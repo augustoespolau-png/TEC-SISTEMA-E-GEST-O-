@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment } from "react";
+import { Fragment, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -76,6 +76,8 @@ export default function TabBar({ role, nome }: { role: Role; nome: string }) {
   const router = useRouter();
   const abas = TABS.filter((t) => t.papeis.includes(role));
   const folhaAtual = busca.get("folha") ?? "fpy";
+  const [weinmannAberto, setWeinmannAberto] = useState(true);
+  const moduloAtivo = abas.some((t) => pathname === t.href);
 
   // o Painel tem cabeçalho próprio, com período e modo TV
   // o painel tem cabeçalho próprio, com projeto, período e modo TV
@@ -99,29 +101,57 @@ export default function TabBar({ role, nome }: { role: Role; nome: string }) {
         {/* no celular a navegação fica na barra de baixo (NavInferior);
             a própria classe .abas se esconde abaixo de 1024px */}
         <nav className="abas flex-1">
-          {abas.map((t) => (
-            <Fragment key={t.href}>
-              <Link
-                href={t.href}
-                className={`aba ${pathname === t.href ? "on" : ""}`}
-              >
-                {t.rotulo}
-              </Link>
-              {t.href === "/indicadores" && pathname === "/indicadores" &&
-                /* uma folha só não é escolha: para o operador a lista
-                   some, em vez de virar um botão sozinho aceso */
-                folhasDoPapel(role).length > 1 &&
-                folhasDoPapel(role).map((f) => (
+          <button
+            type="button"
+            className={`modulo-weinmann ${moduloAtivo ? "on" : ""}`}
+            onClick={() => setWeinmannAberto((aberto) => !aberto)}
+            aria-expanded={weinmannAberto}
+            aria-controls="menu-weinmann"
+          >
+            <span>WEINMANN</span>
+            <svg
+              className={weinmannAberto ? "aberto" : ""}
+              width="15"
+              height="15"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+            >
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+          </button>
+
+          {weinmannAberto && (
+            <div id="menu-weinmann" className="menu-weinmann" role="group">
+              {abas.map((t) => (
+                <Fragment key={t.href}>
                   <Link
-                    key={f.id}
-                    href={`/indicadores?folha=${f.id}`}
-                    className={`aba aba-filha ${folhaAtual === f.id ? "on" : ""}`}
+                    href={t.href}
+                    className={`aba ${pathname === t.href ? "on" : ""}`}
                   >
-                    {f.rotulo}
+                    {t.rotulo}
                   </Link>
-                ))}
-            </Fragment>
-          ))}
+                  {t.href === "/indicadores" && pathname === "/indicadores" &&
+                    /* uma folha só não é escolha: para o operador a lista
+                       some, em vez de virar um botão sozinho aceso */
+                    folhasDoPapel(role).length > 1 &&
+                    folhasDoPapel(role).map((f) => (
+                      <Link
+                        key={f.id}
+                        href={`/indicadores?folha=${f.id}`}
+                        className={`aba aba-filha ${folhaAtual === f.id ? "on" : ""}`}
+                      >
+                        {f.rotulo}
+                      </Link>
+                    ))}
+                </Fragment>
+              ))}
+            </div>
+          )}
         </nav>
 
         {/* .rodape-topo empurra para a direita no celular e para o pe

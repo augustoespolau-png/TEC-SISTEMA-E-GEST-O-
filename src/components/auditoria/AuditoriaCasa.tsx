@@ -95,11 +95,15 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
         // The production database keeps the original quality data in the
         // produto_* tables. This compatibility view groups its wall rows
         // into the same house-level records used by this screen.
-        supabase.from("qualidade_auditorias").select("*").limit(5000),
+        supabase
+          .from("qualidade_auditorias")
+          .select("id, projeto, casa, created_at, observacao")
+          .order("created_at", { ascending: false })
+          .limit(5000),
       ]);
-      const falha = p.error || w.error || s.error || t.error;
+      const falha = p.error || w.error || s.error || t.error || r.error;
       if (falha) {
-        setErroCarga("Falha ao carregar as listas: " + falha.message);
+        setErroCarga("Falha ao carregar os dados da auditoria: " + falha.message);
         return;
       }
       setCfg({
@@ -123,6 +127,11 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
           .not("auditoria_id", "is", null)
           .limit(50000),
       ]);
+      const falhaResumo = fp.error || oc.error;
+      if (falhaResumo) {
+        setErroCarga("Falha ao calcular o resumo das casas: " + falhaResumo.message);
+        return;
+      }
       const regras = await carregarRegras();
       setRegras(regras);
 

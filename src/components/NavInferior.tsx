@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { usePathname } from "next/navigation";
 import type { Role } from "@/lib/types";
 
@@ -81,23 +82,52 @@ const ITENS: {
 export default function NavInferior({ role }: { role: Role }) {
   const pathname = usePathname();
   const itens = ITENS.filter((i) => i.papeis.includes(role));
+  const [aberto, setAberto] = useState(false);
+  const moduloAtivo = itens.some((i) => pathname === i.href);
 
   return (
     <nav className="nav-inferior" aria-label="Navegação principal">
-      {itens.map((i) => {
-        const ativo = pathname === i.href;
-        return (
-          <Link
-            key={i.href}
-            href={i.href}
-            className={ativo ? "on" : ""}
-            aria-current={ativo ? "page" : undefined}
-          >
-            {i.icone}
-            {i.rotulo}
-          </Link>
-        );
-      })}
+      {aberto && (
+        <div
+          id="menu-weinmann-mobile"
+          className="menu-weinmann-mobile"
+          role="menu"
+          aria-label="Módulo WEINMANN"
+        >
+          <div className="menu-weinmann-mobile-titulo">WEINMANN</div>
+          {itens.map((i) => {
+            const ativo = pathname === i.href;
+            return (
+              <Link
+                key={i.href}
+                href={i.href}
+                className={ativo ? "on" : ""}
+                aria-current={ativo ? "page" : undefined}
+                onClick={() => setAberto(false)}
+                role="menuitem"
+              >
+                {i.icone}
+                {i.rotulo}
+              </Link>
+            );
+          })}
+        </div>
+      )}
+
+      <button
+        type="button"
+        className={`nav-modulo-weinmann ${moduloAtivo ? "on" : ""}`}
+        onClick={() => setAberto((valor) => !valor)}
+        aria-expanded={aberto}
+        aria-controls="menu-weinmann-mobile"
+      >
+        <Icone>
+          <path d="m12 3 8 4.5-8 4.5-8-4.5L12 3Z" />
+          <path d="m4 12 8 4.5 8-4.5" />
+          <path d="m4 16.5 8 4.5 8-4.5" />
+        </Icone>
+        WEINMANN
+      </button>
     </nav>
   );
 }

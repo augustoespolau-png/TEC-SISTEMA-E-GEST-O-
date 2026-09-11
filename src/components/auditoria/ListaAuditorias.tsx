@@ -51,8 +51,12 @@ export default function ListaAuditorias({
 
   const filtradas = useMemo(() => {
     const termo = busca.trim().toLowerCase();
+    const projetoNormalizado = projeto.trim().toLocaleLowerCase("pt-BR");
     return auditorias
-      .filter((a) => a.projeto === projeto)
+      .filter(
+        (a) =>
+          a.projeto.trim().toLocaleLowerCase("pt-BR") === projetoNormalizado
+      )
       .filter((a) => !termo || a.casa.toLowerCase().includes(termo))
       // decrescente: as casas mais novas da produção aparecem primeiro
       .sort((a, b) => ordemNaturalCasa(b.casa, a.casa));
