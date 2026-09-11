@@ -91,10 +91,12 @@ export default function FormularioErro({
       setPreview(previewOtimizado);
     } catch (error) {
       if (idSelecao !== selecaoFoto.current) return;
+      setArquivo(null);
+      setPreview(null);
       setErroFoto(
         error instanceof Error
-          ? `${error.message} A imagem original continua selecionada.`
-          : "Não foi possível otimizar a foto. A imagem original continua selecionada."
+          ? error.message
+          : "Não foi possível otimizar a foto. Escolha outra imagem."
       );
     } finally {
       if (idSelecao === selecaoFoto.current) setProcessandoFoto(false);

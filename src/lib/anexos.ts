@@ -6,16 +6,13 @@ export const BUCKET_AUDITORIA = "auditoria-arquivos";
 /** Limite igual ao configurado no bucket do Supabase. */
 export const MAX_FOTO_BYTES = 20 * 1024 * 1024;
 
-/** Fallback de compatibilidade quando o Storage estiver indisponível. */
-export const MAX_FOTO_FALLBACK_BYTES = 2 * 1024 * 1024;
-
 export function tamanhoLegivel(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-/** Converte a foto para JPEG leve, preservando a maior dimensão em 1440px. */
+/** Converte a foto para JPEG leve, preservando a maior dimensão em 1200px. */
 export async function otimizarFoto(arquivo: File): Promise<File> {
   if (!arquivo.type.startsWith("image/")) {
     throw new Error("Escolha uma imagem para anexar.");
@@ -34,18 +31,22 @@ export async function otimizarFoto(arquivo: File): Promise<File> {
     });
 
     const maiorLado = Math.max(imagem.naturalWidth, imagem.naturalHeight);
-    const escala = maiorLado > 1440 ? 1440 / maiorLado : 1;
+    const escala = maiorLado > 1200 ? 1200 / maiorLado : 1;
     const canvas = document.createElement("canvas");
     canvas.width = Math.max(1, Math.round(imagem.naturalWidth * escala));
     canvas.height = Math.max(1, Math.round(imagem.naturalHeight * escala));
     const contexto = canvas.getContext("2d");
-    if (!contexto) return arquivo;
+    if (!contexto) {
+      throw new Error("O navegador não conseguiu preparar a imagem.");
+    }
 
     contexto.drawImage(imagem, 0, 0, canvas.width, canvas.height);
     const blob = await new Promise<Blob | null>((resolve) =>
-      canvas.toBlob(resolve, "image/jpeg", 0.76)
+      canvas.toBlob(resolve, "image/jpeg", 0.8)
     );
-    if (!blob) return arquivo;
+    if (!blob) {
+      throw new Error("Não foi possível compactar a imagem.");
+    }
 
     const nome = arquivo.name.replace(/\.[^.]+$/, "") || "foto-desvio";
     return new File([blob], `${nome}.jpg`, {
@@ -57,15 +58,6 @@ export async function otimizarFoto(arquivo: File): Promise<File> {
   }
 }
 
-export function arquivoComoDataUrl(arquivo: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const leitor = new FileReader();
-    leitor.onload = () => resolve(String(leitor.result ?? ""));
-    leitor.onerror = () => reject(new Error("Não foi possível preparar a foto."));
-    leitor.readAsDataURL(arquivo);
-  });
-}
-
 export function segmentoSeguro(valor: string) {
   return (
     valor
@@ -75,4 +67,45 @@ export function segmentoSeguro(valor: string) {
       .replace(/^-+|-+$/g, "")
       .toLowerCase() || "sem-identificador"
   );
+}
+
+export interface CaminhoAnexoAuditoria {
+  usuarioId: string;
+  projetoId: string;
+  casaId: string;
+  paredeId: string;
+  anexoId: string;
+  extensao?: string;
+  agora?: Date;
+}
+
+/**
+ * Caminho canônico dos anexos da Auditoria de Produto.
+ *
+ * O prefixo de proprietário é parte da política RLS do Storage. Depois dele,
+ * os IDs do domínio deixam cada arquivo localizável sem depender de nomes
+ * editáveis da interface.
+ */
+export function caminhoAnexoAuditoria({
+  usuarioId,
+  projetoId,
+  casaId,
+  paredeId,
+  anexoId,
+  extensao = "jpg",
+  agora = new Date(),
+}: CaminhoAnexoAuditoria) {
+  const timestamp = agora
+    .toISOString()
+    .replace(/[-:]/g, "")
+    .replace(/\.\d{3}Z$/, "Z");
+
+  return [
+    "produto",
+    segmentoSeguro(usuarioId),
+    segmentoSeguro(projetoId),
+    segmentoSeguro(casaId),
+    segmentoSeguro(paredeId),
+    `${timestamp}-${segmentoSeguro(anexoId)}.${segmentoSeguro(extensao)}`,
+  ].join("/");
 }

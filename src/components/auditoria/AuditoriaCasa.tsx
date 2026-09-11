@@ -4,10 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import {
-  arquivoComoDataUrl,
   BUCKET_AUDITORIA,
-  MAX_FOTO_FALLBACK_BYTES,
-  segmentoSeguro,
+  caminhoAnexoAuditoria,
 } from "@/lib/anexos";
 import { mutarQualidade } from "@/lib/qualidadeCompat";
 import PainelParede from "./PainelParede";
@@ -49,7 +47,33 @@ interface AnexoRow {
   tamanho_bytes: number | null;
   storage_bucket: string;
   storage_path: string | null;
-  raw: unknown;
+}
+
+interface AnexoStorageRow {
+  storage_bucket: string;
+  storage_path: string | null;
+}
+
+async function removerArquivosDoStorage(
+  supabase: ReturnType<typeof createClient>,
+  anexos: AnexoStorageRow[]
+) {
+  const porBucket = new Map<string, string[]>();
+  for (const anexo of anexos) {
+    if (!anexo.storage_path) continue;
+    const bucket = anexo.storage_bucket || BUCKET_AUDITORIA;
+    const caminhos = porBucket.get(bucket) ?? [];
+    caminhos.push(anexo.storage_path);
+    porBucket.set(bucket, caminhos);
+  }
+
+  const resultados = await Promise.all(
+    [...porBucket].map(async ([bucket, caminhos]) => {
+      const { error } = await supabase.storage.from(bucket).remove(caminhos);
+      return error;
+    })
+  );
+  return resultados.filter((error) => Boolean(error));
 }
 
 function hojeISO() {
@@ -232,15 +256,14 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
     const errosCarregados = (os.data ?? []) as Array<{ id: string }>;
     const anexosPorDesvio = new Map<string, AnexoDaAuditoria[]>();
 
-    /* O bucket é privado. A tabela relacional guarda o vínculo com o desvio;
-       a URL assinada é criada só para esta sessão e nunca é persistida no
-       estado legado. Se um anexo estiver no modo de compatibilidade (sem
-       Storage), o dataUrl preservado no raw continua sendo uma alternativa. */
+    /* O bucket é privado. A tabela relacional guarda somente os metadados e o
+       caminho do objeto; a URL assinada é criada só para esta sessão e nunca
+       é persistida no banco. */
     if (errosCarregados.length > 0) {
       const anexosConsulta = await supabase
         .from("produto_anexos")
         .select(
-          "id, desvio_id, nome_arquivo, mime_type, tamanho_bytes, storage_bucket, storage_path, raw"
+          "id, desvio_id, nome_arquivo, mime_type, tamanho_bytes, storage_bucket, storage_path"
         )
         .in(
           "desvio_id",
@@ -252,10 +275,6 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
       if (!anexosConsulta.error) {
         await Promise.all(
           ((anexosConsulta.data ?? []) as AnexoRow[]).map(async (row) => {
-            const raw =
-              row.raw && typeof row.raw === "object" && !Array.isArray(row.raw)
-                ? (row.raw as Record<string, unknown>)
-                : {};
             let url: string | null = null;
 
             if (row.storage_path) {
@@ -264,7 +283,6 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
                 .createSignedUrl(row.storage_path, 60 * 60);
               url = assinado.data?.signedUrl ?? null;
             }
-            if (!url && typeof raw.dataUrl === "string") url = raw.dataUrl;
 
             if (!row.desvio_id) return;
             const lista = anexosPorDesvio.get(row.desvio_id) ?? [];
@@ -414,56 +432,42 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
     desvioId: string,
     arquivo: File
   ) {
-    if (!auditoria) return { fallback: false, error: new Error("Auditoria inválida") };
+    if (!auditoria) return { error: new Error("Auditoria inválida") };
 
-    const anexoId = `attachment_${crypto.randomUUID()}`;
+    const anexoUid = crypto.randomUUID();
+    const anexoId = `attachment_${anexoUid}`;
     const { data: usuario } = await supabase.auth.getUser();
-    const projetoId = auditoria.id.split("|", 1)[0] || auditoria.projeto;
-    const extensao = arquivo.type === "image/png"
-      ? "png"
-      : arquivo.type === "image/webp"
-        ? "webp"
-        : "jpg";
-    const caminho = usuario.user
-      ? [
-          "produto",
-          usuario.user.id,
-          segmentoSeguro(projetoId),
-          segmentoSeguro(auditoria.casa),
-          segmentoSeguro(parede),
-          `${anexoId}.${extensao}`,
-        ].join("/")
-      : "";
-    let storagePath = "";
-    let dataUrl = "";
-
-    if (caminho) {
-      const envio = await supabase.storage
-        .from(BUCKET_AUDITORIA)
-        .upload(caminho, arquivo, {
-          cacheControl: "3600",
-          contentType: arquivo.type || "image/jpeg",
-          upsert: false,
-        });
-      if (!envio.error) {
-        storagePath = caminho;
-      }
+    if (!usuario.user) {
+      return {
+        error: new Error("Sua sessão expirou. Entre novamente para anexar a foto."),
+      };
     }
 
-    /* O estado legado já prevê este fallback para não bloquear a inspeção se
-       o Storage estiver temporariamente indisponível. Como a foto já foi
-       reduzida no formulário, o limite evita transformar uma falha de rede
-       em um registro JSON grande demais. */
-    if (!storagePath) {
-      if (arquivo.size > MAX_FOTO_FALLBACK_BYTES) {
-        return {
-          fallback: false,
-          error: new Error(
-            "A foto não pôde ser enviada ao armazenamento. Tente novamente com uma imagem menor."
-          ),
-        };
-      }
-      dataUrl = await arquivoComoDataUrl(arquivo);
+    const projetoId =
+      cfg?.projetos.find((item) => item.nome === auditoria.projeto)?.id?.toString() ??
+      (auditoria.id.split("|", 1)[0] || auditoria.projeto);
+    const paredeId =
+      cfg?.paredes.find((item) => item.nome === parede)?.id?.toString() ?? parede;
+    const caminho = caminhoAnexoAuditoria({
+      usuarioId: usuario.user.id,
+      projetoId,
+      casaId: auditoria.casa,
+      paredeId,
+      anexoId: anexoUid,
+      extensao: "jpg",
+    });
+
+    const envio = await supabase.storage
+      .from(BUCKET_AUDITORIA)
+      .upload(caminho, arquivo, {
+        cacheControl: "3600",
+        contentType: "image/jpeg",
+        upsert: false,
+      });
+    if (envio.error) {
+      return {
+        error: new Error("Não foi possível enviar a foto: " + envio.error.message),
+      };
     }
 
     const { error } = await mutarQualidade("ADICIONAR_ANEXO", {
@@ -473,21 +477,19 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
       anexo: {
         id: anexoId,
         name: arquivo.name,
-        type: arquivo.type || "image/jpeg",
+        type: "image/jpeg",
         size: arquivo.size,
-        path: storagePath,
-        dataUrl,
+        path: caminho,
         deviationId: desvioId,
+        wallId: paredeId,
       },
     });
 
     if (error) {
-      if (storagePath) {
-        await supabase.storage.from(BUCKET_AUDITORIA).remove([storagePath]);
-      }
-      return { fallback: !storagePath, error };
+      await supabase.storage.from(BUCKET_AUDITORIA).remove([caminho]);
+      return { error };
     }
-    return { fallback: !storagePath, error: null };
+    return { error: null };
   }
 
   async function adicionarErro(parede: string, novo: NovoErro, dia: string) {
@@ -516,7 +518,6 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
         return;
       }
 
-      let fotoFallback = false;
       if (anexo) {
         const anexoSalvo = await salvarFotoDoDesvio(supabase, parede, id, anexo);
         if (anexoSalvo.error) {
@@ -529,7 +530,6 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
           );
           return;
         }
-        fotoFallback = anexoSalvo.fallback;
       }
 
       const leitura = await supabase
@@ -554,9 +554,7 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
       setSalvando(false);
       toast.success(
         anexo
-          ? fotoFallback
-            ? "Erro registrado. A foto foi salva em modo compatibilidade."
-            : "Erro e foto registrados. Já aparecem na tela Consultar."
+          ? "Erro e foto registrados. Já aparecem na tela Consultar."
           : "Erro registrado. Já aparece na tela Consultar."
       );
     } catch (caught) {
@@ -629,6 +627,22 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
   async function excluirCasa() {
     if (!auditoria || excluindo) return;
     setExcluindo(true);
+    const supabase = createClient();
+    const anexosConsulta = await supabase
+      .from("produto_anexos")
+      .select("storage_bucket, storage_path")
+      .eq("auditoria_id", auditoria.id)
+      .not("storage_path", "is", null);
+
+    if (anexosConsulta.error) {
+      setExcluindo(false);
+      toast.error(
+        "Não foi possível preparar a exclusão dos arquivos da casa: " +
+          anexosConsulta.error.message
+      );
+      return;
+    }
+
     const { data, error } = await mutarQualidade("EXCLUIR_AUDITORIA", {
       auditoria_id: auditoria.id,
     });
@@ -637,6 +651,10 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
       toast.error("Não foi possível excluir: " + error.message);
       return;
     }
+    const falhasStorage = await removerArquivosDoStorage(
+      supabase,
+      (anexosConsulta.data ?? []) as AnexoStorageRow[]
+    );
     const r = (Array.isArray(data) ? data[0] : data) as {
       erros_apagados: number;
       paredes_apagadas: number;
@@ -655,13 +673,32 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
       `Casa ${casaApagada} excluída` +
         (r
           ? `: ${r.erros_apagados} erros, ${r.paredes_apagadas} paredes e ${r.nas_apagados} NAs.`
-          : ".")
+          : ".") +
+        (falhasStorage.length
+          ? " Alguns arquivos não puderam ser removidos do Storage."
+          : "")
     );
   }
 
   async function removerErro(id: string) {
-    if (salvando) return;
+    if (!auditoria || salvando) return;
     setSalvando(true);
+    const supabase = createClient();
+    const anexosConsulta = await supabase
+      .from("produto_anexos")
+      .select("storage_bucket, storage_path")
+      .eq("desvio_id", id)
+      .not("storage_path", "is", null);
+
+    if (anexosConsulta.error) {
+      setSalvando(false);
+      toast.error(
+        "Não foi possível preparar a remoção das fotos: " +
+          anexosConsulta.error.message
+      );
+      return;
+    }
+
     const { error } = await mutarQualidade("REMOVER_DESVIO", { id });
     setSalvando(false);
     if (error) {
@@ -672,8 +709,16 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
       );
       return;
     }
+    const falhasStorage = await removerArquivosDoStorage(
+      supabase,
+      (anexosConsulta.data ?? []) as AnexoStorageRow[]
+    );
     setErros((lista) => lista.filter((e) => e.id !== id));
-    toast.success("Erro removido.");
+    toast.success(
+      falhasStorage.length
+        ? "Erro removido. Algumas fotos não puderam ser removidas do Storage."
+        : "Erro removido."
+    );
   }
 
   /* ---------- render ---------- */
