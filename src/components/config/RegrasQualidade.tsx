@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
+import { mutarQualidade } from "@/lib/qualidadeCompat";
 
 /*
  * Regras de negócio que a empresa muda sem programador.
@@ -50,8 +51,9 @@ export default function RegrasQualidade() {
         .eq("ativo", true)
         .order("ordem"),
     ]);
-    if (error) {
-      toast.error("Erro ao carregar as regras: " + error.message);
+    const leituraError = error ?? proj.error;
+    if (leituraError) {
+      toast.error("Erro ao carregar as regras: " + leituraError.message);
       return;
     }
     const lista = (data ?? []) as Parametro[];
@@ -66,11 +68,10 @@ export default function RegrasQualidade() {
      casa do C4A e 6% de um bloco da escola. Ver migration 022. */
   async function alternarProjeto(p: ProjetoRegra, vale: boolean) {
     setSalvando(`projeto-${p.id}`);
-    const supabase = createClient();
-    const { error } = await supabase
-      .from("projetos")
-      .update({ fpy_regra_ativa: vale })
-      .eq("id", p.id);
+    const { error } = await mutarQualidade("ALTERAR_REGRA_PROJETO", {
+      projeto: p.nome,
+      ativo: vale,
+    });
     setSalvando(null);
     if (error) {
       toast.error(error.message);
@@ -81,7 +82,7 @@ export default function RegrasQualidade() {
         ? `A regra passa a valer no ${p.nome}.`
         : `O ${p.nome} sai da regra: o FPY dele será sempre paredes que passaram ÷ paredes processadas.`
     );
-    carregar();
+    await carregar();
   }
 
   useEffect(() => {
@@ -91,18 +92,17 @@ export default function RegrasQualidade() {
 
   async function salvar(p: Parametro, campos: { valor?: number; ativo?: boolean }) {
     setSalvando(p.chave);
-    const supabase = createClient();
-    const { error } = await supabase
-      .from("parametros")
-      .update(campos)
-      .eq("chave", p.chave);
+    const { error } = await mutarQualidade("ALTERAR_REGRA_GLOBAL", {
+      chave: p.chave,
+      ...campos,
+    });
     setSalvando(null);
     if (error) {
       toast.error(error.message);
       return;
     }
     toast.success("Regra atualizada.");
-    carregar();
+    await carregar();
   }
 
   return (

@@ -11,7 +11,11 @@ export async function mutarQualidade(
   operacao: string,
   dados: Record<string, unknown>
 ) {
-  return createClient().rpc("qualidade_compat_mutacao", {
+  const funcao = operacao.startsWith("ALTERAR_REGRA_")
+    ? "qualidade_compat_regra"
+    : "qualidade_compat_mutacao";
+
+  return createClient().rpc(funcao, {
     p_operacao: operacao,
     p_dados: dados,
   });
