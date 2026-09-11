@@ -1,13 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import type { ConfigItem, Criticidade } from "@/lib/types";
+import { MAX_FOTO_BYTES, otimizarFoto, tamanhoLegivel } from "@/lib/anexos";
 
 export interface NovoErro {
   tipo_erro: string;
   setor: string;
   criticidade: Criticidade;
   ocorrencia: string;
+  anexo?: File | null;
 }
 
 /* A terceira coluna é a classe de preenchimento: a tinta de dentro do
@@ -37,10 +39,75 @@ export default function FormularioErro({
   const [setor, setSetor] = useState("");
   const [criticidade, setCriticidade] = useState<Criticidade | "">("");
   const [texto, setTexto] = useState("");
+  const [arquivo, setArquivo] = useState<File | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
+  const [processandoFoto, setProcessandoFoto] = useState(false);
+  const [erroFoto, setErroFoto] = useState("");
+  const inputFoto = useRef<HTMLInputElement>(null);
+  const selecaoFoto = useRef(0);
+
+  useEffect(() => {
+    return () => {
+      if (preview) URL.revokeObjectURL(preview);
+    };
+  }, [preview]);
 
   const ehOutro = tipo === "OUTRO";
   const tipoFinal = ehOutro ? tipoOutro.trim().toUpperCase() : tipo;
-  const pronto = tipoFinal && setor && criticidade && texto.trim();
+  const pronto = Boolean(tipoFinal && setor && criticidade && texto.trim());
+
+  async function selecionarFoto(event: ChangeEvent<HTMLInputElement>) {
+    const escolhido = event.target.files?.[0] ?? null;
+    event.target.value = "";
+    if (!escolhido) return;
+
+    const idSelecao = ++selecaoFoto.current;
+    setErroFoto("");
+    if (!escolhido.type.startsWith("image/")) {
+      setArquivo(null);
+      setPreview(null);
+      setErroFoto("Escolha uma imagem para anexar.");
+      return;
+    }
+    if (escolhido.size > MAX_FOTO_BYTES) {
+      setArquivo(null);
+      setPreview(null);
+      setErroFoto("A foto precisa ter no máximo 20 MB.");
+      return;
+    }
+
+    const previewOriginal = URL.createObjectURL(escolhido);
+    setArquivo(escolhido);
+    setPreview(previewOriginal);
+    setProcessandoFoto(true);
+
+    try {
+      const otimizada = await otimizarFoto(escolhido);
+      if (idSelecao !== selecaoFoto.current) {
+        return;
+      }
+      const previewOtimizado = URL.createObjectURL(otimizada);
+      setArquivo(otimizada);
+      setPreview(previewOtimizado);
+    } catch (error) {
+      if (idSelecao !== selecaoFoto.current) return;
+      setErroFoto(
+        error instanceof Error
+          ? `${error.message} A imagem original continua selecionada.`
+          : "Não foi possível otimizar a foto. A imagem original continua selecionada."
+      );
+    } finally {
+      if (idSelecao === selecaoFoto.current) setProcessandoFoto(false);
+    }
+  }
+
+  function removerFoto() {
+    ++selecaoFoto.current;
+    setArquivo(null);
+    setPreview(null);
+    setErroFoto("");
+    setProcessandoFoto(false);
+  }
 
   return (
     <div
@@ -130,6 +197,84 @@ export default function FormularioErro({
         />
       </div>
 
+      <div>
+        <label className="rotulo">Anexo / foto do desvio (opcional)</label>
+        <div className="anexo-captura">
+          <input
+            ref={inputFoto}
+            id="foto-desvio"
+            type="file"
+            accept="image/*"
+            capture="environment"
+            onChange={selecionarFoto}
+            className="anexo-input"
+          />
+          {preview ? (
+            <div className="anexo-preview">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={preview}
+                alt="Pré-visualização da foto do desvio"
+                className="anexo-imagem"
+              />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[12.5px] text-ink">
+                  {arquivo?.name ?? "Foto selecionada"}
+                </p>
+                <p className="sub">
+                  {arquivo ? tamanhoLegivel(arquivo.size) : ""}
+                  {processandoFoto ? " · preparando foto…" : " · pronta para salvar"}
+                </p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => inputFoto.current?.click()}
+                    className="btn"
+                    disabled={salvando || processandoFoto}
+                    style={{ fontSize: 11, padding: "5px 9px" }}
+                  >
+                    Trocar foto
+                  </button>
+                  <button
+                    type="button"
+                    onClick={removerFoto}
+                    className="btn"
+                    disabled={salvando || processandoFoto}
+                    style={{ fontSize: 11, padding: "5px 9px" }}
+                  >
+                    Remover
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="anexo-escolher"
+              onClick={() => inputFoto.current?.click()}
+              disabled={salvando}
+            >
+              <span className="anexo-icone" aria-hidden="true">
+                ▣
+              </span>
+              <span>
+                <b>Tirar foto ou escolher imagem</b>
+                <small>Use a câmera do celular/tablet ou a galeria</small>
+              </span>
+            </button>
+          )}
+        </div>
+        {erroFoto && (
+          <p className="sub" style={{ color: "var(--color-alta)" }}>
+            {erroFoto}
+          </p>
+        )}
+        <p className="sub">
+          A imagem será compactada para agilizar o envio e ficará vinculada a
+          este desvio e à parede atual.
+        </p>
+      </div>
+
       <div className="flex gap-2">
         <button onClick={aoCancelar} className="btn" disabled={salvando}>
           Cancelar
@@ -141,9 +286,10 @@ export default function FormularioErro({
               setor,
               criticidade: criticidade as Criticidade,
               ocorrencia: texto.trim(),
+              anexo: arquivo,
             })
           }
-          disabled={!pronto || salvando}
+          disabled={!pronto || salvando || processandoFoto}
           className="btn btn-forte flex-1"
         >
           {salvando ? "Salvando…" : "Adicionar erro"}

@@ -138,6 +138,32 @@ export default function PainelParede({
                 </span>
               </div>
               <p className="text-[12.5px] text-ink-2">{e.ocorrencia}</p>
+              {e.anexos && e.anexos.length > 0 && (
+                <div className="anexos-erro" aria-label="Fotos anexadas ao erro">
+                  {e.anexos.map((anexo) =>
+                    anexo.url ? (
+                      <a
+                        key={anexo.id}
+                        href={anexo.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="anexo-miniatura"
+                        title={`${anexo.nome_arquivo ?? "Foto do desvio"} · abrir foto`}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={anexo.url}
+                          alt={`Foto anexada ao desvio ${e.tipo_erro}`}
+                        />
+                      </a>
+                    ) : (
+                      <span key={anexo.id} className="anexo-indisponivel">
+                        Foto anexada
+                      </span>
+                    )
+                  )}
+                </div>
+              )}
               {!somenteLeitura && (
               <button
                 onClick={() => aoRemoverErro(e.id)}
@@ -208,6 +234,7 @@ export default function PainelParede({
       ) : adicionandoNa ? (
         <FormularioNa
           tipos={tipos}
+          tiposJaAdicionados={nas.map((n) => n.tipo_erro)}
           salvando={salvando}
           aoCancelar={() => setAdicionandoNa(false)}
           aoAdicionar={async (n) => {

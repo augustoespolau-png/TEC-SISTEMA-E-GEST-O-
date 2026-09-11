@@ -36,6 +36,17 @@ export interface ErroDaAuditoria {
   ocorrencia: string;
   criticidade: Criticidade;
   status: Status;
+  anexos?: AnexoDaAuditoria[];
+}
+
+export interface AnexoDaAuditoria {
+  id: string;
+  nome_arquivo: string | null;
+  mime_type: string | null;
+  tamanho_bytes: number | null;
+  storage_bucket: string;
+  storage_path: string | null;
+  url: string | null;
 }
 
 /**

@@ -4,9 +4,11 @@ import { useState } from "react";
 import type { ConfigItem } from "@/lib/types";
 
 export interface NovoNa {
-  tipo_erro: string;
+  tipos_erro: string[];
   observacao: string;
 }
+
+const VALOR_OUTRO = "__OUTRO__";
 
 /**
  * Formulário de um NA — item NÃO APLICÁVEL àquela parede.
@@ -17,21 +19,46 @@ export interface NovoNa {
  */
 export default function FormularioNa({
   tipos,
+  tiposJaAdicionados = [],
   aoAdicionar,
   aoCancelar,
   salvando,
 }: {
   tipos: ConfigItem[];
+  tiposJaAdicionados?: string[];
   aoAdicionar: (n: NovoNa) => void;
   aoCancelar: () => void;
   salvando: boolean;
 }) {
-  const [tipo, setTipo] = useState("");
+  const [selecionados, setSelecionados] = useState<string[]>([]);
   const [tipoOutro, setTipoOutro] = useState("");
   const [texto, setTexto] = useState("");
 
-  const ehOutro = tipo === "OUTRO";
-  const tipoFinal = ehOutro ? tipoOutro.trim().toUpperCase() : tipo;
+  const existentes = new Set(tiposJaAdicionados);
+  const ehOutro = selecionados.includes(VALOR_OUTRO);
+  const outroFinal = tipoOutro.trim().toUpperCase();
+  const tiposFinais = [
+    ...selecionados.filter((tipo) => tipo !== VALOR_OUTRO),
+    ...(ehOutro && outroFinal ? [outroFinal] : []),
+  ];
+
+  function alternarTipo(tipo: string) {
+    if (existentes.has(tipo)) return;
+    setSelecionados((lista) =>
+      lista.includes(tipo)
+        ? lista.filter((item) => item !== tipo)
+        : [...lista, tipo]
+    );
+  }
+
+  function selecionarTodos() {
+    setSelecionados((lista) => [
+      ...new Set([
+        ...lista,
+        ...tipos.map((tipo) => tipo.nome).filter((nome) => !existentes.has(nome)),
+      ]),
+    ]);
+  }
 
   return (
     <div
@@ -42,21 +69,76 @@ export default function FormularioNa({
       }}
     >
       <div>
-        <label className="rotulo">Item que não se aplica</label>
-        <select
-          value={tipo}
-          onChange={(e) => setTipo(e.target.value)}
-          className="campo"
-          autoFocus
-        >
-          <option value="">Selecione</option>
-          {tipos.map((t) => (
-            <option key={t.id} value={t.nome}>
-              {t.nome}
-            </option>
-          ))}
-          <option value="OUTRO">Outro (especificar)</option>
-        </select>
+        <div className="flex flex-wrap items-end justify-between gap-2">
+          <label className="rotulo mb-0">Itens que não se aplicam</label>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={selecionarTodos}
+              className="btn"
+              style={{ fontSize: 11, padding: "5px 9px" }}
+              disabled={salvando || tipos.every((tipo) => existentes.has(tipo.nome))}
+            >
+              Todos
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelecionados([])}
+              className="btn"
+              style={{ fontSize: 11, padding: "5px 9px" }}
+              disabled={salvando || selecionados.length === 0}
+            >
+              Nenhum
+            </button>
+          </div>
+        </div>
+        <p className="sub">
+          Marque todos os itens de uma vez. Os que já foram registrados ficam
+          bloqueados para evitar duplicidade.
+        </p>
+        <div className="na-selecao" role="group" aria-label="Itens que não se aplicam">
+          {tipos.map((t, index) => {
+            const jaAdicionado = existentes.has(t.nome);
+            const marcado = jaAdicionado || selecionados.includes(t.nome);
+            return (
+              <label
+                key={t.id}
+                className={`na-opcao ${marcado ? "selecionada" : ""} ${
+                  jaAdicionado ? "bloqueada" : ""
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={marcado}
+                  disabled={salvando || jaAdicionado}
+                  onChange={() => alternarTipo(t.nome)}
+                  autoFocus={index === 0}
+                  className="na-input"
+                />
+                <span className="na-check" aria-hidden="true">
+                  {marcado ? "✓" : ""}
+                </span>
+                <span>{t.nome}</span>
+                {jaAdicionado && <span className="na-ja-adicionado">já salvo</span>}
+              </label>
+            );
+          })}
+          <label
+            className={`na-opcao ${selecionados.includes(VALOR_OUTRO) ? "selecionada" : ""}`}
+          >
+            <input
+              type="checkbox"
+              checked={selecionados.includes(VALOR_OUTRO)}
+              disabled={salvando}
+              onChange={() => alternarTipo(VALOR_OUTRO)}
+              className="na-input"
+            />
+            <span className="na-check" aria-hidden="true">
+              {selecionados.includes(VALOR_OUTRO) ? "✓" : ""}
+            </span>
+            <span>Outro (especificar)</span>
+          </label>
+        </div>
       </div>
 
       {ehOutro && (
@@ -73,7 +155,9 @@ export default function FormularioNa({
       )}
 
       <div>
-        <label className="rotulo">Por que não se aplica (opcional)</label>
+        <label className="rotulo">
+          Por que não se aplica (opcional; vale para todos os selecionados)
+        </label>
         <textarea
           value={texto}
           onChange={(e) => setTexto(e.target.value)}
@@ -87,13 +171,15 @@ export default function FormularioNa({
           Cancelar
         </button>
         <button
-          onClick={() =>
-            aoAdicionar({ tipo_erro: tipoFinal, observacao: texto.trim() })
-          }
-          disabled={!tipoFinal || salvando}
+          onClick={() => aoAdicionar({ tipos_erro: tiposFinais, observacao: texto.trim() })}
+          disabled={tiposFinais.length === 0 || salvando}
           className="btn btn-forte flex-1"
         >
-          {salvando ? "Salvando…" : "Adicionar NA"}
+          {salvando
+            ? "Salvando…"
+            : tiposFinais.length > 0
+              ? `Adicionar ${tiposFinais.length} ${tiposFinais.length === 1 ? "NA" : "NAs"}`
+              : "Adicionar NAs"}
         </button>
       </div>
     </div>

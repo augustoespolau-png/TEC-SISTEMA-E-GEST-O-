@@ -3,6 +3,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
+import {
+  arquivoComoDataUrl,
+  BUCKET_AUDITORIA,
+  MAX_FOTO_FALLBACK_BYTES,
+  segmentoSeguro,
+} from "@/lib/anexos";
 import { mutarQualidade } from "@/lib/qualidadeCompat";
 import PainelParede from "./PainelParede";
 import ListaAuditorias, { type ResumoDaCasa } from "./ListaAuditorias";
@@ -12,6 +18,7 @@ import type { NovoNa } from "./FormularioNa";
 import {
   resumoAuditoria,
   situacaoDaParede,
+  type AnexoDaAuditoria,
   type Auditoria,
   type ErroDaAuditoria,
   type NaDaAuditoria,
@@ -32,6 +39,17 @@ interface Config {
   paredes: Parede[];
   setores: ConfigItem[];
   tipos: ConfigItem[];
+}
+
+interface AnexoRow {
+  id: string;
+  desvio_id: string | null;
+  nome_arquivo: string | null;
+  mime_type: string | null;
+  tamanho_bytes: number | null;
+  storage_bucket: string;
+  storage_path: string | null;
+  raw: unknown;
 }
 
 function hojeISO() {
@@ -211,12 +229,71 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
         .eq("auditoria_id", a.id)
         .order("id"),
     ]);
+    const errosCarregados = (os.data ?? []) as Array<{ id: string }>;
+    const anexosPorDesvio = new Map<string, AnexoDaAuditoria[]>();
+
+    /* O bucket é privado. A tabela relacional guarda o vínculo com o desvio;
+       a URL assinada é criada só para esta sessão e nunca é persistida no
+       estado legado. Se um anexo estiver no modo de compatibilidade (sem
+       Storage), o dataUrl preservado no raw continua sendo uma alternativa. */
+    if (errosCarregados.length > 0) {
+      const anexosConsulta = await supabase
+        .from("produto_anexos")
+        .select(
+          "id, desvio_id, nome_arquivo, mime_type, tamanho_bytes, storage_bucket, storage_path, raw"
+        )
+        .in(
+          "desvio_id",
+          errosCarregados.map((e) => e.id)
+        )
+        .eq("tipo", "desvio")
+        .limit(1000);
+
+      if (!anexosConsulta.error) {
+        await Promise.all(
+          ((anexosConsulta.data ?? []) as AnexoRow[]).map(async (row) => {
+            const raw =
+              row.raw && typeof row.raw === "object" && !Array.isArray(row.raw)
+                ? (row.raw as Record<string, unknown>)
+                : {};
+            let url: string | null = null;
+
+            if (row.storage_path) {
+              const assinado = await supabase.storage
+                .from(row.storage_bucket || BUCKET_AUDITORIA)
+                .createSignedUrl(row.storage_path, 60 * 60);
+              url = assinado.data?.signedUrl ?? null;
+            }
+            if (!url && typeof raw.dataUrl === "string") url = raw.dataUrl;
+
+            if (!row.desvio_id) return;
+            const lista = anexosPorDesvio.get(row.desvio_id) ?? [];
+            lista.push({
+              id: String(row.id),
+              nome_arquivo: row.nome_arquivo,
+              mime_type: row.mime_type,
+              tamanho_bytes: row.tamanho_bytes,
+              storage_bucket: row.storage_bucket || BUCKET_AUDITORIA,
+              storage_path: row.storage_path,
+              url,
+            });
+            anexosPorDesvio.set(row.desvio_id, lista);
+          })
+        );
+      }
+    }
+
     setDatas(
       Object.fromEntries(
         (ps.data ?? []).map((x) => [x.parede as string, x.data as string])
       )
     );
-    setErros((os.data ?? []) as ErroDaAuditoria[]);
+    setErros(
+      (os.data ?? []).map((erro) => ({
+        ...(erro as ErroDaAuditoria),
+        anexos: anexosPorDesvio.get(String((erro as { id: string }).id)) ?? [],
+      }))
+    );
     /* Qualquer falha ao ler os NAs esconde a função — não só o código de
        tabela inexistente. Eu tinha testado por 42P01, que é o erro do
        Postgres; o PostgREST responde antes disso, com PGRST205 ("could
@@ -331,45 +408,164 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
     toast.success(`Parede ${parede}: data atualizada.`);
   }
 
+  async function salvarFotoDoDesvio(
+    supabase: ReturnType<typeof createClient>,
+    parede: string,
+    desvioId: string,
+    arquivo: File
+  ) {
+    if (!auditoria) return { fallback: false, error: new Error("Auditoria inválida") };
+
+    const anexoId = `attachment_${crypto.randomUUID()}`;
+    const { data: usuario } = await supabase.auth.getUser();
+    const projetoId = auditoria.id.split("|", 1)[0] || auditoria.projeto;
+    const extensao = arquivo.type === "image/png"
+      ? "png"
+      : arquivo.type === "image/webp"
+        ? "webp"
+        : "jpg";
+    const caminho = usuario.user
+      ? [
+          "produto",
+          usuario.user.id,
+          segmentoSeguro(projetoId),
+          segmentoSeguro(auditoria.casa),
+          segmentoSeguro(parede),
+          `${anexoId}.${extensao}`,
+        ].join("/")
+      : "";
+    let storagePath = "";
+    let dataUrl = "";
+
+    if (caminho) {
+      const envio = await supabase.storage
+        .from(BUCKET_AUDITORIA)
+        .upload(caminho, arquivo, {
+          cacheControl: "3600",
+          contentType: arquivo.type || "image/jpeg",
+          upsert: false,
+        });
+      if (!envio.error) {
+        storagePath = caminho;
+      }
+    }
+
+    /* O estado legado já prevê este fallback para não bloquear a inspeção se
+       o Storage estiver temporariamente indisponível. Como a foto já foi
+       reduzida no formulário, o limite evita transformar uma falha de rede
+       em um registro JSON grande demais. */
+    if (!storagePath) {
+      if (arquivo.size > MAX_FOTO_FALLBACK_BYTES) {
+        return {
+          fallback: false,
+          error: new Error(
+            "A foto não pôde ser enviada ao armazenamento. Tente novamente com uma imagem menor."
+          ),
+        };
+      }
+      dataUrl = await arquivoComoDataUrl(arquivo);
+    }
+
+    const { error } = await mutarQualidade("ADICIONAR_ANEXO", {
+      auditoria_id: auditoria.id,
+      parede,
+      deviation_id: desvioId,
+      anexo: {
+        id: anexoId,
+        name: arquivo.name,
+        type: arquivo.type || "image/jpeg",
+        size: arquivo.size,
+        path: storagePath,
+        dataUrl,
+        deviationId: desvioId,
+      },
+    });
+
+    if (error) {
+      if (storagePath) {
+        await supabase.storage.from(BUCKET_AUDITORIA).remove([storagePath]);
+      }
+      return { fallback: !storagePath, error };
+    }
+    return { fallback: !storagePath, error: null };
+  }
+
   async function adicionarErro(parede: string, novo: NovoErro, dia: string) {
     if (!auditoria || salvando) return;
     setSalvando(true);
     const supabase = createClient();
+    const { anexo, ...dadosErro } = novo;
 
-    const { data: criacao, error } = await mutarQualidade("REGISTRAR_DESVIO", {
-      data: dia,
-      projeto: auditoria.projeto,
-      casa: auditoria.casa,
-      parede,
-      auditoria_id: auditoria.id,
-      ...novo,
-    });
+    try {
+      const { data: criacao, error } = await mutarQualidade("REGISTRAR_DESVIO", {
+        data: dia,
+        projeto: auditoria.projeto,
+        casa: auditoria.casa,
+        parede,
+        auditoria_id: auditoria.id,
+        ...dadosErro,
+      });
 
-    const id = (criacao as { id?: string } | null)?.id;
-    const leitura = !error && id
-      ? await supabase
-          .from("ocorrencias")
-          .select("id, parede, setor, tipo_erro, ocorrencia, criticidade, status")
-          .eq("id", id)
-          .single()
-      : null;
-    setSalvando(false);
+      const id = (criacao as { id?: string } | null)?.id;
+      if (error || !id) {
+        setSalvando(false);
+        toast.error(
+          "Não foi possível salvar o erro: " +
+            (error?.message ?? "a operação não retornou um identificador")
+        );
+        return;
+      }
 
-    if (error) {
-      toast.error("Não foi possível salvar o erro: " + error.message);
-      return;
-    }
-    if (!leitura || leitura.error || !leitura.data) {
-      toast.error(
-        "O erro foi salvo, mas não pôde ser recarregado: " +
-          (leitura?.error?.message ?? "registro não encontrado")
-      );
+      let fotoFallback = false;
+      if (anexo) {
+        const anexoSalvo = await salvarFotoDoDesvio(supabase, parede, id, anexo);
+        if (anexoSalvo.error) {
+          await carregarConteudo(auditoria);
+          setDatas((d) => ({ ...d, [parede]: dia }));
+          setSalvando(false);
+          toast.error(
+            "O erro foi salvo, mas a foto não pôde ser vinculada: " +
+              anexoSalvo.error.message
+          );
+          return;
+        }
+        fotoFallback = anexoSalvo.fallback;
+      }
+
+      const leitura = await supabase
+        .from("ocorrencias")
+        .select("id, parede, setor, tipo_erro, ocorrencia, criticidade, status")
+        .eq("id", id)
+        .single();
+
+      if (leitura.error || !leitura.data) {
+        await carregarConteudo(auditoria);
+        setDatas((d) => ({ ...d, [parede]: dia }));
+        setSalvando(false);
+        toast.error(
+          "O erro foi salvo, mas não pôde ser recarregado: " +
+            (leitura.error?.message ?? "registro não encontrado")
+        );
+        return;
+      }
+
       await carregarConteudo(auditoria);
-      return;
+      setDatas((d) => ({ ...d, [parede]: dia }));
+      setSalvando(false);
+      toast.success(
+        anexo
+          ? fotoFallback
+            ? "Erro registrado. A foto foi salva em modo compatibilidade."
+            : "Erro e foto registrados. Já aparecem na tela Consultar."
+          : "Erro registrado. Já aparece na tela Consultar."
+      );
+    } catch (caught) {
+      setSalvando(false);
+      toast.error(
+        "Não foi possível salvar o erro: " +
+          (caught instanceof Error ? caught.message : "erro inesperado")
+      );
     }
-    setErros((lista) => [...lista, leitura.data as ErroDaAuditoria]);
-    setDatas((d) => ({ ...d, [parede]: dia }));
-    toast.success("Erro registrado. Já aparece na tela Consultar.");
   }
 
   /* NA não confere a parede: quem confere é "Parede sem erros" ou o
@@ -380,36 +576,38 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
   async function adicionarNa(parede: string, novo: NovoNa) {
     if (!auditoria || salvando) return;
     setSalvando(true);
-    const supabase = createClient();
-    const { data: criacao, error } = await mutarQualidade("ADICIONAR_NA", {
+    const itens = novo.tipos_erro.map((tipo_erro) => ({
+      tipo_erro,
+      observacao: novo.observacao || null,
+    }));
+
+    try {
+      const { data, error } = await mutarQualidade("ADICIONAR_NAS", {
         auditoria_id: auditoria.id,
         parede,
-        tipo_erro: novo.tipo_erro,
-        observacao: novo.observacao || null,
-    });
-    const id = (criacao as { id?: string } | null)?.id;
-    const leitura = !error && id
-      ? await supabase
-          .from("qualidade_auditoria_nas")
-          .select("id, parede, tipo_erro, observacao")
-          .eq("id", id)
-          .single()
-      : null;
-    setSalvando(false);
-    if (error) {
-      toast.error("Não foi possível salvar o NA: " + error.message);
-      return;
-    }
-    if (!leitura || leitura.error || !leitura.data) {
-      toast.error(
-        "O NA foi salvo, mas não pôde ser recarregado: " +
-          (leitura?.error?.message ?? "registro não encontrado")
-      );
+        itens,
+      });
+      if (error) {
+        setSalvando(false);
+        toast.error("Não foi possível salvar os NAs: " + error.message);
+        return;
+      }
+
       await carregarConteudo(auditoria);
-      return;
+      setSalvando(false);
+      const adicionados = Number(
+        (data as { adicionados?: number } | null)?.adicionados ?? itens.length
+      );
+      toast.success(
+        `${adicionados} ${adicionados === 1 ? "NA registrado" : "NAs registrados"}. Eles não contam como erro.`
+      );
+    } catch (caught) {
+      setSalvando(false);
+      toast.error(
+        "Não foi possível salvar os NAs: " +
+          (caught instanceof Error ? caught.message : "erro inesperado")
+      );
     }
-    setNas((lista) => [...lista, leitura.data as NaDaAuditoria]);
-    toast.success("NA registrado. Ele não conta como erro.");
   }
 
   async function removerNa(id: string) {
