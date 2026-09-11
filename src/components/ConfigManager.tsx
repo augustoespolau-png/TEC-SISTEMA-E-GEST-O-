@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
+import { mutarQualidade } from "@/lib/qualidadeCompat";
 import LinhaConfig from "@/components/config/LinhaConfig";
 import RegrasQualidade from "@/components/config/RegrasQualidade";
 import type { ConfigItem, Parede } from "@/lib/types";
@@ -106,9 +107,12 @@ function ConfigSection({
     const nome = novo.trim().toUpperCase();
     if (!nome || ocupado) return;
     setOcupado(true);
-    const supabase = createClient();
     const ordem = Math.max(0, ...(itens ?? []).map((i) => i.ordem)) + 1;
-    const { error } = await supabase.from(tabela).insert({ nome, ordem });
+    const { error } = await mutarQualidade("CONFIG_ADICIONAR_ITEM", {
+      tabela,
+      nome,
+      ordem,
+    });
     setOcupado(false);
     if (error) {
       toast.error(
@@ -122,11 +126,11 @@ function ConfigSection({
   }
 
   async function renomear(item: ConfigItem, nome: string) {
-    const supabase = createClient();
-    const { error } = await supabase
-      .from(tabela)
-      .update({ nome })
-      .eq("id", item.id);
+    const { error } = await mutarQualidade("CONFIG_RENOMEAR_ITEM", {
+      tabela,
+      nome_atual: item.nome,
+      nome_novo: nome,
+    });
     if (error) {
       toast.error(
         error.code === "23505"
@@ -141,11 +145,10 @@ function ConfigSection({
   }
 
   async function reativar(item: ConfigItem) {
-    const supabase = createClient();
-    const { error } = await supabase
-      .from(tabela)
-      .update({ ativo: true })
-      .eq("id", item.id);
+    const { error } = await mutarQualidade("CONFIG_REATIVAR_ITEM", {
+      tabela,
+      nome_atual: item.nome,
+    });
     if (error) {
       toast.error(error.message);
       return;
@@ -155,8 +158,10 @@ function ConfigSection({
   }
 
   async function excluir(item: ConfigItem) {
-    const supabase = createClient();
-    const { error } = await supabase.from(tabela).delete().eq("id", item.id);
+    const { error } = await mutarQualidade("CONFIG_EXCLUIR_ITEM", {
+      tabela,
+      nome_atual: item.nome,
+    });
     if (error) {
       toast.error("Não foi possível excluir: " + error.message);
       return;
@@ -284,11 +289,12 @@ function ParedesSection({ versaoProjetos }: { versaoProjetos: number }) {
     const nome = novo.trim().toUpperCase();
     if (!nome || ocupado || projetoId == null) return;
     setOcupado(true);
-    const supabase = createClient();
     const ordem = Math.max(0, ...(paredes ?? []).map((i) => i.ordem)) + 1;
-    const { error } = await supabase
-      .from("paredes")
-      .insert({ nome, ordem, projeto_id: projetoId });
+    const { error } = await mutarQualidade("CONFIG_ADICIONAR_PAREDE", {
+      projeto: projeto?.nome,
+      nome,
+      ordem,
+    });
     setOcupado(false);
     if (error) {
       toast.error(
@@ -336,15 +342,10 @@ function ParedesSection({ versaoProjetos }: { versaoProjetos: number }) {
     }
 
     setOcupado(true);
-    const supabase = createClient();
-    const base = Math.max(0, ...(paredes ?? []).map((i) => i.ordem));
-    const { error } = await supabase.from("paredes").insert(
-      criar.map((nome, i) => ({
-        nome,
-        ordem: base + i + 1,
-        projeto_id: projetoId,
-      }))
-    );
+    const { error } = await mutarQualidade("CONFIG_ADICIONAR_PAREDES", {
+      projeto: projeto?.nome,
+      nomes: criar,
+    });
     setOcupado(false);
     if (error) {
       toast.error("Não foi possível criar: " + error.message);
@@ -360,11 +361,12 @@ function ParedesSection({ versaoProjetos }: { versaoProjetos: number }) {
   }
 
   async function renomear(item: Parede, nome: string) {
-    const supabase = createClient();
-    const { error } = await supabase
-      .from("paredes")
-      .update({ nome })
-      .eq("id", item.id);
+    const { error } = await mutarQualidade("CONFIG_RENOMEAR_PAREDE", {
+      projeto: projeto?.nome,
+      nome_atual: item.nome,
+      parede_ordem: item.ordem,
+      nome_novo: nome,
+    });
     if (error) {
       toast.error(
         error.code === "23505"
@@ -381,11 +383,12 @@ function ParedesSection({ versaoProjetos }: { versaoProjetos: number }) {
      casas, inclusive as já auditadas. É o comportamento certo — se a
      área mudou, foi o desenho da parede que mudou, não o de uma casa. */
   async function salvarArea(item: Parede, m2: number | null) {
-    const supabase = createClient();
-    const { error } = await supabase
-      .from("paredes")
-      .update({ area_m2: m2 })
-      .eq("id", item.id);
+    const { error } = await mutarQualidade("CONFIG_ALTERAR_AREA_PAREDE", {
+      projeto: projeto?.nome,
+      nome_atual: item.nome,
+      parede_ordem: item.ordem,
+      area_m2: m2,
+    });
     if (error) {
       toast.error("Não foi possível salvar a metragem: " + error.message);
       return;
@@ -399,11 +402,11 @@ function ParedesSection({ versaoProjetos }: { versaoProjetos: number }) {
   }
 
   async function reativar(item: Parede) {
-    const supabase = createClient();
-    const { error } = await supabase
-      .from("paredes")
-      .update({ ativo: true })
-      .eq("id", item.id);
+    const { error } = await mutarQualidade("CONFIG_REATIVAR_PAREDE", {
+      projeto: projeto?.nome,
+      nome_atual: item.nome,
+      parede_ordem: item.ordem,
+    });
     if (error) {
       toast.error(error.message);
       return;
@@ -412,8 +415,11 @@ function ParedesSection({ versaoProjetos }: { versaoProjetos: number }) {
   }
 
   async function excluir(item: Parede) {
-    const supabase = createClient();
-    const { error } = await supabase.from("paredes").delete().eq("id", item.id);
+    const { error } = await mutarQualidade("CONFIG_EXCLUIR_PAREDE", {
+      projeto: projeto?.nome,
+      nome_atual: item.nome,
+      parede_ordem: item.ordem,
+    });
     if (error) {
       toast.error("Não foi possível excluir: " + error.message);
       return;

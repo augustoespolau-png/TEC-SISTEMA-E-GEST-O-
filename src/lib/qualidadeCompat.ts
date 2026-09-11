@@ -13,6 +13,8 @@ export async function mutarQualidade(
 ) {
   const funcao = operacao.startsWith("ALTERAR_REGRA_")
     ? "qualidade_compat_regra"
+    : operacao.startsWith("CONFIG_")
+      ? "qualidade_compat_configuracao"
     : "qualidade_compat_mutacao";
 
   return createClient().rpc(funcao, {
