@@ -1,0 +1,3236 @@
+@import "tailwindcss";
+
+/* ==================================================================
+   TOKENS — identidade Tecverde em dois temas
+   Verde 362C #399747 · Azul 639C #2192CF · Cinza Black 90% #404041
+   As cores de dados foram validadas para daltonismo em cada fundo
+   (script da skill dataviz) — não trocar no olho.
+   ================================================================== */
+@theme {
+  --color-fundo: #eaeeec;
+  --color-papel: #ffffff;
+  --color-papel-2: #f4f7f5;
+  --color-ink: #1b2621;
+  --color-ink-2: #5d6d65;
+  --color-ink-3: #8d9c94;
+  --color-line: #dde4e0;
+  --color-line-2: #c6d0ca;
+
+  /* Tinta que vai EM CIMA de um preenchimento colorido (botão forte, chip
+     ligado, faixa de gráfico). No tema claro as cores de marca são
+     escuras e pedem branco; no escuro elas clareiam e pedem tinta
+     escura, senão o texto desaparece dentro do próprio botão. */
+  --color-sobre-cor: #ffffff;
+  /* O vermelho de não conformidade é escuro nos DOIS temas — ali o branco
+     é que funciona, e por isso ele não segue o token acima. */
+  --color-sobre-alta: #ffffff;
+
+  --color-brand: #399747;
+  --color-brand-forte: #2c7a38;
+  --color-brand-suave: #eaf4ec;
+  --color-info: #1d7fb8;
+
+  /* dados: criticidade e estado */
+  --color-alta: #b42318;
+  --color-media: #d97706;
+  --color-baixa: #067647;
+  /* BAIXO dentro de gráfico. O verde acima fica a ΔE 11 do verde da
+     marca em OKLab — abaixo do piso de 15 para VISÃO NORMAL, ou seja,
+     lado a lado num gráfico ninguém separa os dois. Este azul sobe a
+     separação para ΔE 26 a 37. Nos chips de texto o verde continua,
+     porque lá a palavra "BAIXO" está escrita. */
+  --color-baixa-graf: #1570ef;
+  /* espera de aprovação: quinto estado da barra empilhada. Roxo porque
+     é o único tom que passa a checagem de daltonismo ao lado do verde,
+     do âmbar, do azul e do vermelho (script da skill dataviz). */
+  --color-espera: #7e3ba1;
+
+  --font-sans: var(--font-roboto), Roboto, system-ui, sans-serif;
+}
+
+/* ------------------------------------------------------------------
+   TEMA ESCURO — escuro de verdade, para o monitor de chão de fábrica.
+   O logo Black entra em cima em PNG transparente, então o fundo não
+   precisa imitar o cinza do arquivo: a marca pousa em qualquer tom.
+
+   As cores de dados foram validadas contra esta superfície no script da
+   skill dataviz. Vale para o texto dentro de preenchimento colorido
+   também, medido e não estimado: aqui as cores de marca clareiam, e a
+   tinta escura ganha da branca em quatro dos cinco preenchimentos
+   (verde da marca 6.4:1 contra 2.5:1 do branco). A exceção é o vermelho
+   de não conformidade, que é escuro: lá o branco ganha, e por isso ele
+   tem token próprio.
+   ------------------------------------------------------------------ */
+html[data-tema="escuro"] {
+  --color-fundo: #0d1210;
+  --color-papel: #131a16;
+  --color-papel-2: #0f1613;
+  --color-ink: #e8efea;
+  --color-ink-2: #9db2a6;
+  --color-ink-3: #667a70;
+  --color-line: #22302a;
+  --color-line-2: #2e4036;
+
+  --color-sobre-cor: #16241b;
+
+  --color-brand: #4fb85f;
+  --color-brand-forte: #6cc97a;
+  --color-brand-suave: #16241b;
+  --color-info: #2192cf;
+
+  --color-alta: #d03b3b;
+  --color-media: #c98500;
+  --color-baixa: #199e70;
+  --color-baixa-graf: #5b9dff;
+  --color-espera: #a86fd8;
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+/* ------------------------------------------------------------------
+   BARRAS DE ROLAGEM
+
+   A barra do Windows vem com 17px de largura, trilho branco e duas
+   setas nas pontas — mais desenho do que o conteudo que ela acompanha.
+   Aqui ela vira um fio: 8px, sem setas, trilho transparente e o polegar
+   na cor da linha do tema, que escurece so quando o ponteiro chega.
+
+   Vai no seletor universal, e nao so em html, porque scrollbar-color e
+   herdada mas scrollbar-width NAO e — medido: com a regra so em html a
+   barra continuava com 15px de largura, com a cor certa. As regras
+   -webkit ficam para o navegador que ainda nao entende as duas de cima;
+   quando ele entende, ignora estas.
+   ------------------------------------------------------------------ */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-line-2) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--color-line-2);
+  border-radius: 999px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--color-ink-3);
+}
+/* as setas das pontas e o quadradinho do encontro das duas barras */
+*::-webkit-scrollbar-button,
+*::-webkit-scrollbar-corner {
+  display: none;
+}
+
+body {
+  background: var(--color-fundo);
+  color: var(--color-ink);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.num,
+.mono {
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- logotipo: a versão certa para cada tema, trocada por CSS ---
+   A ALTURA vive aqui, não no componente: o logo completo (com a escrita
+   TECVERDE e o slogan) aparece em toda largura de tela, só menor no
+   celular. Antes eu trocava o lockup pelo símbolo sozinho abaixo de
+   640px, e a marca ficava sem o nome. */
+.logo-tv {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  height: 24px;
+}
+@media (min-width: 400px) {
+  .logo-tv {
+    height: 27px;
+  }
+}
+@media (min-width: 640px) {
+  .logo-tv {
+    height: 30px;
+  }
+}
+.logo-tv img {
+  display: block;
+  height: 100%;
+  width: auto;
+  flex: 0 0 auto;
+}
+html[data-tema="escuro"] .logo-tv-claro,
+html:not([data-tema="escuro"]) .logo-tv-escuro {
+  display: none;
+}
+/* Altura fixa quando quem chama pede (tela de login). Precisa estar aqui,
+   depois das media queries: esta folha não está em @layer, e um valor em
+   estilo em linha no componente venceria — mas então a versão responsiva
+   nunca valeria. */
+.logo-tv.grande {
+  height: 44px;
+}
+@media (min-width: 640px) {
+  .logo-tv.grande {
+    height: 56px;
+  }
+}
+
+::selection {
+  background: var(--color-brand);
+  color: var(--color-sobre-cor);
+}
+
+/* ==================================================================
+   COMPONENTES — a mesma linguagem em todas as telas
+   ================================================================== */
+
+.cartao {
+  background: var(--color-papel);
+  border: 1px solid var(--color-line);
+  border-radius: 10px;
+  padding: 14px 16px 16px;
+  min-width: 0;
+}
+.cartao > h2,
+.titulo-secao {
+  font-size: 11.5px;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--color-ink-2);
+  font-weight: 700;
+}
+.sub {
+  font-size: 11.5px;
+  color: var(--color-ink-3);
+  margin-top: 3px;
+  line-height: 1.45;
+}
+.corpo {
+  margin-top: 14px;
+}
+
+/* --- campos --- */
+.rotulo {
+  display: block;
+  font-size: 11px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--color-ink-2);
+  margin-bottom: 6px;
+}
+.campo {
+  width: 100%;
+  /* sem isto, um input de data no iOS impõe sua largura natural e
+     invade a coluna vizinha do grid */
+  max-width: 100%;
+  min-width: 0;
+  border: 1px solid var(--color-line-2);
+  background: var(--color-papel);
+  color: var(--color-ink);
+  border-radius: 8px;
+  padding: 11px 12px;
+  font: inherit;
+  font-size: 16px; /* evita o zoom automático do iOS */
+  outline: none;
+  transition: border-color 130ms, box-shadow 130ms;
+}
+.campo::placeholder {
+  color: var(--color-ink-3);
+}
+.campo:focus {
+  border-color: var(--color-brand);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-brand) 22%, transparent);
+}
+/* O seletor de data do iOS carrega altura e recuo próprios e fica mais
+   alto que os demais campos. Zeramos a aparência nativa e igualamos a
+   altura: 1,5em de texto + 22px de recuo + 2px de borda = 48px. */
+input[type="date"].campo,
+input[type="time"].campo {
+  -webkit-appearance: none;
+  appearance: none;
+  height: calc(1.5em + 24px);
+  line-height: 1.5;
+}
+
+select.campo {
+  appearance: none;
+  padding-right: 32px;
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%),
+    linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: right 15px center, right 10px center;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+}
+textarea.campo {
+  min-height: 68px;
+  resize: vertical;
+  line-height: 1.45;
+}
+/* campo que barrou o envio: a borda tem de gritar mais que o foco */
+.campo.invalido,
+.campo.invalido:focus {
+  border-color: var(--color-alta);
+  border-width: 2px;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-alta) 20%, transparent);
+}
+
+/* --- botões --- */
+.btn {
+  border: 1px solid var(--color-line-2);
+  background: var(--color-papel);
+  color: var(--color-ink-2);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  padding: 8px 13px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color 130ms, color 130ms, transform 80ms;
+  white-space: nowrap;
+}
+.btn:hover:not(:disabled) {
+  border-color: var(--color-brand);
+  color: var(--color-ink);
+}
+.btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.btn-forte {
+  border-color: transparent;
+  background: var(--color-brand);
+  color: var(--color-sobre-cor);
+  font-weight: 700;
+}
+.btn-forte:hover:not(:disabled) {
+  color: var(--color-sobre-cor);
+  filter: brightness(1.06);
+}
+.btn-forte:disabled {
+  background: var(--color-line);
+  color: var(--color-ink-3);
+  opacity: 1;
+}
+
+.segm {
+  display: flex;
+  gap: 3px;
+  background: var(--color-papel);
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  padding: 3px;
+}
+.segm button {
+  border: 0;
+  background: transparent;
+  color: var(--color-ink-2);
+  font: inherit;
+  font-size: 12.5px;
+  padding: 7px 13px;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.segm button.on {
+  background: var(--color-brand);
+  color: var(--color-sobre-cor);
+  font-weight: 700;
+}
+
+/* --- chips de escolha --- */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.chips.grade {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+}
+.chip-esc {
+  border: 1px solid var(--color-line-2);
+  background: var(--color-papel);
+  color: var(--color-ink-2);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 9px 13px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: transform 80ms;
+}
+.chips.grade .chip-esc {
+  padding: 9px 2px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.chip-esc:active {
+  transform: scale(0.95);
+}
+.chip-esc.on {
+  background: var(--color-brand);
+  border-color: var(--color-brand);
+  color: var(--color-sobre-cor);
+  font-weight: 700;
+}
+/* Seleção na auditoria: anel azul em volta, sem trocar a cor de dentro.
+   Assim "selecionada" nunca compete com o verde de "sem erros". */
+.chip-esc.selecionada {
+  outline: 3px solid var(--color-info);
+  outline-offset: 2px;
+  position: relative;
+  z-index: 1;
+}
+
+/* Chip preenchido com uma cor de dado. A tinta de dentro é do tema, não
+   de quem chama: o vermelho é escuro e pede branco, o âmbar e o verde
+   clareiam no tema escuro e pedem tinta escura. Deixar isso em estilo
+   em linha espalhava a decisão por quatro componentes. */
+.preenche-alta,
+.preenche-media,
+.preenche-baixa {
+  font-weight: 700;
+}
+.preenche-alta {
+  background: var(--color-alta);
+  border-color: var(--color-alta);
+  color: var(--color-sobre-alta);
+}
+.preenche-media {
+  background: var(--color-media);
+  border-color: var(--color-media);
+  color: var(--color-sobre-cor);
+}
+.preenche-baixa {
+  background: var(--color-baixa);
+  border-color: var(--color-baixa);
+  color: var(--color-sobre-cor);
+}
+
+/* Selo da PAREDE no cartão de ocorrência.
+   Nunca encolhe: casa e parede sao o endereco do painel na fabrica, e
+   sem a parede o registro nao serve para achar nada. O contorno e
+   neutro de proposito — os selos coloridos ao lado dizem gravidade e
+   situacao, e mais uma cor aqui roubaria a leitura deles. */
+.selo-parede {
+  flex: 0 0 auto;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 2px 7px;
+  border-radius: 6px;
+  white-space: nowrap;
+  color: var(--color-ink);
+  background: var(--color-papel-2);
+  border: 1px solid var(--color-line-2);
+}
+
+/* --- selos de estado --- */
+.chip {
+  display: inline-block;
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
+  padding: 3px 8px;
+  border-radius: 99px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.chip.completa,
+.chip.ok {
+  background: color-mix(in srgb, var(--color-baixa) 16%, transparent);
+  color: var(--color-baixa);
+}
+.chip.pendente,
+.chip.aguardando {
+  background: color-mix(in srgb, var(--color-media) 16%, transparent);
+  color: var(--color-media);
+}
+.chip.bloqueada,
+.chip.critica {
+  background: color-mix(in srgb, var(--color-alta) 16%, transparent);
+  color: var(--color-alta);
+}
+.chip.retrabalho {
+  background: color-mix(in srgb, var(--color-info) 16%, transparent);
+  color: var(--color-info);
+}
+/* não conformidade: o estado que a fábrica precisa enxergar de longe */
+.chip.naoconf {
+  background: var(--color-alta);
+  color: var(--color-sobre-alta);
+}
+/* retrabalho pendente: a produção executou, a gestão ainda não homologou.
+   Contorno tracejado em vez de preenchimento — assim nunca é lido de
+   relance como "concluído". */
+.chip.pendaprov {
+  background: transparent;
+  color: var(--color-info);
+  border: 1px dashed var(--color-info);
+  padding: 2px 7px;
+}
+.chip.normal {
+  background: color-mix(in srgb, var(--color-ink-2) 12%, transparent);
+  color: var(--color-ink-2);
+}
+
+/* ==================================================================
+   INTERAÇÃO NOS GRÁFICOS
+   Toda marca clicável avisa que é clicável e explica o que fará.
+   ================================================================== */
+
+/* alvo de dica: o balão vive dentro do elemento e aparece no hover/foco */
+.dica-alvo {
+  position: relative;
+}
+/* Escondido é display:none, não só transparente: um balão invisível de
+   260px encostado na borda direita ainda empurraria a largura da página
+   e criaria rolagem lateral no celular. */
+.dica {
+  display: none;
+  position: absolute;
+  bottom: calc(100% + 7px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 40;
+  width: max-content;
+  max-width: min(260px, 74vw);
+  padding: 7px 10px;
+  border-radius: 8px;
+  background: var(--color-ink);
+  color: var(--color-fundo);
+  border: 1px solid var(--color-line-2);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.22);
+  font-size: 11.5px;
+  font-weight: 400;
+  line-height: 1.5;
+  text-align: left;
+  white-space: normal;
+  pointer-events: none;
+}
+.dica b {
+  font-weight: 700;
+}
+.dica-alvo:hover > .dica,
+.dica-alvo:focus-visible > .dica {
+  display: block;
+}
+/* Balão é afordância de mouse: em tela de toque não existe hover, e numa
+   marca estreita (coluna de parede, faixa de casa) um balão de 260 px não
+   cabe em 375 px de largura sem sair da tela. Abaixo de 1024 px a
+   informação fica no title nativo, que o sistema posiciona sozinho. */
+@media (max-width: 1023px) {
+  .dica-alvo:hover > .dica,
+  .dica-alvo:focus-visible > .dica {
+    display: none;
+  }
+}
+/* ancorado pelo lado de dentro: encostado na borda, não sai da tela */
+.dica.esq {
+  left: 0;
+  right: auto;
+  transform: none;
+}
+.dica.dir {
+  left: auto;
+  right: 0;
+  transform: none;
+}
+
+/* marca de gráfico que filtra o painel ao ser clicada */
+.clicavel {
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background 100ms ease;
+}
+.clicavel:hover,
+.clicavel:focus-visible {
+  background: color-mix(in srgb, var(--color-info) 10%, transparent);
+  outline: none;
+}
+.clicavel.on {
+  background: color-mix(in srgb, var(--color-info) 16%, transparent);
+  box-shadow: inset 0 0 0 1.5px var(--color-info);
+}
+
+/* coluna de gráfico SVG clicável: destaque atrás das barras da semana */
+.col-svg {
+  cursor: pointer;
+}
+.col-svg .alvo {
+  fill: var(--color-ink);
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.col-svg:hover .alvo,
+.col-svg:focus-visible .alvo {
+  opacity: 0.07;
+}
+.col-svg.on .alvo {
+  fill: var(--color-info);
+  opacity: 0.16;
+}
+
+/* barra de recortes ativos */
+.recortes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.recorte {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--color-info);
+  background: color-mix(in srgb, var(--color-info) 12%, transparent);
+  color: var(--color-info);
+  border-radius: 99px;
+  padding: 4px 6px 4px 11px;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.recorte span.x {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 99px;
+  background: var(--color-info);
+  color: var(--color-papel);
+  font-size: 11px;
+  line-height: 1;
+}
+
+/* --- barras --- */
+.bar {
+  display: grid;
+  grid-template-columns: minmax(72px, 130px) 1fr auto;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 9px;
+  font-size: 12px;
+}
+.bar:last-child {
+  margin-bottom: 0;
+}
+/* a mesma linha, agora clicável: um botão sem cara de botão */
+button.bar {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  padding: 3px 5px;
+  margin-inline: -5px;
+}
+.bar .n {
+  color: var(--color-ink-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.trilho {
+  height: 12px;
+  border-radius: 0 3px 3px 0;
+  background: var(--color-papel-2);
+  display: flex;
+  gap: 2px;
+  overflow: hidden;
+}
+.trilho i {
+  display: block;
+  height: 100%;
+}
+.bar .q {
+  text-align: right;
+  color: var(--color-ink-2);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+.mini {
+  height: 5px;
+  border-radius: 3px;
+  background: var(--color-papel-2);
+  overflow: hidden;
+  min-width: 64px;
+}
+.mini i {
+  display: block;
+  height: 100%;
+  background: var(--color-baixa);
+}
+
+.legenda {
+  display: flex;
+  gap: 14px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+.legenda span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--color-ink-2);
+}
+.legenda i {
+  width: 9px;
+  height: 9px;
+  border-radius: 2.5px;
+  display: inline-block;
+}
+
+/* --- tabelas --- */
+.rolagem {
+  overflow-x: auto;
+}
+table.tabela {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+table.tabela th {
+  text-align: left;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-ink-3);
+  font-weight: 600;
+  padding: 0 10px 8px;
+  white-space: nowrap;
+}
+table.tabela td {
+  padding: 7px 10px;
+  border-top: 1px solid var(--color-line);
+  white-space: nowrap;
+}
+table.tabela tbody tr:hover {
+  background: var(--color-papel-2);
+}
+
+table.mapa {
+  border-collapse: separate;
+  border-spacing: 2px;
+  font-size: 10px;
+}
+table.mapa th {
+  color: var(--color-ink-3);
+  font-weight: 500;
+  font-size: 9.5px;
+}
+table.mapa td {
+  width: 30px;
+  height: 24px;
+  border-radius: 3px;
+  text-align: center;
+  background: var(--color-papel-2);
+  color: var(--color-ink-3);
+}
+
+/* --- indicador de conexão ao vivo --- */
+.vivo {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  color: var(--color-ink-3);
+  white-space: nowrap;
+}
+.vivo i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-brand);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-brand) 50%, transparent);
+  animation: pulso 2.4s infinite;
+}
+.vivo.parado i {
+  background: var(--color-ink-3);
+  animation: none;
+}
+@keyframes pulso {
+  70% {
+    box-shadow: 0 0 0 7px transparent;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .vivo i {
+    animation: none;
+  }
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+}
+
+/* ==================================================================
+   LAYOUT
+   ================================================================== */
+
+/* altura reservada pela barra de navegação do celular */
+:root {
+  --altura-nav: calc(58px + env(safe-area-inset-bottom));
+}
+@media (min-width: 1024px) {
+  :root {
+    --altura-nav: 0px;
+  }
+}
+
+/* navegação inferior — só no celular, ao alcance do polegar */
+.nav-inferior {
+  position: fixed;
+  inset-inline: 0;
+  bottom: 0;
+  z-index: 60;
+  display: flex;
+  background: color-mix(in srgb, var(--color-papel) 96%, transparent);
+  backdrop-filter: blur(10px);
+  border-top: 1px solid var(--color-line);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.nav-inferior a {
+  flex: 1;
+  min-height: 58px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 7px 4px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--color-ink-3);
+  transition: color 130ms;
+}
+.nav-inferior a.on {
+  color: var(--color-brand);
+}
+.nav-inferior a:active {
+  background: var(--color-papel-2);
+}
+@media (min-width: 1024px) {
+  .nav-inferior {
+    display: none;
+  }
+}
+
+/* telas operacionais: coluna no celular, largura confortável no PC */
+.tela {
+  margin-inline: auto;
+  width: 100%;
+  max-width: 34rem;
+  padding: 14px 14px calc(28px + var(--altura-nav));
+  display: grid;
+  gap: 12px;
+}
+/* a tela de registro tem o rodapé fixo por cima da navegação */
+.tela-form {
+  padding-bottom: calc(96px + var(--altura-nav));
+}
+@media (min-width: 1024px) {
+  .tela {
+    max-width: 76rem;
+    padding: 18px 22px 40px;
+  }
+  .tela-form {
+    padding-bottom: 110px;
+  }
+  .tela-2col {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+  .tela-filtros {
+    grid-template-columns: 300px minmax(0, 1fr);
+    align-items: start;
+  }
+}
+
+/* cabeçalho do app */
+.topo {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: var(--color-papel);
+  border-bottom: 1px solid var(--color-line);
+}
+.topo-linha {
+  margin-inline: auto;
+  max-width: 76rem;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 14px;
+}
+@media (min-width: 1024px) {
+  .topo-linha {
+    padding: 12px 22px;
+  }
+}
+/* No celular a navegação vive na barra de baixo; estas abas são só do PC.
+   O display fica aqui (e não numa classe utilitária) porque CSS sem
+   camada vence as utilitárias do Tailwind — usar `hidden` não bastaria. */
+.abas {
+  display: none;
+  gap: 2px;
+}
+@media (min-width: 1024px) {
+  .abas {
+    display: flex;
+  }
+}
+.aba {
+  padding: 7px 12px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--color-ink-2);
+  white-space: nowrap;
+}
+.aba:hover {
+  background: var(--color-papel-2);
+}
+.aba.on {
+  background: var(--color-brand);
+  color: var(--color-sobre-cor);
+}
+/* As folhas dos indicadores, aninhadas sob a aba Indicadores. Recuo e
+   fonte menor dizem "isto e filho do de cima" sem precisar de titulo de
+   grupo; acesa, ela usa o tom suave da marca — o cheio ja e da aba mae,
+   e duas marcacoes fortes na mesma coluna competiriam. */
+.aba-filha {
+  font-size: 12px;
+  font-weight: 600;
+  padding-left: 26px;
+  color: var(--color-ink-3);
+}
+.aba-filha.on {
+  background: var(--color-brand-suave);
+  color: var(--color-brand-forte);
+}
+/* no celular a lateral vira barra horizontal: o recuo nao faz sentido */
+@media (max-width: 1023.98px) {
+  .aba-filha {
+    padding-left: 12px;
+  }
+}
+
+/* rodapé fixo do formulário */
+.rodape {
+  position: fixed;
+  inset-inline: 0;
+  bottom: var(--altura-nav);
+  z-index: 40;
+  background: color-mix(in srgb, var(--color-papel) 94%, transparent);
+  backdrop-filter: blur(10px);
+  border-top: 1px solid var(--color-line-2);
+}
+.rodape-linha {
+  margin-inline: auto;
+  max-width: 76rem;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px calc(11px + env(safe-area-inset-bottom));
+}
+
+/* ==================================================================
+   PAINEL DE PRODUÇÃO — só o que é específico dele
+   ================================================================== */
+.pn {
+  min-height: 100dvh;
+  background: var(--color-fundo);
+}
+.pn-topo {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--color-line);
+  background: var(--color-papel);
+}
+/* faixa sob o cabeçalho: datas escolhidas e recortes ativos */
+.pn-barra {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 9px 18px;
+  border-bottom: 1px solid var(--color-line);
+  background: var(--color-papel-2);
+}
+/* muitos botões de período: no celular a fileira rola em vez de quebrar */
+.segm.rolar {
+  overflow-x: auto;
+  max-width: 100%;
+  scrollbar-width: none;
+}
+.segm.rolar::-webkit-scrollbar {
+  display: none;
+}
+.pn-grade {
+  max-width: 1680px;
+  margin: 0 auto;
+  padding: 14px 18px calc(40px + var(--altura-nav));
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(12, 1fr);
+}
+.pn-grade > * {
+  grid-column: span 12;
+}
+@media (min-width: 1100px) {
+  .col-4 { grid-column: span 4; }
+  .col-5 { grid-column: span 5; }
+  .col-7 { grid-column: span 7; }
+}
+
+/* ==================================================================
+   PAINEL 2.0 — uma coluna, do macro ao micro. Sem grade de 12 colunas:
+   a leitura é de cima para baixo, e cada bloco responde uma pergunta.
+   ================================================================== */
+.pn2-grade {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 14px 18px calc(40px + var(--altura-nav));
+  display: grid;
+  gap: 12px;
+}
+
+/* dois cartões lado a lado no PC, empilhados no celular */
+.pn2-par {
+  display: grid;
+  gap: 12px;
+}
+@media (min-width: 900px) {
+  .pn2-par {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* os quatro números do topo */
+.numeros2 {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, 1fr);
+}
+@media (min-width: 900px) {
+  .numeros2 {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+.numero2 {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: left;
+  background: var(--color-papel);
+  border: 1px solid var(--color-line);
+  border-radius: 10px;
+  padding: 13px 15px 12px;
+  font: inherit;
+}
+.n2-rotulo {
+  font-size: 10.5px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--color-ink-3);
+  line-height: 1.3;
+}
+.n2-valor {
+  font-size: 40px;
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+.n2-valor small {
+  font-size: 19px;
+  font-weight: 700;
+  color: var(--color-ink-2);
+}
+.n2-embaixo {
+  font-size: 11px;
+  color: var(--color-ink-3);
+  line-height: 1.4;
+}
+.pn.tv .n2-valor {
+  font-size: 60px;
+}
+
+/* a barra de estados: as faixas somam o total de paredes */
+.barra-estados {
+  display: flex;
+  gap: 2px;
+  height: 34px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--color-papel-2);
+}
+.barra-estados.fina {
+  height: 20px;
+  border-radius: 5px;
+}
+.barra-estados .faixa {
+  position: relative;
+  border: 0;
+  padding: 0;
+  min-width: 3px;
+  cursor: pointer;
+  transition: filter 120ms;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.barra-estados .faixa:hover,
+.barra-estados .faixa:focus-visible {
+  filter: brightness(1.12);
+  outline: none;
+}
+.barra-estados .faixa.on {
+  box-shadow: inset 0 0 0 2px var(--color-ink);
+}
+.faixa-num {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--color-sobre-cor);
+  pointer-events: none;
+}
+
+/* tiras da leitura de diretoria: números pequenos, muitos por linha */
+.tiras {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, 1fr);
+}
+@media (min-width: 560px) {
+  .tiras {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+@media (min-width: 1024px) {
+  .tiras {
+    grid-template-columns: repeat(6, 1fr);
+  }
+}
+.tira {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--color-papel-2);
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  padding: 9px 11px 8px;
+}
+.tira-rotulo {
+  font-size: 9.5px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--color-ink-3);
+  line-height: 1.3;
+}
+.tira-valor {
+  font-size: 25px;
+  font-weight: 900;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+}
+.tira-valor small {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-ink-2);
+}
+.tira-detalhe {
+  font-size: 10px;
+  color: var(--color-ink-3);
+  line-height: 1.35;
+}
+
+/* cartões de semana do FPY */
+.semanas-fpy {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+.semana-cartao {
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  padding: 9px 11px;
+  background: var(--color-papel-2);
+}
+.semana-topo {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--color-ink-2);
+  display: flex;
+  flex-direction: column;
+}
+.semana-casas {
+  font-size: 9.5px;
+  font-weight: 400;
+  color: var(--color-ink-3);
+}
+.semana-nums {
+  display: flex;
+  gap: 12px;
+  margin-top: 6px;
+}
+.semana-nums span {
+  display: flex;
+  flex-direction: column;
+}
+.semana-nums b {
+  font-size: 16px;
+  font-weight: 900;
+  line-height: 1.1;
+}
+.semana-nums i {
+  font-style: normal;
+  font-size: 9px;
+  color: var(--color-ink-3);
+}
+.semana-status {
+  margin-top: 6px;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* retrabalhos por dia */
+.dias-barras {
+  display: flex;
+  gap: 3px;
+  align-items: flex-end;
+  min-height: 108px;
+}
+.dia-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  min-width: 26px;
+  flex: 1 1 0;
+}
+.dia-num {
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--color-ink-2);
+}
+.dia-vazio {
+  width: 100%;
+  height: 72px;
+  display: flex;
+  align-items: flex-end;
+  background: var(--color-papel-2);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.dia-cheio {
+  width: 100%;
+  border-radius: 3px 3px 0 0;
+  min-height: 2px;
+}
+.dia-rot {
+  font-size: 8.5px;
+  color: var(--color-ink-3);
+  white-space: nowrap;
+}
+
+/* uma linha por casa */
+.linha-casa {
+  display: grid;
+  grid-template-columns: 74px 1fr 42px 42px;
+  gap: 8px;
+  align-items: center;
+  padding: 3px 4px;
+  border-radius: 6px;
+  margin-inline: -4px;
+}
+.linha-casa.on {
+  background: color-mix(in srgb, var(--color-info) 12%, transparent);
+}
+.casa-nome {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--color-ink);
+  padding: 3px 5px;
+  margin-inline: -5px;
+  text-align: left;
+}
+.casa-recon {
+  font-size: 9px;
+  font-weight: 500;
+  color: var(--color-ink-3);
+}
+.casa-pct,
+.casa-fpy {
+  font-size: 11.5px;
+  text-align: right;
+  font-weight: 700;
+}
+
+/* colunas por posição de parede */
+.colunas-parede {
+  display: flex;
+  gap: 4px;
+  align-items: flex-end;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+.coluna-parede {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 40px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  padding: 4px 2px;
+  border-radius: 7px;
+  cursor: pointer;
+}
+.coluna-parede:hover,
+.coluna-parede:focus-visible {
+  background: color-mix(in srgb, var(--color-info) 10%, transparent);
+  outline: none;
+}
+.coluna-parede.on {
+  background: color-mix(in srgb, var(--color-info) 16%, transparent);
+  box-shadow: inset 0 0 0 1.5px var(--color-info);
+}
+.cp-vazio {
+  width: 100%;
+  height: 92px;
+  display: flex;
+  align-items: flex-end;
+  background: var(--color-papel-2);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.cp-cheio {
+  width: 100%;
+  border-radius: 4px 4px 0 0;
+  min-height: 3px;
+}
+.cp-num {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--color-ink);
+}
+.cp-nome {
+  font-size: 10.5px;
+  color: var(--color-ink-2);
+}
+.cp-fpy {
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.kpis {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, 1fr);
+}
+@media (min-width: 720px) {
+  .kpis { grid-template-columns: repeat(3, 1fr); }
+}
+@media (min-width: 1024px) {
+  .kpis { grid-template-columns: repeat(5, 1fr); }
+}
+/* nove indicadores numa linha só: é a leitura de monitor de fábrica */
+@media (min-width: 1440px) {
+  .kpis { grid-template-columns: repeat(9, 1fr); }
+}
+.kpi {
+  background: var(--color-papel);
+  border: 1px solid var(--color-line);
+  border-radius: 10px;
+  padding: 11px 13px 10px;
+}
+.kpi .r {
+  font-size: 10px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--color-ink-3);
+  line-height: 1.3;
+}
+.kpi .v {
+  font-size: 26px;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  margin-top: 5px;
+  line-height: 1.05;
+}
+.kpi .v small {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-ink-2);
+}
+.kpi .d {
+  font-size: 10.5px;
+  margin-top: 3px;
+  color: var(--color-ink-3);
+}
+
+/* modo TV: escala maior e sem controles */
+.pn.tv { font-size: 15px; }
+.pn.tv .kpi .v { font-size: 38px; }
+.pn.tv .cartao > h2 { font-size: 13px; }
+.pn.tv .pn-grade { max-width: none; padding: 18px 26px; gap: 14px; }
+.pn.tv .esconde-tv { display: none; }
+/* ==================================================================
+   INDICADORES — as tres folhas (FPY, Desvios, Comparativos).
+   Prefixo .ind- de proposito: esta tela nao empresta classe de
+   ninguem e nao toma classe emprestada. Ja fomos mordidos duas vezes
+   por CSS sem camada vencendo utilitario do Tailwind.
+   ================================================================== */
+
+.ind-topo {
+  position: sticky;
+  top: 0;
+  z-index: 25;
+  background: var(--color-papel-2);
+  padding: 10px 0 8px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--color-line);
+}
+.ind-topo-linha {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+.ind-titulo {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.ind-projeto {
+  width: auto;
+  max-width: 100%;
+  margin-left: auto;
+}
+.ind-erro {
+  color: var(--color-alta);
+  font-size: 13px;
+}
+
+/* --- barra de periodo --- */
+.ind-periodos {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-wrap: wrap;
+  background: var(--color-papel);
+  border: 1px solid var(--color-line);
+  border-radius: 10px;
+  padding: 4px;
+  margin-top: 10px;
+}
+.ind-periodos button {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  background: transparent;
+  color: var(--color-ink-2);
+  border: 0;
+  border-radius: 7px;
+  padding: 7px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ind-periodos button:hover {
+  background: var(--color-papel-2);
+  color: var(--color-ink);
+}
+.ind-periodos button[aria-pressed="true"] {
+  background: var(--color-brand);
+  color: #fff;
+}
+.ind-resumo {
+  font-size: 12px;
+  color: var(--color-ink-3);
+  padding: 0 10px;
+  white-space: nowrap;
+}
+/* ------------------------------------------------------------------
+   INTERVALO DE DATAS — um calendario so, na propria faixa de filtros
+
+   Os dois campos <input type="date"> que moravam aqui custavam uma
+   FAIXA INTEIRA de altura abaixo dos botoes, e ela so aparecia no modo
+   personalizado — ou seja, empurrava os graficos para baixo justamente
+   quando a pessoa tinha acabado de escolher o periodo para olhar os
+   graficos. O botao ocupa o espaco que ja sobrava a direita.
+   ------------------------------------------------------------------ */
+/* ------------------------------------------------------------------
+   AUDITORIA — abrir a casa, e a fila das casas auditadas
+   ------------------------------------------------------------------ */
+
+/* Casa, projeto e o botão numa linha só: é um gesto único. O botão
+   ganha largura própria para o rótulo não quebrar em duas linhas. */
+.aud-abrir {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 1fr;
+  align-items: end;
+}
+@media (min-width: 768px) {
+  .aud-abrir {
+    grid-template-columns: 1fr 1fr minmax(200px, 0.9fr);
+  }
+}
+/* 12px de recuo, e não 11: com 11 o botão saía 46px contra os 48 dos
+   campos, e os 2px de diferença apareciam como um degrau no topo da
+   linha — as bases já estavam alinhadas. */
+.aud-abrir-botao {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 12px 16px;
+  font-size: 14.5px;
+}
+
+/* A FILA DE CASAS. Fichas do mesmo tamanho, em linha, com o número
+   grande à esquerda e o FPY à direita — o par que responde "qual casa"
+   e "como ela foi" sem ler mais nada. */
+.aud-casas {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(178px, 1fr));
+}
+.aud-casa {
+  display: grid;
+  gap: 5px;
+  align-content: start;
+  text-align: left;
+  border: 1px solid var(--color-line);
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: var(--color-papel-2);
+  color: var(--color-ink);
+  cursor: pointer;
+  transition:
+    border-color 120ms,
+    transform 120ms;
+}
+.aud-casa:hover {
+  border-color: var(--color-brand);
+  transform: translateY(-1px);
+}
+.aud-casa:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+}
+.aud-casa-topo {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.aud-casa-topo b {
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.aud-casa-topo em {
+  font-size: 14px;
+  font-weight: 800;
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+}
+.aud-casa-pe {
+  font-size: 11.5px;
+  color: var(--color-ink-3);
+}
+.aud-casa-marcas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 10px;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.aud-casa-marcas i {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-style: normal;
+}
+/* a bolinha herda a cor do marcador, então ela nunca discorda do texto */
+.aud-casa-marcas i b {
+  width: 5px;
+  height: 5px;
+  border-radius: 99px;
+  background: currentColor;
+}
+.aud-casa-mais {
+  align-content: center;
+  justify-items: center;
+  gap: 7px;
+  text-align: center;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--color-ink-2);
+  background: transparent;
+  border-style: dashed;
+}
+
+/* ------------------------------------------------------------------
+   A BARRINHA DE META NA RÉGUA DE NÚMEROS
+
+   Os três FPY já foram cartões grandes, com ícone e barra de 7px. Três
+   blocos de 168px de altura para três números — e eles empurravam os
+   gráficos, que são o assunto da folha, para fora da tela. Voltaram
+   para a régua; ficou o que a régua não tinha: um risco de 4px que
+   responde de relance o que o número sozinho não responde, falta
+   quanto para a meta.
+   ------------------------------------------------------------------ */
+.ind-regua {
+  position: relative;
+  height: 4px;
+  margin: 5px 0 1px;
+  border-radius: 99px;
+  background: var(--color-line);
+}
+.ind-regua i {
+  display: block;
+  height: 100%;
+  border-radius: 99px;
+  transition: width 220ms;
+}
+.ind-regua i.t-marca {
+  background: var(--color-brand);
+}
+.ind-regua i.t-alta {
+  background: var(--color-alta);
+}
+/* a meta marcada ONDE ELA CAI, e não no fim da barra: sem ela, 68%
+   parece bom até se ver que a linha está em 70 */
+.ind-regua span {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--color-ink-2);
+}
+
+/* ------------------------------------------------------------------
+   PAREDE OK NA CONSULTA
+
+   Ela divide a lista com os cartões de erro, e não pode disputar
+   atenção com eles: quem abre a Consultar está atrás do que precisa de
+   ação. Cartão baixo, sem nada para clicar, verde discreto.
+   ------------------------------------------------------------------ */
+.cartao-ok {
+  border-left: 3px solid var(--color-brand);
+  background: color-mix(in srgb, var(--color-brand) 4%, var(--color-papel));
+}
+.selo-ok {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 5px;
+  padding: 2px 7px;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: var(--color-sobre-cor);
+  background: var(--color-brand);
+}
+
+/* as situações da Consulta, marcadas várias de uma vez */
+.filtro-marca {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--color-ink);
+  cursor: pointer;
+}
+.filtro-marca input {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--color-brand);
+  cursor: pointer;
+}
+
+.ind-datas-caixa {
+  position: relative;
+  display: inline-flex;
+}
+/* na coluna de filtros o botão é o campo, e ocupa a largura dela */
+.ind-datas-larga,
+.ind-datas-larga > .ind-datas-botao {
+  display: flex;
+  width: 100%;
+  justify-content: center;
+}
+.ind-cal-limpa {
+  display: block;
+  width: 100%;
+  margin-bottom: 8px;
+  border: 1px solid var(--color-line-2);
+  border-radius: 8px;
+  padding: 5px;
+  font-size: 11.5px;
+  color: var(--color-ink-2);
+  background: transparent;
+  cursor: pointer;
+}
+.ind-cal-limpa:hover {
+  border-color: var(--color-brand);
+  color: var(--color-ink);
+}
+.ind-datas-botao {
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 5px 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ind-calendario {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 80;
+  background: var(--color-papel);
+  border: 1px solid var(--color-line-2);
+  border-radius: 12px;
+  padding: 12px;
+  box-shadow: 0 16px 40px rgb(0 0 0 / 0.28);
+}
+.ind-cal-topo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.ind-cal-topo span {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-ink-2);
+  white-space: nowrap;
+}
+.ind-cal-topo button {
+  border: 1px solid var(--color-line-2);
+  border-radius: 7px;
+  width: 26px;
+  height: 26px;
+  font-size: 15px;
+  line-height: 1;
+  color: var(--color-ink-2);
+  background: var(--color-papel-2);
+  cursor: pointer;
+}
+.ind-cal-topo button:hover {
+  border-color: var(--color-brand);
+  color: var(--color-ink);
+}
+.ind-cal-meses {
+  display: flex;
+  gap: 18px;
+}
+.ind-cal-nome {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-ink);
+  text-align: center;
+  margin-bottom: 6px;
+  text-transform: capitalize;
+}
+.ind-cal-grade {
+  display: grid;
+  grid-template-columns: repeat(7, 30px);
+  gap: 1px;
+}
+.ind-cal-dow {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--color-ink-3);
+  text-align: center;
+  padding-bottom: 3px;
+}
+.ind-cal-dia {
+  height: 28px;
+  font: inherit;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-ink);
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.ind-cal-dia:hover:not(:disabled) {
+  background: var(--color-papel-2);
+}
+.ind-cal-dia:disabled {
+  color: var(--color-ink-3);
+  opacity: 0.45;
+  cursor: default;
+}
+.ind-cal-dia.vazio {
+  visibility: hidden;
+}
+/* o trecho entre as pontas, pintado enquanto o ponteiro anda */
+.ind-cal-dia.dentro {
+  background: var(--color-brand-suave);
+  color: var(--color-brand-forte);
+  border-radius: 0;
+}
+.ind-cal-dia.ponta {
+  background: var(--color-brand);
+  color: var(--color-sobre-cor);
+  font-weight: 700;
+}
+/* o segundo mes so aparece quando ha largura para ele */
+@media (max-width: 719.98px) {
+  .ind-cal-segundo {
+    display: none;
+  }
+  /* Pendurar o calendario no botao quebra em tela estreita: medido a
+     375, com o botao no meio da faixa, ele nascia em x = -116 e metade
+     ficava fora da tela. Preso a JANELA, e nao ao botao, ele cabe
+     sempre — nao importa onde o botao tenha parado. */
+  .ind-calendario {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    right: auto;
+    transform: translate(-50%, -50%);
+  }
+  /* alvo de dedo, nao de ponteiro */
+  .ind-cal-grade {
+    grid-template-columns: repeat(7, 38px);
+  }
+  .ind-cal-dia {
+    height: 36px;
+    font-size: 13px;
+  }
+}
+
+/* --- abas das folhas --- */
+.ind-abas {
+  display: flex;
+  gap: 4px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+.ind-abas button {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  background: transparent;
+  color: var(--color-ink-2);
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 8px 14px;
+  cursor: pointer;
+}
+.ind-abas button:hover {
+  background: var(--color-papel);
+  color: var(--color-ink);
+}
+.ind-abas button[aria-selected="true"] {
+  background: var(--color-papel);
+  color: var(--color-ink);
+  border-color: var(--color-line-2);
+}
+
+/* ------------------------------------------------------------------
+   O TOPO NO CELULAR
+
+   Ele estava comendo 243px de uma tela de 812 — quase um terco so de
+   filtro. O motivo era estreito: as duas barras passavam da largura por
+   POUCO (383 e 386 num espaco de 347), e cada uma quebrava em duas
+   linhas por causa de trinta e poucos pixels.
+
+   Entao o recuo dos botoes encolheu o suficiente para as duas caberem
+   numa linha, e as barras ganharam rolagem lateral como rede de
+   seguranca: rotulo mais comprido — um intervalo personalizado, uma
+   folha nova — desliza de lado em vez de empurrar tudo para baixo.
+   ------------------------------------------------------------------ */
+@media (max-width: 1023.98px) {
+  .ind-topo {
+    padding: 8px 0 6px;
+  }
+  /* TENTEI juntar as abas com o seletor de projeto numa faixa so, o que
+     levaria o topo de 141px para 102. Nao ficou: as abas sobram 80px e
+     duas delas — Comparativos e Execucao — passam a exigir arrastar.
+     Navegacao que se usa o tempo todo nao fica atras de um gesto, entao
+     o seletor manteve a linha dele. */
+
+  /* "Indicadores" sai, como ja saiu no computador: a barra de baixo ja
+     diz em que tela voce esta, e o titulo custava uma linha inteira. */
+  .ind-titulo {
+    display: none;
+  }
+  /* teto no seletor: nome comprido de projeto nao pode empurrar as abas
+     para fora da tela */
+  .ind-projeto {
+    margin-left: 0;
+    max-width: 118px;
+    padding-top: 7px;
+    padding-bottom: 7px;
+  }
+  .ind-periodos,
+  .ind-abas {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    margin-top: 6px;
+  }
+  .ind-periodos::-webkit-scrollbar,
+  .ind-abas::-webkit-scrollbar {
+    display: none;
+  }
+  .ind-periodos button,
+  .ind-abas button {
+    font-size: 12.5px;
+    flex: 0 0 auto;
+  }
+  .ind-periodos button {
+    padding: 6px 8px;
+  }
+  .ind-abas button {
+    padding: 7px 9px;
+    white-space: nowrap;
+  }
+  /* "toda a base" so repete o botao que ja esta aceso ao lado */
+  .ind-resumo {
+    display: none;
+  }
+}
+
+/* As folhas dentro da tela existem SO no celular: no computador elas
+   moram na barra lateral, e ter as duas seria o mesmo menu duas vezes. */
+@media (min-width: 1024px) {
+  .ind-abas-celular {
+    display: none;
+  }
+}
+.ind-abas-celular a {
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--color-ink-2);
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 7px 9px;
+  white-space: nowrap;
+}
+.ind-abas-celular a[aria-selected="true"] {
+  background: var(--color-papel);
+  color: var(--color-ink);
+  border-color: var(--color-line-2);
+}
+
+/* --- grade --- */
+.ind-grade {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(12, 1fr);
+  margin-top: 14px;
+}
+.ind-grade > .cartao {
+  grid-column: span 12;
+  min-width: 0;
+}
+.ind-faixa {
+  grid-column: 1 / -1;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-ink-3);
+  margin: 14px 0 -2px;
+}
+.ind-faixa:first-child {
+  margin-top: 0;
+}
+.ind-aviso {
+  grid-column: 1 / -1;
+  border-left: 3px solid var(--color-media);
+  background: var(--color-papel);
+  padding: 10px 14px;
+  border-radius: 0 8px 8px 0;
+  font-size: 12.5px;
+  color: var(--color-ink-2);
+}
+.ind-aviso b {
+  color: var(--color-ink);
+}
+
+/* --- numero grande --- */
+.ind-grade > .cartao.ind-kpi {
+  grid-column: span 6;
+}
+/* UMA LINHA CADA. O rótulo quebrava em duas ("TOTAL PAREDES /
+   AUDITADAS") e o pé em três, e cada quebra dessas subia a altura da
+   régua INTEIRA — oito células pagam a conta da mais alta. Agora o
+   texto não quebra: se não couber, ele corta com reticências e o texto
+   completo continua na dica. O que de fato resolveu foi encurtar as
+   palavras; isto aqui é a rede de segurança. */
+.ind-rot,
+.ind-pe {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ind-rot {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-ink-3);
+}
+.ind-num {
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  margin-top: 6px;
+}
+.ind-num.t-alta {
+  color: var(--color-alta);
+}
+.ind-num.t-marca {
+  color: var(--color-brand-forte);
+}
+.ind-pe {
+  font-size: 10.5px;
+  color: var(--color-ink-2);
+  margin-top: 3px;
+}
+
+/* --- barra de gravidade --- */
+.ind-pilha {
+  display: flex;
+  height: 30px;
+  border-radius: 6px;
+  overflow: hidden;
+  gap: 2px;
+}
+.ind-pilha > div {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  min-width: 2px;
+}
+.ind-legenda {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 12px;
+}
+.ind-legenda span {
+  font-size: 12px;
+  color: var(--color-ink-2);
+}
+.ind-legenda i {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  display: inline-block;
+  margin-right: 6px;
+  vertical-align: -1px;
+}
+.ind-legenda b {
+  color: var(--color-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- ranking horizontal --- */
+.ind-linhas {
+  display: grid;
+  gap: 9px;
+}
+.ind-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 10px;
+  align-items: center;
+}
+.ind-nome {
+  font-size: 12.5px;
+  min-width: 0;
+}
+.ind-val {
+  font-size: 12.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.ind-val em {
+  font-style: normal;
+  color: var(--color-ink-3);
+  font-weight: 600;
+}
+.ind-trilho {
+  grid-column: 1 / -1;
+  height: 7px;
+  border-radius: 4px;
+  background: var(--color-papel-2);
+  overflow: hidden;
+}
+.ind-trilho > i {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+}
+
+/* --- tabela --- */
+.ind-rolagem {
+  overflow-x: auto;
+}
+.ind-tabela {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 13px;
+}
+.ind-tabela th,
+.ind-tabela td {
+  text-align: right;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--color-line);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.ind-tabela th:first-child,
+.ind-tabela td:first-child {
+  text-align: left;
+}
+.ind-tabela th {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--color-ink-3);
+  border-bottom: 1px solid var(--color-line-2);
+}
+.ind-tabela tbody tr:last-child td {
+  border-bottom: none;
+}
+/* Observacao de NA: e frase escrita por gente, entao pode quebrar em
+   varias linhas — ao contrario das colunas de numero, que ficam numa
+   linha so para as casas decimais se alinharem. */
+.ind-tabela td.na-obs {
+  white-space: normal;
+  min-width: 180px;
+  text-align: left;
+}
+/* ------------------------------------------------------------------
+   JANELA (dialog nativo)
+
+   O <dialog> do navegador ja resolve sozinho o que costuma dar errado
+   em modal feita a mao: prende o foco dentro dela, fecha no Esc, deixa
+   o fundo inerte e sobe acima de qualquer z-index da pagina. Aqui so
+   entra a aparencia.
+   ------------------------------------------------------------------ */
+.janela {
+  border: 1px solid var(--color-line-2);
+  border-radius: 14px;
+  background: var(--color-papel);
+  color: var(--color-ink);
+  padding: 18px 20px 20px;
+  width: min(440px, calc(100vw - 32px));
+  box-shadow: 0 18px 48px rgb(0 0 0 / 0.28);
+}
+.janela::backdrop {
+  background: rgb(0 0 0 / 0.45);
+}
+.janela > h2 {
+  margin-bottom: 4px;
+}
+
+/* Texto que se comporta como link dentro de uma tabela. */
+.ligacao {
+  color: var(--color-info);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.ligacao:hover {
+  color: var(--color-ink);
+}
+/* A linha inteira acende ao passar o ponteiro. Numa tabela de onze
+   colunas o olho perde a linha no meio do caminho, e a leitura de um
+   mes acaba misturada com a do mes de baixo. */
+.ind-tabela tbody tr {
+  transition: background 120ms;
+}
+.ind-tabela tbody tr:hover {
+  background: color-mix(in srgb, var(--color-ink-3) 10%, transparent);
+}
+.ind-pos {
+  color: var(--color-ink-3);
+  font-weight: 700;
+  width: 1%;
+}
+.ind-fraco {
+  color: var(--color-ink-3);
+}
+.ind-melhora {
+  color: var(--color-brand-forte);
+  font-weight: 700;
+}
+.ind-piora {
+  color: var(--color-alta);
+  font-weight: 700;
+}
+
+/* --- escolha de meses --- */
+.ind-escolha {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 10px;
+  align-items: end;
+  flex-wrap: wrap;
+  background: var(--color-papel);
+  border: 1px solid var(--color-line);
+  border-radius: 12px;
+  padding: 12px 16px;
+}
+.ind-campo {
+  display: grid;
+  gap: 4px;
+}
+.ind-campo label {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--color-ink-3);
+}
+.ind-campo .campo {
+  width: auto;
+}
+.ind-seta {
+  color: var(--color-ink-3);
+  padding-bottom: 9px;
+}
+
+/* Caixa de desenho. O piso vem do proprio grafico, pela variavel que o
+   componente escreve: no celular a pagina rola e cada desenho pede a
+   altura de que precisa; no computador o cartao e que manda, e a regra
+   de dentro do @media zera este piso. */
+.ind-caixa-grafico {
+  min-height: var(--alt-padrao, 145px);
+  /* Rola de lado quando o desenho pede mais largura do que o cartao tem
+     — hoje so o FPY por casa, que garante 26px por casa. Os demais sao
+     desenhados exatamente na largura medida, entao nunca acionam a
+     barra. Vale no computador e no celular. */
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+/* FPY por casa: escala e meta fixas a esquerda, casas rolando no meio,
+   media fixa a direita. Quem rola e a faixa do meio, entao a caixa de
+   fora nao pode rolar tambem — senao a pagina ganha duas barras para o
+   mesmo movimento. */
+.ind-caixa-grafico.ind-fpy {
+  display: flex;
+  align-items: flex-start;
+  overflow-x: hidden;
+}
+.ind-caixa-grafico.ind-fpy > svg {
+  flex: 0 0 auto;
+}
+.ind-fpy-rolagem {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+/* ------------------------------------------------------------------
+   MODO TV
+
+   Some tudo que nao e grafico: a barra lateral, o topo do aplicativo, a
+   barra de baixo do celular e a faixa de filtros. O que sobra e a grade
+   de cartoes, esticada na tela inteira, para ser lida de longe.
+
+   E uma classe no <body> porque o que precisa sumir mora FORA da tela
+   de indicadores — a lateral e do layout do aplicativo, nao dela.
+   ------------------------------------------------------------------ */
+body.modo-tv .topo,
+body.modo-tv .nav-inferior,
+body.modo-tv .ind-topo {
+  display: none;
+}
+body.modo-tv .conteudo-app {
+  padding: 0;
+}
+body.modo-tv .ind-tela {
+  padding: 8px 12px 12px;
+}
+/* O BOTAO DE SAIR E VISIVEL, SEMPRE.
+   Ele nasceu discreto — 25% de opacidade ate o ponteiro chegar — e o
+   resultado foi ficar preso: sobre o fundo escuro, um botao de contorno
+   fino a 25% simplesmente nao existe para quem olha. Discricao vale
+   para enfeite; a unica saida de um modo que esconde toda a navegacao
+   nao e enfeite. Fica no alto a direita, onde o olho procura o "fechar",
+   e com preenchimento cheio. */
+.ind-tv-sai {
+  position: fixed;
+  top: 12px;
+  right: 14px;
+  z-index: 200;
+  background: var(--color-brand);
+  border-color: var(--color-brand);
+  color: var(--color-sobre-cor);
+  font-weight: 700;
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.3);
+}
+.ind-tv-sai:hover:not(:disabled) {
+  border-color: var(--color-brand-forte);
+  background: var(--color-brand-forte);
+  color: var(--color-sobre-cor);
+}
+.ind-tv-liga {
+  margin-left: auto;
+  font-size: 12px;
+  padding: 5px 10px;
+}
+/* no celular a tela ja e pequena: o modo TV nao se oferece la */
+@media (max-width: 1023.98px) {
+  .ind-tv-liga {
+    display: none;
+  }
+}
+
+/* pizza e legenda: empilhadas no celular, lado a lado no computador */
+.ind-pizza {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  height: 100%;
+  min-height: 0;
+}
+@media (min-width: 1024px) {
+  .ind-pizza {
+    flex-direction: row;
+    align-items: center;
+    gap: 14px;
+  }
+}
+
+/* --- SVG --- */
+/* 12px, e nao 10: o painel e lido de longe — de pe ao lado da mesa, e
+   no modo TV do outro lado da sala. Os graficos ganharam a largura do
+   eixo Y, que saiu, entao a letra maior nao custa espaco de desenho. */
+.ind-eixo {
+  fill: var(--color-ink-3);
+  font-size: 12px;
+}
+.ind-malha {
+  stroke: var(--color-line);
+  stroke-width: 1;
+}
+.ind-valor-svg {
+  fill: var(--color-ink);
+  font-size: 13px;
+  font-weight: 700;
+}
+/* Alvo de ponteiro de uma coluna. A area sensivel e a FATIA INTEIRA, do
+   chao ao teto do grafico, e nao a barra: numa serie de 71 casas a
+   coluna tem 16px de largura, e uma casa com FPY 4% viraria um alvo de
+   16x6 — impossivel de acertar. Ao passar, a fatia acende de leve e a
+   barra ganha contorno. */
+.ind-alvo rect:first-child {
+  transition: fill 120ms;
+}
+.ind-alvo:hover rect:first-child {
+  fill: color-mix(in srgb, var(--color-ink-3) 12%, transparent);
+}
+.ind-alvo:hover rect + rect {
+  stroke: var(--color-ink);
+  stroke-width: 1;
+}
+/* ------------------------------------------------------------------
+   O CLIQUE QUE RECORTA O PAINEL
+
+   Vale para marca de SVG, linha de ranking e linha de tabela: as três
+   viraram alvo de clique e as três precisam PARECER alvo antes do
+   clique. Sem isso o recorte é um segredo — quem não tentar clicar por
+   acaso nunca descobre que ele existe.
+   ------------------------------------------------------------------ */
+.ind-clicavel {
+  cursor: pointer;
+}
+tr.ind-clicavel:hover > td {
+  background: color-mix(in srgb, var(--color-brand) 9%, transparent);
+}
+/* a linha recortada fica marcada mesmo sem o ponteiro em cima */
+tr.ind-clicavel[aria-selected="true"] > td {
+  background: var(--color-brand-suave);
+  box-shadow: inset 3px 0 0 var(--color-brand);
+}
+.ind-item.ind-clicavel[aria-pressed="true"] {
+  box-shadow: inset 3px 0 0 var(--color-brand);
+  padding-left: 8px;
+}
+.ind-fatia.ind-clicavel {
+  transition: opacity 120ms;
+}
+.ind-fatia.ind-clicavel:hover path,
+.ind-fatia.ind-clicavel:hover circle {
+  stroke: var(--color-ink);
+  stroke-width: 2;
+}
+/* a barra de recortes divide a faixa dos filtros, e não uma linha nova */
+.ind-recortes {
+  margin-top: 6px;
+}
+
+.ind-mini {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 18px;
+  vertical-align: -3px;
+}
+.ind-mini i {
+  width: 6px;
+  border-radius: 1px;
+  display: block;
+  background: var(--color-ink-3);
+  min-height: 1px;
+}
+.ind-vazio {
+  color: var(--color-ink-3);
+  font-size: 13px;
+  padding: 16px 0;
+  text-align: center;
+}
+
+@media (min-width: 640px) {
+  .ind-grade > .cartao.ind-kpi {
+    grid-column: span 3;
+  }
+  .ind-grade > .cartao.ind-meio {
+    grid-column: span 6;
+  }
+}
+@media (min-width: 1024px) {
+  .ind-grade > .cartao.ind-terco {
+    grid-column: span 4;
+  }
+  .ind-grade > .cartao.ind-doisTercos {
+    grid-column: span 8;
+  }
+}
+
+/* Com a aba Indicadores a gestao passa a ter seis itens na barra de
+   baixo. Em 375 px cada um fica com ~62 px, e "Indicadores" so cabe
+   com a fonte um ponto menor. A regra vale a partir do sexto item,
+   entao voltar a cinco nao deixa residuo. */
+.nav-inferior a:nth-last-child(n + 6),
+.nav-inferior a:nth-last-child(n + 6) ~ a {
+  font-size: 9.5px;
+  letter-spacing: 0;
+  padding-inline: 2px;
+}
+
+/* ------------------------------------------------------------------
+   INDICADORES — ajuste de densidade (2a passada)
+
+   O que estava errado: cada SVG ocupava 100% da largura e puxava a
+   altura pela proporcao do viewBox. Num cartao de 1150 px o grafico
+   saia com 367 px de altura e tomava a tela. Agora a altura e escolhida
+   no componente, em pixel, e o desenho e feito na largura medida.
+
+   O resto e respiro: quatro molduras para quatro numeros viraram uma
+   faixa so, e as secoes ganharam um fio no lugar de espaco vazio.
+   ------------------------------------------------------------------ */
+
+/* --- faixa de numeros: um cartao, varios indicadores --- */
+/* Precisa do mesmo peso de .ind-grade > .cartao, que declara
+   display:flex logo abaixo. Com so .ind-faixa-num o flex vencia e as
+   quatro celulas empilhavam em coluna, cada uma com a largura toda. */
+.ind-grade > .cartao.ind-faixa-num {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+}
+.ind-num-item {
+  padding: 10px 11px 11px;
+  border-top: 1px solid var(--color-line);
+  border-left: 1px solid var(--color-line);
+  min-width: 0;
+}
+/* os fios so entre as celulas, nunca na borda do cartao */
+.ind-num-item:nth-child(-n + 2) {
+  border-top: 0;
+}
+.ind-num-item:nth-child(odd) {
+  border-left: 0;
+}
+/* Entre 720 e 1180: QUATRO POR LINHA, duas linhas.
+   A linha unica so vale quando ela cabe. Medido a 800, com oito
+   celulas de 96px, TODOS os rotulos batiam nas reticencias — "Paredes
+   afetadas" precisa de 101px e sobravam 74. Regua ilegivel numa linha
+   e pior do que legivel em duas. */
+@media (min-width: 720px) {
+  .ind-grade > .cartao.ind-faixa-num {
+    grid-template-columns: repeat(4, 1fr);
+  }
+  .ind-num-item:nth-child(-n + 4) {
+    border-top: 0;
+  }
+  .ind-num-item:nth-child(odd) {
+    border-left: 1px solid var(--color-line);
+  }
+  .ind-num-item:nth-child(4n + 1) {
+    border-left: 0;
+  }
+}
+
+/* Daqui para cima, UMA LINHA SO, quantos numeros forem — com auto-flow
+   em coluna a faixa se reparte igualmente entre os itens que existirem.
+   Medido a 1280: oito celulas de 156px, nenhuma cortada, 85px de
+   altura para a regua inteira. */
+@media (min-width: 1180px) {
+  .ind-grade > .cartao.ind-faixa-num {
+    grid-template-columns: none;
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
+  }
+  .ind-num-item,
+  .ind-num-item:nth-child(odd) {
+    border-top: 0;
+    border-left: 1px solid var(--color-line);
+  }
+  .ind-num-item:first-child {
+    border-left: 0;
+  }
+}
+
+.ind-num {
+  font-size: 23px;
+  margin-top: 3px;
+}
+
+/* --- secao: rotulo com fio, no lugar de espaco vazio --- */
+.ind-faixa {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 0 0;
+  font-size: 10.5px;
+}
+.ind-faixa::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--color-line);
+}
+
+/* --- cartao um pouco mais apertado nesta tela --- */
+.ind-grade > .cartao {
+  padding: 12px 14px 14px;
+}
+.ind-grade > .cartao > .corpo {
+  margin-top: 10px;
+}
+.ind-grade > .cartao > .sub {
+  margin-top: 2px;
+}
+
+/* Cartoes da mesma linha terminam juntos: altura desigual e a coisa que
+   mais faz um painel parecer improvisado. */
+.ind-grade > .cartao {
+  display: flex;
+  flex-direction: column;
+}
+.ind-grade > .cartao > .corpo {
+  flex: 1;
+}
+
+.ind-tabela th,
+.ind-tabela td {
+  padding: 6px 9px;
+}
+.ind-vazio {
+  padding: 22px 0;
+}
+
+/* ------------------------------------------------------------------
+   INDICADORES · FLUXOGRAMA
+
+   Caixas e setas do caminho da parede. As classes internas (.no,
+   .fluxo, .pilula, .pulsos, .trilho, .corpo) so existem dentro do
+   .ind-fluxograma — por isso os nomes curtos nao colidem com nada.
+   ------------------------------------------------------------------ */
+
+.ind-fluxograma {
+  width: 100%;
+  /* Tem de ser IGUAL a LARGURA_MINIMA em Fluxograma.tsx: e a largura
+     em que os vaos entre colunas ainda cabem a pilula do numero. O
+     cartao rola de lado abaixo disso. */
+  min-width: 880px;
+  max-width: 1060px;
+  height: auto;
+  margin: 0 auto;
+  display: block;
+}
+
+/* ---------- o fluxograma no celular ----------
+   REGRA: o tamanho PINTADO tem de ser igual ao tamanho MEDIDO. O
+   componente mede a caixa e desenha uma tela desse tamanho; se o CSS
+   pintar noutro tamanho, a altura realimenta a si mesma. Era o que
+   acontecia: a tela saia com 680 de largura e o CSS pintava a 820, um
+   fator de 1,206 — e como no celular a altura da caixa vem do proprio
+   desenho, cada medicao esticava a anterior: 386, 465, 561, 677, 816.
+   Nao ha ponto de equilibrio fora do zero; o cartao crescia sem parar.
+
+   Aqui a caixa ganha altura propria (nao vem do conteudo) e o desenho
+   ocupa exatamente ela. O min-width de 680 mantem o texto legivel e faz
+   o cartao rolar de lado, que continua sendo o jeito de ver um diagrama
+   de quatro colunas num telefone. */
+@media (max-width: 1023.98px) {
+  .ind-caixa-fluxo {
+    height: 58vh;
+    min-height: 300px;
+    max-height: 520px;
+    overflow-y: hidden;
+  }
+  .ind-caixa-fluxo > .ind-fluxograma {
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    margin: 0;
+  }
+}
+
+.ind-fluxograma .no.apagada {
+  opacity: 0.3;
+}
+.ind-fluxograma .no .corpo {
+  transition: stroke 160ms;
+}
+.ind-fluxograma .no:hover .corpo {
+  stroke: var(--color-ink-3);
+}
+
+/* a linha e discreta: quem carrega a cor e a pilula do numero */
+.ind-fluxograma .trilho {
+  opacity: 0.28;
+  transition: opacity 160ms;
+}
+.ind-fluxograma .fluxo:hover .trilho {
+  opacity: 0.5;
+}
+
+/* ---------- movimento ----------
+   Entrada: acontece uma vez. Continuo: so os pulsos, um ponto com
+   rastro percorrendo cada seta no sentido do fluxo. A quantidade de
+   pulsos e a quantidade do fluxo (calculada no componente), entao o
+   movimento carrega dado em vez de enfeitar. */
+@keyframes ind-fx-sobe {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes ind-fx-desenha {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes ind-fx-aparece {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.ind-fluxograma .no {
+  opacity: 0;
+  animation: ind-fx-sobe 450ms cubic-bezier(0.22, 0.8, 0.3, 1) forwards;
+  animation-delay: var(--atraso, 0ms);
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.ind-fluxograma .trilho {
+  stroke-dasharray: var(--comp, 400);
+  stroke-dashoffset: var(--comp, 400);
+  animation: ind-fx-desenha 600ms ease-out forwards;
+  animation-delay: var(--atraso, 0ms);
+}
+/* SO OPACIDADE na pilula. Ela tem transform de atributo no SVG, e
+   transform vindo do CSS SUBSTITUI o do atributo: com scale no keyframe
+   as seis pilulas saltavam empilhadas para o canto de cima. Medido no
+   navegador, nao suposto. */
+.ind-fluxograma .pilula {
+  opacity: 0;
+  animation: ind-fx-aparece 350ms ease-out forwards;
+  animation-delay: calc(var(--atraso, 0ms) + 300ms);
+}
+.ind-fluxograma .pulsos {
+  opacity: 0;
+  animation: ind-fx-aparece 500ms ease-out forwards;
+  animation-delay: calc(var(--atraso, 0ms) + 600ms);
+}
+
+/* REDE DE SEGURANCA. A entrada comeca em opacity 0, entao se a animacao
+   nao rodar — aba em segundo plano, navegador que bloqueia — o
+   fluxograma fica invisivel. Passado o tempo da entrada, o componente
+   poe .pronto e tudo aparece. Conteudo nao depende de animacao. */
+.ind-fluxograma.pronto .no {
+  animation: none;
+  opacity: 1;
+  transform: none;
+}
+.ind-fluxograma.pronto .pilula,
+.ind-fluxograma.pronto .pulsos {
+  animation: none;
+  opacity: 1;
+}
+.ind-fluxograma.pronto .trilho {
+  animation: none;
+  stroke-dasharray: none;
+  stroke-dashoffset: 0;
+}
+
+/* Quem pediu menos movimento no sistema nao recebe nenhum. Os pulsos
+   somem por display:none — animacao SMIL nao para por media query. */
+@media (prefers-reduced-motion: reduce) {
+  .ind-fluxograma .no {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+  .ind-fluxograma .pilula {
+    animation: none;
+    opacity: 1;
+  }
+  .ind-fluxograma .trilho {
+    animation: none;
+    stroke-dasharray: none;
+    stroke-dashoffset: 0;
+  }
+  .ind-fluxograma .pulsos {
+    display: none;
+  }
+}
+
+/* ------------------------------------------------------------------
+   PAINEL EMBUTIDO — o Painel 2.0 como folha de Indicadores.
+
+   Sozinho ele e a tela inteira: 100dvh de altura minima e fundo
+   proprio. Dentro de uma aba isso vira um bloco de tela cheia com
+   fundo diferente no meio da pagina, e o recuo lateral dobra com o
+   da tela que o hospeda.
+   ------------------------------------------------------------------ */
+.pn.embutido {
+  min-height: 0;
+  background: transparent;
+}
+.pn.embutido .pn2-grade {
+  max-width: none;
+  padding: 14px 0 0;
+}
+
+/* ==================================================================
+   NAVEGACAO LATERAL (so no PC)
+
+   Ate 1023px nada muda: a faixa .topo continua no alto com o logo e as
+   acoes, e a navegacao vive na barra de baixo, ao alcance do polegar.
+
+   De 1024px em diante a mesma marcacao vira uma COLUNA a esquerda. Com
+   cinco telas, ler de cima para baixo e mais rapido que varrer uma
+   faixa horizontal — e o que era altura de cabecalho vira largura util
+   para os paineis.
+   ================================================================== */
+
+.quadro-app {
+  min-height: 100dvh;
+  width: 100%;
+}
+.rodape-topo {
+  margin-left: auto;
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+@media (min-width: 1024px) {
+  .quadro-app {
+    display: flex;
+    align-items: flex-start;
+  }
+
+  .topo {
+    position: sticky;
+    top: 0;
+    align-self: flex-start;
+    width: var(--largura-lateral, 208px);
+    flex: 0 0 var(--largura-lateral, 208px);
+    height: 100dvh;
+    border-bottom: 0;
+    border-right: 1px solid var(--color-line);
+  }
+  .topo-linha {
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    height: 100%;
+    max-width: none;
+    margin-inline: 0;
+    padding: 16px 12px;
+    gap: 18px;
+  }
+
+  /* a coluna do logo nao encolhe o lockup */
+  .topo-linha > a {
+    flex-wrap: wrap;
+  }
+
+  .abas {
+    flex-direction: column;
+    flex: 0 0 auto;
+    gap: 2px;
+  }
+  .aba {
+    padding: 9px 12px;
+    font-size: 13px;
+  }
+
+  /* as acoes descem para o pe da coluna */
+  .rodape-topo {
+    margin-left: 0;
+    margin-top: auto;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .rodape-topo > span {
+    display: block;
+    text-align: left;
+  }
+  .rodape-topo .btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .conteudo-app {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  /* sem a faixa no alto, a tela ganha a largura que sobrou */
+  .conteudo-app .tela {
+    max-width: none;
+  }
+}
+
+/* ==================================================================
+   INDICADORES EM UMA TELA (so no PC)
+
+   REGRA DA CASA: nenhum cartao rola por dentro. Barra de rolagem
+   dentro de cartao foi a primeira tentativa e o resultado foi
+   ridiculo — cada bloco com sua barrinha e todo grafico cortado pela
+   metade. Se nao cabe, o conteudo diminui; nao se esconde.
+
+   Para a altura descer da janela ate o desenho, TODA a corrente
+   precisa de min-height:0 — sem isso um item de flex nunca encolhe
+   abaixo do conteudo e o filho recebe altura maior que a caixa:
+
+     .ind-tela (100dvh, flex column)
+       -> .ind-grade (flex:1, min-height:0, grid de linhas fr)
+         -> .cartao (flex column, min-height:0, overflow hidden)
+           -> .corpo (flex:1, min-height:0)
+             -> .ind-caixa-grafico (height:100%) -> o SVG se mede
+
+   Abaixo de 1024px nada disso vale: no celular a pagina rola, que e o
+   gesto natural ali.
+   ================================================================== */
+@media (min-width: 1024px) {
+  .ind-tela {
+    height: 100dvh;
+    max-width: none;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    padding: 8px 14px 10px;
+  }
+  /* ---------- o topo em UMA linha ----------
+     Eram tres faixas empilhadas — titulo, periodo, abas — somando 157px
+     de altura antes do primeiro dado. O titulo "Indicadores" sai: a
+     barra lateral ja marca em que tela voce esta, e repetir custa uma
+     faixa inteira. O resto entra na mesma linha, e o que sobra vira
+     grafico. */
+  .ind-tela > .ind-topo {
+    flex: 0 0 auto;
+    position: static;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 0 0 8px;
+    margin-bottom: 0;
+    border-bottom: 1px solid var(--color-line);
+  }
+  .ind-tela .ind-titulo {
+    display: none;
+  }
+  .ind-tela .ind-abas {
+    order: 1;
+    margin-top: 0;
+  }
+  .ind-tela .ind-periodos {
+    order: 2;
+    margin-top: 0;
+  }
+  .ind-tela .ind-topo-linha {
+    order: 3;
+    margin-left: auto;
+    gap: 0;
+  }
+  /* A barra de recortes ocupa a linha inteira: ela é texto corrido
+     ("Casa 106 ×", "12 erros no recorte") e, espremida ao lado dos
+     botões de período, sairia quebrada palavra por palavra. */
+  .ind-tela .ind-recortes {
+    order: 4;
+    flex-basis: 100%;
+  }
+  .ind-tela .ind-projeto {
+    margin-left: 0;
+  }
+  .ind-tela > .ind-grade,
+  .ind-tela > .folha-execucao {
+    flex: 1 1 auto;
+    min-height: 0;
+    margin-top: 8px;
+    overflow: hidden;
+  }
+  /* o campo de projeto encolhe ao conteudo em vez de ocupar a linha */
+  .ind-tela .ind-projeto {
+    width: auto;
+    font-size: 13px;
+    padding: 6px 30px 6px 10px;
+    background-position: right 12px center, right 8px center;
+  }
+
+  /* o topo tambem encolhe: cada pixel ali sai do grafico */
+  .ind-tela .ind-periodos {
+    padding: 3px;
+  }
+  /* O texto do recorte ("toda a base", "01/07 a 31/07") custava ate
+     200px de largura e era o que quebrava a linha unica em 1280px. Ele
+     e redundante: o botao aceso ja diz o periodo, e no personalizado os
+     dois campos de data mostram as datas escolhidas. */
+  .ind-tela .ind-resumo {
+    display: none;
+  }
+  .ind-tela .ind-periodos button {
+    padding: 5px 10px;
+    font-size: 12.5px;
+  }
+  .ind-tela .ind-abas button {
+    padding: 6px 12px;
+    font-size: 12.5px;
+  }
+  /* o rotulo de secao custava 26px de altura e dizia o que o titulo do
+     cartao ja diz */
+  .ind-tela .ind-faixa {
+    display: none;
+  }
+
+  /* ---------- o cartao reparte a altura que recebeu ---------- */
+  .ind-grade > .cartao {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+    padding: 9px 12px 11px;
+  }
+  .ind-grade > .cartao > .titulo-secao,
+  .ind-grade > .cartao > .sub {
+    flex: 0 0 auto;
+  }
+  .ind-grade > .cartao > .sub {
+    /* a nota explicativa vira o primeiro corte quando falta altura */
+    display: none;
+  }
+  /* O corpo tambem e coluna flexivel: assim o conteudo se reparte pela
+     altura em vez de subir e deixar um vazio no pe do cartao. */
+  .ind-grade > .cartao > .corpo {
+    flex: 1 1 auto;
+    min-height: 0;
+    margin-top: 7px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .ind-grade .ind-caixa-grafico,
+  .ind-grade .ind-rolagem,
+  .ind-grade .ind-linhas {
+    flex: 1 1 auto;
+  }
+  .ind-grade .ind-legenda {
+    flex: 0 0 auto;
+  }
+  .ind-caixa-grafico {
+    height: 100%;
+    min-height: 0;
+  }
+  /* No computador a pizza fica AO LADO da legenda, nao em cima dela.
+     Empilhadas, sobravam 80px de altura para o desenho num cartao de
+     157 — e sobravam 200px de largura sem uso do lado. Deitado, o
+     desenho fica redondo e a legenda ganha uma linha por gravidade. */
+  /* 46%: com o cartao mais alto, quem limita o circulo passou a ser a
+     LARGURA. A legenda vive bem nos 54% que sobram — a linha mais longa
+     ("Crítico 213 · 59%") mede cerca de 140px. */
+  .ind-grade .ind-pizza > .ind-caixa-grafico {
+    flex: 0 0 46%;
+  }
+  .ind-grade .ind-pizza > .ind-legenda {
+    flex: 1 1 auto;
+    display: grid;
+    align-content: center;
+    gap: 7px;
+    margin-top: 0;
+  }
+
+  /* o fluxograma cabe na altura em vez de impor a dele */
+  .ind-grade .ind-fluxograma {
+    height: 100%;
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+  }
+
+  /* ---------- tudo mais apertado ---------- */
+  /* recuo menor: com cinco numeros na mesma linha, cada 4px de recuo
+     vira 40px a menos de texto util */
+  .ind-grade .ind-faixa-num .ind-num-item {
+    padding: 8px 10px 9px;
+  }
+  .ind-grade .ind-num {
+    font-size: 22px;
+    margin-top: 2px;
+  }
+  .ind-grade .ind-pe {
+    font-size: 10.5px;
+    margin-top: 2px;
+  }
+  .ind-grade .ind-tabela th,
+  .ind-grade .ind-tabela td {
+    padding: 4px 7px;
+    font-size: 12px;
+  }
+  .ind-grade .ind-tabela th {
+    font-size: 9.5px;
+  }
+  /* Cinco itens de ranking estouravam o cartao em 14px. Apertar o item
+     resolve sem virar "top 4" — o titulo promete cinco e entrega cinco. */
+  .ind-grade .ind-linhas {
+    gap: 4px;
+  }
+  .ind-grade .ind-item {
+    gap: 2px 8px;
+  }
+  .ind-grade .ind-trilho {
+    height: 5px;
+  }
+  /* a barra de escolha nao precisa esticar na linha dela */
+  .ind-grade .ind-escolha {
+    align-self: start;
+  }
+  .ind-grade .ind-item .nome,
+  .ind-grade .ind-item .ind-nome,
+  .ind-grade .ind-item .ind-val {
+    font-size: 12px;
+  }
+  .ind-grade .ind-legenda {
+    margin-top: 8px;
+    gap: 10px;
+  }
+  .ind-grade .ind-legenda span {
+    font-size: 11px;
+  }
+  .ind-grade .ind-escolha {
+    padding: 8px 12px;
+  }
+  .ind-grade .ind-aviso {
+    padding: 7px 12px;
+    font-size: 12px;
+  }
+  /* A tabela nunca empurra o cartao: ela ocupa o que tem. Mas overflow
+     hidden aqui APAGA linha — o quadro mensal ganha uma linha por mes e
+     um dia passa da caixa. Barra de rolagem so quando a alternativa e
+     esconder dado; como a caixa tem a altura toda, ela nao aparece
+     enquanto couber (que e o caso hoje, com 4 meses). */
+  .ind-grade .ind-rolagem {
+    height: 100%;
+    min-height: 0;
+    overflow: auto;
+  }
+
+  /* ---------- as grades de cada folha ---------- */
+  .folha-fpy,
+  .folha-desvios,
+  .folha-comparativos {
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+  }
+  .folha-fpy,
+  .folha-desvios,
+  .folha-fluxo,
+  .folha-comparativos {
+    gap: 10px;
+  }
+  /* As proporcoes saem do que cada faixa PRECISA, nao de dividir por
+     igual. A faixa do meio do FPY carrega barra, tres numeros e quatro
+     colunas: ~150px bastam. O que sobra vai para o fluxo e para a linha
+     de FPY por casa, que sao os dois desenhos que ganham com altura. */
+  /* O fluxo cede altura para a faixa do meio. Ele e feito de tres faixas
+     horizontais e nao ganha nada em ser alto — o que ele mostra e
+     COMPRIMENTO. Ja a pizza da gravidade e um circulo: espremida em
+     111px ela virava uma moedinha ao lado da legenda. */
+  /* Tres faixas: os numeros, o FPY por dia e por semana lado a lado, e o
+     FPY por casa embaixo. O de casa fica com mais altura porque tem
+     dezenas de colunas; os dois de cima cobrem menos periodos. */
+  .folha-fpy {
+    grid-template-rows: auto minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .folha-desvios {
+    grid-template-rows: auto minmax(0, 1.2fr) minmax(0, 0.95fr) minmax(0, 0.95fr);
+  }
+  /* Fluxo: so o seletor de setor e o diagrama. Sem cartoes de numero e
+     sem tabela embaixo, o desenho fica com toda a altura da tela.
+
+     Em coluna flex, e nao em grid de linhas fixas, porque o aviso do
+     meio aparece so quando ha filtro de setor: com linhas nomeadas, o
+     terceiro filho cairia numa linha "auto" e o diagrama encolheria
+     justamente quando alguem filtra. Aqui quem tem flex:1 e o cartao,
+     apareca o aviso ou nao. */
+  .folha-fluxo {
+    display: flex;
+    flex-direction: column;
+  }
+  .folha-fluxo > .ind-escolha,
+  .folha-fluxo > .ind-aviso {
+    flex: 0 0 auto;
+  }
+  .folha-fluxo > .cartao {
+    flex: 1 1 auto;
+  }
+  .ind-grade .ind-caixa-fluxo {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .ind-grade .ind-caixa-fluxo > .ind-fluxograma {
+    height: 100%;
+    width: 100%;
+  }
+  .folha-comparativos {
+    grid-template-rows: auto minmax(0, 0.95fr) minmax(0, 1.1fr) minmax(0, 1.1fr);
+  }
+  /* Comparativos: o aviso sai. As colunas da tabela ja dizem "por casa",
+     que era a unica coisa que ele acrescentava, e ele custava uma faixa
+     inteira da largura. */
+  .folha-comparativos .ind-aviso {
+    display: none;
+  }
+  /* Linha de 24px, e nao de 27. Esta folha e so tabela: os 3px que cada
+     linha devolve viram uma linha inteira a mais por cartao, e uma linha
+     a mais e um tipo de erro a mais na tela. */
+  .folha-comparativos .ind-tabela td {
+    padding-top: 2px;
+    padding-bottom: 2px;
+  }
+  /* a barra de escolha em linha, nao empilhada: 75px para dois seletores
+     era um decimo da altura util da tela */
+  .ind-grade .ind-escolha {
+    padding: 6px 12px;
+    gap: 8px;
+    align-items: center;
+  }
+  .ind-grade .ind-campo {
+    grid-auto-flow: column;
+    align-items: center;
+    gap: 6px;
+  }
+  .ind-grade .ind-campo .campo {
+    padding: 5px 28px 5px 9px;
+    font-size: 13px;
+    background-position: right 11px center, right 7px center;
+  }
+  .ind-grade .ind-seta {
+    padding-bottom: 0;
+  }
+
+  /* Cartao de lista (gravidade, concentracao) nao ganha nada com altura
+     sobrando: o conteudo sobe e o resto fica em branco. Distribuindo, o
+     branco vira respiro entre as linhas em vez de um vazio no pe. */
+  .ind-grade .ind-linhas {
+    align-content: space-between;
+    height: 100%;
+  }
+
+  /* A folha de Execucao e o Painel 2.0 inteiro, com dezenas de blocos.
+     Cabe-lo numa tela exigiria cortar conteudo dele; ate essa decisao
+     ele rola DENTRO da area, com a lateral e o topo parados. */
+  .folha-execucao {
+    overflow: auto;
+  }
+}
+
+/* quatro cartoes lado a lado: os rankings de Desvios */
+@media (min-width: 1024px) {
+  .ind-grade > .cartao.ind-quarto {
+    grid-column: span 3;
+  }
+}
