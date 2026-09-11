@@ -40,6 +40,10 @@ function hojeISO() {
   return d.toISOString().slice(0, 10);
 }
 
+function chaveDaAuditoria(projeto: string, casa: string) {
+  return `${projeto.trim().toLocaleLowerCase("pt-BR")}|${casa.trim()}`;
+}
+
 /* A tinta de dentro do chip preenchido é decisão do tema (classes
    .preenche-*), não deste componente: o vermelho pede branco e o verde
    pede tinta escura no modo escuro. */
@@ -112,14 +116,19 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
         setores: s.data ?? [],
         tipos: t.data ?? [],
       });
-      setTodas((r.data ?? []) as Auditoria[]);
+      const auditoriasCarregadas = (r.data ?? []) as Auditoria[];
+      setTodas(auditoriasCarregadas);
       if (p.data?.[0]) setProjeto(p.data[0].nome);
+
+      const auditoriaPorChave = new Map(
+        auditoriasCarregadas.map((a) => [chaveDaAuditoria(a.projeto, a.casa), a.id])
+      );
 
       // resumo de cada casa (FPY, erros, NC) para a lista de auditorias
       const [fp, oc] = await Promise.all([
         supabase
           .from("fpy_paredes")
-          .select("auditoria_id, projeto, erros, passou_de_primeira")
+          .select("projeto, casa, erros, passou_de_primeira")
           .limit(50000),
         supabase
           .from("ocorrencias")
@@ -140,8 +149,11 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
       // de que projeto é cada casa (migration 022)
       const projetoDaCasa = new Map<string, string>();
       for (const l of fp.data ?? []) {
-        const id = String(l.auditoria_id);
-        projetoDaCasa.set(id, (l.projeto as string) ?? "");
+        const id = auditoriaPorChave.get(
+          chaveDaAuditoria(String(l.projeto ?? ""), String(l.casa ?? ""))
+        );
+        if (!id) continue;
+        projetoDaCasa.set(id, String(l.projeto ?? ""));
         const a = (acc[id] ??= {
           conferidas: 0,
           ok: 0,
