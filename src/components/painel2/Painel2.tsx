@@ -183,13 +183,25 @@ export default function Painel2({
   useEffect(() => {
     (async () => {
       const supabase = createClient();
-      const { data } = await supabase
-        .from("projetos")
-        .select("nome, paredes(id)")
-        .eq("ativo", true);
+      /* A base legada expõe projetos e paredes por views compatíveis, sem
+         uma FK Postgres entre elas. Consultar uma relação embutida aqui
+         fazia o painel falhar mesmo quando as duas listas existiam. */
+      const [{ data: projetos }, { data: paredes }] = await Promise.all([
+        supabase.from("projetos").select("id, nome").eq("ativo", true),
+        supabase.from("paredes").select("projeto_id").eq("ativo", true),
+      ]);
       const mapa: Record<string, number> = {};
-      for (const p of (data ?? []) as { nome: string; paredes: unknown[] }[])
-        mapa[p.nome.trim()] = p.paredes?.length ?? 0;
+      const quantidadePorProjeto = new Map<number, number>();
+      for (const parede of paredes ?? []) {
+        const projetoId = Number(parede.projeto_id);
+        quantidadePorProjeto.set(
+          projetoId,
+          (quantidadePorProjeto.get(projetoId) ?? 0) + 1
+        );
+      }
+      for (const p of projetos ?? []) {
+        mapa[p.nome.trim()] = quantidadePorProjeto.get(Number(p.id)) ?? 0;
+      }
       setParedesPorProjeto(mapa);
 
       /* Uma função só para as três telas que mostram FPY — foi assim que

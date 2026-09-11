@@ -83,7 +83,8 @@ export interface Parede extends ConfigItem {
 }
 
 export interface Ocorrencia {
-  id: number;
+  /** A base nova usa números; o adaptador da base legada usa texto. */
+  id: string | number;
   data: string;
   projeto: string;
   parede: string;
@@ -110,7 +111,7 @@ export interface LogItem {
   id: number;
   criado_em: string;
   tabela: string;
-  registro_id: number | null;
+  registro_id: string | number | null;
   acao: "INSERT" | "UPDATE" | "DELETE";
   campo: string | null;
   de: string | null;

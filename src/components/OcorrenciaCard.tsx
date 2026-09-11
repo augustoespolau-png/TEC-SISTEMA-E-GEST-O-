@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { toast } from "sonner";
-import { createClient } from "@/lib/supabase/client";
+import { mutarQualidade } from "@/lib/qualidadeCompat";
 import ChipGroup from "@/components/ChipGroup";
 import HistoricoRegistro from "@/components/HistoricoRegistro";
 import { SeloCriticidade, SeloStatus } from "@/components/Selo";
@@ -73,7 +73,6 @@ export default function OcorrenciaCard({
 
   async function enviar(status: string, observacao: string, avisoOk: string) {
     setSalvando(true);
-    const supabase = createClient();
     // meio-dia em São Paulo: a data não desliza de fuso em nenhuma direção
     const resolvedAt =
       (status === "RETRABALHO" || status === "RETRABALHO_PENDENTE") &&
@@ -81,17 +80,12 @@ export default function OcorrenciaCard({
         ? `${dataRetrabalho}T12:00:00-03:00`
         : null;
 
-    const { data, error } = await supabase
-      .from("ocorrencias")
-      .update({
-        status,
-        observacao: observacao.trim() || null,
-        resolved_at: resolvedAt,
-      })
-      .eq("id", item.id)
-      .select("*, criador:profiles!ocorrencias_created_by_fkey(nome)")
-      .single();
-
+    const { data, error } = await mutarQualidade("ATUALIZAR_DESVIO", {
+      id: item.id,
+      status,
+      observacao: observacao.trim() || null,
+      resolved_at: resolvedAt,
+    });
     setSalvando(false);
     if (error) {
       toast.error(error.message);

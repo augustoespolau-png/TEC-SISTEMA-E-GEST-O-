@@ -215,9 +215,9 @@ export default function TelaConsultar({ role }: { role: Role }) {
     let q = filtrar(
       supabase
         .from("ocorrencias")
-        .select("*, criador:profiles!ocorrencias_created_by_fkey(nome)", {
-          count: "exact",
-        }),
+        // The legacy compatibility view intentionally has no synthetic
+        // foreign key. Author names remain optional in the card.
+        .select("*", { count: "exact" }),
       f
     );
 
@@ -327,7 +327,7 @@ export default function TelaConsultar({ role }: { role: Role }) {
         ? filtrar(
             supabase
               .from("ocorrencias")
-              .select("*, criador:profiles!ocorrencias_created_by_fkey(nome)"),
+              .select("*"),
             filtros
           )
             .order("data", { ascending: false })

@@ -12,7 +12,8 @@ import { fpyDaCasa, REGRA_FPY_PADRAO, type RegraFpy } from "@/lib/regras";
 /* A casa não tem data própria: cada parede é conferida no seu dia.
    Ver migration 020. */
 export interface Auditoria {
-  id: number;
+  /** O adaptador legado identifica a casa por projeto + número da casa. */
+  id: string;
   projeto: string;
   casa: string;
   observacao: string | null;
@@ -20,15 +21,15 @@ export interface Auditoria {
 }
 
 export interface ParedeInspecionada {
-  id: number;
-  auditoria_id: number;
+  id: string;
+  auditoria_id: string;
   parede: string;
   /** dia em que ESTA parede foi conferida */
   data: string;
 }
 
 export interface ErroDaAuditoria {
-  id: number;
+  id: string;
   parede: string;
   setor: string;
   tipo_erro: string;
@@ -45,7 +46,7 @@ export interface ErroDaAuditoria {
  * indicador de defeito o enxerga. Ver migration 023.
  */
 export interface NaDaAuditoria {
-  id: number;
+  id: string;
   parede: string;
   tipo_erro: string;
   observacao: string | null;

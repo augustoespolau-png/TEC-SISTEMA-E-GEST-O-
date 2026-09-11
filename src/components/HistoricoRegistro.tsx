@@ -15,7 +15,7 @@ export default function HistoricoRegistro({
   id,
 }: {
   tabela: string;
-  id: number;
+  id: string | number;
 }) {
   const [aberto, setAberto] = useState(false);
   const [itens, setItens] = useState<LogItem[] | null>(null);

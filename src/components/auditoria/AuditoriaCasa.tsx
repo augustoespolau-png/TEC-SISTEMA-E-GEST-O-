@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
+import { mutarQualidade } from "@/lib/qualidadeCompat";
 import PainelParede from "./PainelParede";
 import ListaAuditorias, { type ResumoDaCasa } from "./ListaAuditorias";
 import ResumoDeNas from "./ResumoDeNas";
@@ -77,7 +78,7 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
   const [abrindo, setAbrindo] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [todas, setTodas] = useState<Auditoria[]>([]);
-  const [resumos, setResumos] = useState<Record<number, ResumoDaCasa>>({});
+  const [resumos, setResumos] = useState<Record<string, ResumoDaCasa>>({});
   // regras da qualidade vindas de Configurações; o FPY desta tela obedece
   // exatamente as mesmas do painel
   const [regras, setRegras] = useState<Regras>(REGRAS_PADRAO);
@@ -91,7 +92,10 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
         supabase.from("paredes").select("*").eq("ativo", true).order("ordem"),
         supabase.from("setores").select("*").eq("ativo", true).order("ordem"),
         supabase.from("tipos_erro").select("*").eq("ativo", true).order("ordem"),
-        supabase.from("auditorias").select("*").limit(5000),
+        // The production database keeps the original quality data in the
+        // produto_* tables. This compatibility view groups its wall rows
+        // into the same house-level records used by this screen.
+        supabase.from("qualidade_auditorias").select("*").limit(5000),
       ]);
       const falha = p.error || w.error || s.error || t.error;
       if (falha) {
@@ -122,12 +126,12 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
       const regras = await carregarRegras();
       setRegras(regras);
 
-      const acc: Record<number, ResumoDaCasa> = {};
+      const acc: Record<string, ResumoDaCasa> = {};
       // a regra do zeramento é por projeto, então a lista precisa saber
       // de que projeto é cada casa (migration 022)
-      const projetoDaCasa = new Map<number, string>();
+      const projetoDaCasa = new Map<string, string>();
       for (const l of fp.data ?? []) {
-        const id = l.auditoria_id as number;
+        const id = String(l.auditoria_id);
         projetoDaCasa.set(id, (l.projeto as string) ?? "");
         const a = (acc[id] ??= {
           conferidas: 0,
@@ -142,7 +146,7 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
         a.erros += l.erros as number;
       }
       for (const o of oc.data ?? []) {
-        const a = acc[o.auditoria_id as number];
+        const a = acc[String(o.auditoria_id)];
         if (a && o.status === "NAO_CONFORMIDADE") a.naoConformidades++;
       }
       /* Mesma função do painel. Antes esta lista calculava o FPY por
@@ -150,7 +154,7 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
          zerada no painel e com 50% aqui, ao mesmo tempo. */
       for (const [id, a] of Object.entries(acc)) {
         const afetadas = a.conferidas - a.ok;
-        const r = regraDoProjeto(regras, projetoDaCasa.get(Number(id)));
+        const r = regraDoProjeto(regras, projetoDaCasa.get(id));
         a.fpy = fpyDaCasa(a.conferidas, afetadas, r);
         a.zeradaPelaRegra = a.ok > 0 && casaZeraOFpy(afetadas, r);
       }
@@ -172,7 +176,7 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
     const supabase = createClient();
     const [ps, os, ns] = await Promise.all([
       supabase
-        .from("auditoria_paredes")
+          .from("qualidade_auditoria_paredes")
         .select("parede, data")
         .eq("auditoria_id", a.id),
       supabase
@@ -181,7 +185,7 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
         .eq("auditoria_id", a.id)
         .order("id"),
       supabase
-        .from("auditoria_nas")
+        .from("qualidade_auditoria_nas")
         .select("id, parede, tipo_erro, observacao")
         .eq("auditoria_id", a.id)
         .order("id"),
@@ -209,7 +213,7 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
     const supabase = createClient();
 
     const { data: existente } = await supabase
-      .from("auditorias")
+      .from("qualidade_auditorias")
       .select("*")
       .eq("projeto", projeto)
       .eq("casa", numero)
@@ -217,17 +221,30 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
 
     let a = existente as Auditoria | null;
     if (!a) {
-      const { data: nova, error } = await supabase
-        .from("auditorias")
-        .insert({ projeto, casa: numero })
-        .select()
-        .single();
+      const { data: criacao, error } = await mutarQualidade(
+        "ABRIR_AUDITORIA",
+        { projeto, casa: numero }
+      );
       if (error) {
         setAbrindo(false);
         toast.error("Não foi possível abrir a auditoria: " + error.message);
         return;
       }
-      a = nova as Auditoria;
+      const id = (criacao as { id?: string } | null)?.id;
+      const leitura = await supabase
+        .from("qualidade_auditorias")
+        .select("*")
+        .eq("id", id ?? `${projeto}|${numero}`)
+        .single();
+      if (leitura.error || !leitura.data) {
+        setAbrindo(false);
+        toast.error(
+          "A auditoria foi criada, mas não pôde ser carregada: " +
+            (leitura.error?.message ?? "registro não encontrado")
+        );
+        return;
+      }
+      a = leitura.data as Auditoria;
       setTodas((lista) => [a as Auditoria, ...lista]);
       toast.success(`Auditoria da casa ${numero} aberta.`);
     } else {
@@ -253,10 +270,11 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
   async function marcarOk(parede: string, dia: string) {
     if (!auditoria || salvando) return;
     setSalvando(true);
-    const supabase = createClient();
-    const { error } = await supabase
-      .from("auditoria_paredes")
-      .insert({ auditoria_id: auditoria.id, parede, data: dia });
+    const { error } = await mutarQualidade("MARCAR_PAREDE_OK", {
+      auditoria_id: auditoria.id,
+      parede,
+      data: dia,
+    });
     setSalvando(false);
     if (error && error.code !== "23505") {
       toast.error("Não foi possível salvar: " + error.message);
@@ -278,18 +296,11 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
   async function mudarDataDaParede(parede: string, dia: string) {
     if (!auditoria || salvando) return;
     setSalvando(true);
-    const supabase = createClient();
-    const { error } = await supabase
-      .from("auditoria_paredes")
-      .update({ data: dia })
-      .eq("auditoria_id", auditoria.id)
-      .eq("parede", parede);
-    if (!error)
-      await supabase
-        .from("ocorrencias")
-        .update({ data: dia })
-        .eq("auditoria_id", auditoria.id)
-        .eq("parede", parede);
+    const { error } = await mutarQualidade("ALTERAR_DATA_PAREDE", {
+      auditoria_id: auditoria.id,
+      parede,
+      data: dia,
+    });
     setSalvando(false);
     if (error) {
       toast.error("Não foi possível mudar a data: " + error.message);
@@ -304,33 +315,38 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
     setSalvando(true);
     const supabase = createClient();
 
-    const { data: criado, error } = await supabase
-      .from("ocorrencias")
-      .insert({
-        // o erro herda a data DA PAREDE, não da casa
-        data: dia,
-        projeto: auditoria.projeto,
-        casa: auditoria.casa,
-        parede,
-        auditoria_id: auditoria.id,
-        ...novo,
-      })
-      .select("id, parede, setor, tipo_erro, ocorrencia, criticidade, status")
-      .single();
+    const { data: criacao, error } = await mutarQualidade("REGISTRAR_DESVIO", {
+      data: dia,
+      projeto: auditoria.projeto,
+      casa: auditoria.casa,
+      parede,
+      auditoria_id: auditoria.id,
+      ...novo,
+    });
 
-    if (!error) {
-      // uma parede com erro está conferida por definição
-      await supabase
-        .from("auditoria_paredes")
-        .insert({ auditoria_id: auditoria.id, parede, data: dia });
-    }
+    const id = (criacao as { id?: string } | null)?.id;
+    const leitura = !error && id
+      ? await supabase
+          .from("ocorrencias")
+          .select("id, parede, setor, tipo_erro, ocorrencia, criticidade, status")
+          .eq("id", id)
+          .single()
+      : null;
     setSalvando(false);
 
     if (error) {
       toast.error("Não foi possível salvar o erro: " + error.message);
       return;
     }
-    setErros((lista) => [...lista, criado as ErroDaAuditoria]);
+    if (!leitura || leitura.error || !leitura.data) {
+      toast.error(
+        "O erro foi salvo, mas não pôde ser recarregado: " +
+          (leitura?.error?.message ?? "registro não encontrado")
+      );
+      await carregarConteudo(auditoria);
+      return;
+    }
+    setErros((lista) => [...lista, leitura.data as ErroDaAuditoria]);
     setDatas((d) => ({ ...d, [parede]: dia }));
     toast.success("Erro registrado. Já aparece na tela Consultar.");
   }
@@ -344,33 +360,41 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
     if (!auditoria || salvando) return;
     setSalvando(true);
     const supabase = createClient();
-    const { data: criado, error } = await supabase
-      .from("auditoria_nas")
-      .insert({
+    const { data: criacao, error } = await mutarQualidade("ADICIONAR_NA", {
         auditoria_id: auditoria.id,
         parede,
         tipo_erro: novo.tipo_erro,
         observacao: novo.observacao || null,
-      })
-      .select("id, parede, tipo_erro, observacao")
-      .single();
+    });
+    const id = (criacao as { id?: string } | null)?.id;
+    const leitura = !error && id
+      ? await supabase
+          .from("qualidade_auditoria_nas")
+          .select("id, parede, tipo_erro, observacao")
+          .eq("id", id)
+          .single()
+      : null;
     setSalvando(false);
     if (error) {
       toast.error("Não foi possível salvar o NA: " + error.message);
       return;
     }
-    setNas((lista) => [...lista, criado as NaDaAuditoria]);
+    if (!leitura || leitura.error || !leitura.data) {
+      toast.error(
+        "O NA foi salvo, mas não pôde ser recarregado: " +
+          (leitura?.error?.message ?? "registro não encontrado")
+      );
+      await carregarConteudo(auditoria);
+      return;
+    }
+    setNas((lista) => [...lista, leitura.data as NaDaAuditoria]);
     toast.success("NA registrado. Ele não conta como erro.");
   }
 
-  async function removerNa(id: number) {
+  async function removerNa(id: string) {
     if (salvando) return;
     setSalvando(true);
-    const supabase = createClient();
-    const { error } = await supabase
-      .from("auditoria_nas")
-      .delete()
-      .eq("id", id);
+    const { error } = await mutarQualidade("REMOVER_NA", { id });
     setSalvando(false);
     if (error) {
       toast.error("Não foi possível remover o NA: " + error.message);
@@ -386,9 +410,8 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
   async function excluirCasa() {
     if (!auditoria || excluindo) return;
     setExcluindo(true);
-    const supabase = createClient();
-    const { data, error } = await supabase.rpc("excluir_auditoria", {
-      p_id: auditoria.id,
+    const { data, error } = await mutarQualidade("EXCLUIR_AUDITORIA", {
+      auditoria_id: auditoria.id,
     });
     setExcluindo(false);
     if (error) {
@@ -417,11 +440,10 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
     );
   }
 
-  async function removerErro(id: number) {
+  async function removerErro(id: string) {
     if (salvando) return;
     setSalvando(true);
-    const supabase = createClient();
-    const { error } = await supabase.from("ocorrencias").delete().eq("id", id);
+    const { error } = await mutarQualidade("REMOVER_DESVIO", { id });
     setSalvando(false);
     if (error) {
       toast.error(

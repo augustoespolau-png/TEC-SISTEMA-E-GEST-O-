@@ -42,11 +42,11 @@ export default function PainelParede({
   setores: ConfigItem[];
   aoMarcarOk: (dia: string) => void;
   aoAdicionarErro: (e: NovoErro, dia: string) => Promise<void>;
-  aoRemoverErro: (id: number) => void;
+  aoRemoverErro: (id: string) => void;
   /* sem dia: o NA não é acontecimento de um dia, é característica da
      parede — ela não leva aquele item, e isso não muda de data para data */
   aoAdicionarNa: (n: NovoNa) => Promise<void>;
-  aoRemoverNa: (id: number) => void;
+  aoRemoverNa: (id: string) => void;
   /** só é chamado quando a parede JÁ está conferida */
   aoMudarData: (dia: string) => void;
   salvando: boolean;

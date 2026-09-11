@@ -34,7 +34,7 @@ export default function ListaAuditorias({
   aoAbrir,
 }: {
   auditorias: Auditoria[];
-  resumos: Record<number, ResumoDaCasa>;
+  resumos: Record<string, ResumoDaCasa>;
   projetos: ConfigItem[];
   projeto: string;
   aoTrocarProjeto: (p: string) => void;
