@@ -43,7 +43,10 @@ export default function FormularioErro({
   const [preview, setPreview] = useState<string | null>(null);
   const [processandoFoto, setProcessandoFoto] = useState(false);
   const [erroFoto, setErroFoto] = useState("");
-  const inputFoto = useRef<HTMLInputElement>(null);
+  const [menuFotoAberto, setMenuFotoAberto] = useState(false);
+  const inputGaleria = useRef<HTMLInputElement>(null);
+  const inputCamera = useRef<HTMLInputElement>(null);
+  const seletorFoto = useRef<HTMLDivElement>(null);
   const selecaoFoto = useRef(0);
 
   useEffect(() => {
@@ -51,6 +54,27 @@ export default function FormularioErro({
       if (preview) URL.revokeObjectURL(preview);
     };
   }, [preview]);
+
+  useEffect(() => {
+    if (!menuFotoAberto) return;
+
+    function fecharAoClicarFora(event: PointerEvent) {
+      if (!seletorFoto.current?.contains(event.target as Node)) {
+        setMenuFotoAberto(false);
+      }
+    }
+
+    function fecharComEsc(event: KeyboardEvent) {
+      if (event.key === "Escape") setMenuFotoAberto(false);
+    }
+
+    document.addEventListener("pointerdown", fecharAoClicarFora);
+    document.addEventListener("keydown", fecharComEsc);
+    return () => {
+      document.removeEventListener("pointerdown", fecharAoClicarFora);
+      document.removeEventListener("keydown", fecharComEsc);
+    };
+  }, [menuFotoAberto]);
 
   const ehOutro = tipo === "OUTRO";
   const tipoFinal = ehOutro ? tipoOutro.trim().toUpperCase() : tipo;
@@ -109,6 +133,16 @@ export default function FormularioErro({
     setPreview(null);
     setErroFoto("");
     setProcessandoFoto(false);
+    setMenuFotoAberto(false);
+  }
+
+  function abrirFonteFoto(fonte: "camera" | "galeria") {
+    setMenuFotoAberto(false);
+    if (fonte === "camera") {
+      inputCamera.current?.click();
+    } else {
+      inputGaleria.current?.click();
+    }
   }
 
   return (
@@ -203,58 +237,71 @@ export default function FormularioErro({
         <label className="rotulo">Anexo / foto do desvio (opcional)</label>
         <div className="anexo-captura">
           <input
-            ref={inputFoto}
-            id="foto-desvio"
+            ref={inputGaleria}
+            id="foto-desvio-galeria"
+            type="file"
+            accept="image/*"
+            onChange={selecionarFoto}
+            className="anexo-input"
+          />
+          <input
+            ref={inputCamera}
+            id="foto-desvio-camera"
             type="file"
             accept="image/*"
             capture="environment"
             onChange={selecionarFoto}
             className="anexo-input"
           />
-          {preview ? (
-            <div className="anexo-preview">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={preview}
-                alt="Pré-visualização da foto do desvio"
-                className="anexo-imagem"
-              />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-[12.5px] text-ink">
-                  {arquivo?.name ?? "Foto selecionada"}
-                </p>
-                <p className="sub">
-                  {arquivo ? tamanhoLegivel(arquivo.size) : ""}
-                  {processandoFoto ? " · preparando foto…" : " · pronta para salvar"}
-                </p>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => inputFoto.current?.click()}
-                    className="btn"
-                    disabled={salvando || processandoFoto}
-                    style={{ fontSize: 11, padding: "5px 9px" }}
-                  >
-                    Trocar foto
-                  </button>
-                  <button
-                    type="button"
-                    onClick={removerFoto}
-                    className="btn"
-                    disabled={salvando || processandoFoto}
-                    style={{ fontSize: 11, padding: "5px 9px" }}
-                  >
-                    Remover
-                  </button>
+          <div className="anexo-seletor" ref={seletorFoto}>
+            {preview ? (
+              <div className="anexo-preview">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={preview}
+                  alt="Pré-visualização da foto do desvio"
+                  className="anexo-imagem"
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[12.5px] text-ink">
+                    {arquivo?.name ?? "Foto selecionada"}
+                  </p>
+                  <p className="sub">
+                    {arquivo ? tamanhoLegivel(arquivo.size) : ""}
+                    {processandoFoto ? " · preparando foto…" : " · pronta para salvar"}
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setMenuFotoAberto((aberto) => !aberto)}
+                      className="btn"
+                      disabled={salvando || processandoFoto}
+                      aria-expanded={menuFotoAberto}
+                      aria-haspopup="menu"
+                      style={{ fontSize: 11, padding: "5px 9px" }}
+                    >
+                      Trocar foto
+                    </button>
+                    <button
+                      type="button"
+                      onClick={removerFoto}
+                      className="btn"
+                      disabled={salvando || processandoFoto}
+                      style={{ fontSize: 11, padding: "5px 9px" }}
+                    >
+                      Remover
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
           ) : (
             <button
               type="button"
               className="anexo-escolher"
-              onClick={() => inputFoto.current?.click()}
+              onClick={() => setMenuFotoAberto((aberto) => !aberto)}
               disabled={salvando}
+              aria-expanded={menuFotoAberto}
+              aria-haspopup="menu"
             >
               <span className="anexo-icone" aria-hidden="true">
                 ▣
@@ -264,7 +311,36 @@ export default function FormularioErro({
                 <small>Use a câmera do celular/tablet ou a galeria</small>
               </span>
             </button>
-          )}
+            )}
+            {menuFotoAberto && (
+              <div className="anexo-opcoes" role="menu" aria-label="Escolher origem da imagem">
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => abrirFonteFoto("camera")}
+                  disabled={salvando || processandoFoto}
+                >
+                  <span aria-hidden="true">▣</span>
+                  <span>
+                    <b>Tirar foto</b>
+                    <small>Abrir a câmera do dispositivo</small>
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => abrirFonteFoto("galeria")}
+                  disabled={salvando || processandoFoto}
+                >
+                  <span aria-hidden="true">▤</span>
+                  <span>
+                    <b>Escolher da galeria</b>
+                    <small>Selecionar uma imagem já salva</small>
+                  </span>
+                </button>
+              </div>
+            )}
+          </div>
         </div>
         {erroFoto && (
           <p className="sub" style={{ color: "var(--color-alta)" }}>
