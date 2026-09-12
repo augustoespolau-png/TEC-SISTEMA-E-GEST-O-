@@ -10,6 +10,19 @@ export interface NovoNa {
 
 const VALOR_OUTRO = "__OUTRO__";
 
+function menuDeveAbrirParaCima(elemento: HTMLElement | null) {
+  if (!elemento || typeof window === "undefined") return false;
+
+  const retangulo = elemento.getBoundingClientRect();
+  const alturaNav = Number.parseFloat(
+    window.getComputedStyle(document.documentElement).getPropertyValue("--altura-nav")
+  ) || 72;
+  const alturaMenu = Math.min(390, window.innerHeight * 0.58);
+  const espacoAbaixo = window.innerHeight - retangulo.bottom - Math.max(72, alturaNav);
+
+  return espacoAbaixo < alturaMenu && retangulo.top > alturaMenu;
+}
+
 /**
  * Formulário de um NA — item NÃO APLICÁVEL àquela parede.
  *
@@ -34,6 +47,7 @@ export default function FormularioNa({
   const [tipoOutro, setTipoOutro] = useState("");
   const [texto, setTexto] = useState("");
   const [menuAberto, setMenuAberto] = useState(false);
+  const [menuParaCima, setMenuParaCima] = useState(false);
   const seletorRef = useRef<HTMLDivElement>(null);
 
   const existentes = new Set(tiposJaAdicionados);
@@ -58,6 +72,10 @@ export default function FormularioNa({
   useEffect(() => {
     if (!menuAberto) return;
 
+    const atualizarDirecao = () => {
+      setMenuParaCima(menuDeveAbrirParaCima(seletorRef.current));
+    };
+
     function fecharAoClicarFora(event: PointerEvent) {
       if (!seletorRef.current?.contains(event.target as Node)) {
         setMenuAberto(false);
@@ -68,11 +86,16 @@ export default function FormularioNa({
       if (event.key === "Escape") setMenuAberto(false);
     }
 
+    atualizarDirecao();
     document.addEventListener("pointerdown", fecharAoClicarFora);
     document.addEventListener("keydown", fecharComEsc);
+    window.addEventListener("resize", atualizarDirecao);
+    window.addEventListener("scroll", atualizarDirecao, true);
     return () => {
       document.removeEventListener("pointerdown", fecharAoClicarFora);
       document.removeEventListener("keydown", fecharComEsc);
+      window.removeEventListener("resize", atualizarDirecao);
+      window.removeEventListener("scroll", atualizarDirecao, true);
     };
   }, [menuAberto]);
 
@@ -92,6 +115,13 @@ export default function FormularioNa({
         ...tipos.map((tipo) => tipo.nome).filter((nome) => !existentes.has(nome)),
       ]),
     ]);
+  }
+
+  function alternarMenu() {
+    if (!menuAberto) {
+      setMenuParaCima(menuDeveAbrirParaCima(seletorRef.current));
+    }
+    setMenuAberto((aberto) => !aberto);
   }
 
   return (
@@ -115,7 +145,7 @@ export default function FormularioNa({
             className={`na-select-trigger ${
               nomesSelecionados.length === 0 ? "placeholder" : ""
             }`}
-            onClick={() => setMenuAberto((aberto) => !aberto)}
+            onClick={alternarMenu}
             disabled={salvando || tipos.every((tipo) => existentes.has(tipo.nome))}
             aria-expanded={menuAberto}
             aria-controls="na-select-menu"
@@ -129,7 +159,7 @@ export default function FormularioNa({
           {menuAberto && (
             <div
               id="na-select-menu"
-              className="na-select-menu"
+              className={`na-select-menu ${menuParaCima ? "acima" : ""}`}
               role="listbox"
               aria-label="Itens que não se aplicam"
               aria-multiselectable="true"

@@ -475,14 +475,23 @@ textarea.campo {
   border-radius: 8px;
   background: var(--color-papel-2);
   box-shadow: 0 14px 32px rgb(0 0 0 / 24%);
+  overscroll-behavior: contain;
+}
+.na-select-menu.acima {
+  top: auto;
+  bottom: calc(100% + 6px);
 }
 .na-select-acoes {
+  position: sticky;
+  top: -6px;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
   padding: 2px 3px 7px;
   border-bottom: 1px solid var(--color-line);
+  background: var(--color-papel-2);
 }
 .na-select-contagem {
   min-width: 0;
