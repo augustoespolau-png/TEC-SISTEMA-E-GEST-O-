@@ -478,8 +478,8 @@ textarea.campo {
   }
 }
 
-/* campo de foto do desvio. Os inputs ficam no DOM: o de câmera só é acionado
-   depois que o inspetor escolhe explicitamente "Tirar foto". */
+/* campo de foto do desvio. Um único input sem capture deixa o sistema do
+   celular abrir o seletor nativo com Fototeca, Tirar Foto e Escolher Arquivo. */
 .anexo-captura {
   min-width: 0;
 }
@@ -527,69 +527,6 @@ textarea.campo {
 .anexo-escolher:focus-visible {
   outline: 3px solid color-mix(in srgb, var(--color-brand) 22%, transparent);
   outline-offset: 1px;
-}
-.anexo-opcoes {
-  position: absolute;
-  z-index: 30;
-  top: calc(100% + 6px);
-  left: 0;
-  width: min(100%, 320px);
-  padding: 5px;
-  border: 1px solid var(--color-line-2);
-  border-radius: 8px;
-  background: var(--color-papel-2);
-  box-shadow: 0 14px 32px rgb(0 0 0 / 22%);
-}
-.anexo-opcoes button {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 9px 10px;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--color-ink-2);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-.anexo-opcoes button:hover:not(:disabled),
-.anexo-opcoes button:focus-visible {
-  border-color: var(--color-brand);
-  background: color-mix(in srgb, var(--color-brand) 8%, var(--color-papel));
-  color: var(--color-ink);
-  outline: none;
-}
-.anexo-opcoes button:disabled {
-  cursor: not-allowed;
-  opacity: 0.45;
-}
-.anexo-opcoes button > span:first-child {
-  display: inline-flex;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border: 1px solid var(--color-line-2);
-  border-radius: 6px;
-  color: var(--color-brand);
-  font-size: 16px;
-}
-.anexo-opcoes b,
-.anexo-opcoes small {
-  display: block;
-}
-.anexo-opcoes b {
-  color: var(--color-ink);
-  font-size: 12px;
-  font-weight: 600;
-}
-.anexo-opcoes small {
-  margin-top: 2px;
-  color: var(--color-ink-3);
-  font-size: 10.5px;
 }
 .anexo-escolher b {
   display: block;
