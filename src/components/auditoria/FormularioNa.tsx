@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ConfigItem } from "@/lib/types";
 
 export interface NovoNa {
@@ -33,6 +33,8 @@ export default function FormularioNa({
   const [selecionados, setSelecionados] = useState<string[]>([]);
   const [tipoOutro, setTipoOutro] = useState("");
   const [texto, setTexto] = useState("");
+  const [menuAberto, setMenuAberto] = useState(false);
+  const seletorRef = useRef<HTMLDivElement>(null);
 
   const existentes = new Set(tiposJaAdicionados);
   const ehOutro = selecionados.includes(VALOR_OUTRO);
@@ -41,6 +43,38 @@ export default function FormularioNa({
     ...selecionados.filter((tipo) => tipo !== VALOR_OUTRO),
     ...(ehOutro && outroFinal ? [outroFinal] : []),
   ];
+  const nomesSelecionados = selecionados.map((tipo) =>
+    tipo === VALOR_OUTRO ? "Outro" : tipo
+  );
+  const resumoSelecionados =
+    nomesSelecionados.length === 0
+      ? tipos.length > 0 && tipos.every((tipo) => existentes.has(tipo.nome))
+        ? "Todos os itens já foram registrados"
+        : "Selecione"
+      : nomesSelecionados.length <= 2
+        ? nomesSelecionados.join(", ")
+        : `${nomesSelecionados.length} itens selecionados`;
+
+  useEffect(() => {
+    if (!menuAberto) return;
+
+    function fecharAoClicarFora(event: PointerEvent) {
+      if (!seletorRef.current?.contains(event.target as Node)) {
+        setMenuAberto(false);
+      }
+    }
+
+    function fecharComEsc(event: KeyboardEvent) {
+      if (event.key === "Escape") setMenuAberto(false);
+    }
+
+    document.addEventListener("pointerdown", fecharAoClicarFora);
+    document.addEventListener("keydown", fecharComEsc);
+    return () => {
+      document.removeEventListener("pointerdown", fecharAoClicarFora);
+      document.removeEventListener("keydown", fecharComEsc);
+    };
+  }, [menuAberto]);
 
   function alternarTipo(tipo: string) {
     if (existentes.has(tipo)) return;
@@ -69,75 +103,109 @@ export default function FormularioNa({
       }}
     >
       <div>
-        <div className="flex flex-wrap items-end justify-between gap-2">
-          <label className="rotulo mb-0">Itens que não se aplicam</label>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={selecionarTodos}
-              className="btn"
-              style={{ fontSize: 11, padding: "5px 9px" }}
-              disabled={salvando || tipos.every((tipo) => existentes.has(tipo.nome))}
-            >
-              Todos
-            </button>
-            <button
-              type="button"
-              onClick={() => setSelecionados([])}
-              className="btn"
-              style={{ fontSize: 11, padding: "5px 9px" }}
-              disabled={salvando || selecionados.length === 0}
-            >
-              Nenhum
-            </button>
-          </div>
-        </div>
+        <span className="rotulo">Itens que não se aplicam</span>
         <p className="sub">
-          Marque todos os itens de uma vez. Os que já foram registrados ficam
-          bloqueados para evitar duplicidade.
+          Abra a lista para marcar vários itens de uma vez. Os que já foram
+          registrados ficam bloqueados para evitar duplicidade.
         </p>
-        <div className="na-selecao" role="group" aria-label="Itens que não se aplicam">
-          {tipos.map((t, index) => {
-            const jaAdicionado = existentes.has(t.nome);
-            const marcado = jaAdicionado || selecionados.includes(t.nome);
-            return (
-              <label
-                key={t.id}
-                className={`na-opcao ${marcado ? "selecionada" : ""} ${
-                  jaAdicionado ? "bloqueada" : ""
-                }`}
-              >
-                <input
-                  type="checkbox"
-                  checked={marcado}
-                  disabled={salvando || jaAdicionado}
-                  onChange={() => alternarTipo(t.nome)}
-                  autoFocus={index === 0}
-                  className="na-input"
-                />
-                <span className="na-check" aria-hidden="true">
-                  {marcado ? "✓" : ""}
-                </span>
-                <span>{t.nome}</span>
-                {jaAdicionado && <span className="na-ja-adicionado">já salvo</span>}
-              </label>
-            );
-          })}
-          <label
-            className={`na-opcao ${selecionados.includes(VALOR_OUTRO) ? "selecionada" : ""}`}
+        <div className="na-seletor" ref={seletorRef}>
+          <button
+            id="na-seletor-trigger"
+            type="button"
+            className={`na-select-trigger ${
+              nomesSelecionados.length === 0 ? "placeholder" : ""
+            }`}
+            onClick={() => setMenuAberto((aberto) => !aberto)}
+            disabled={salvando || tipos.every((tipo) => existentes.has(tipo.nome))}
+            aria-expanded={menuAberto}
+            aria-controls="na-select-menu"
+            aria-haspopup="listbox"
+            autoFocus
           >
-            <input
-              type="checkbox"
-              checked={selecionados.includes(VALOR_OUTRO)}
-              disabled={salvando}
-              onChange={() => alternarTipo(VALOR_OUTRO)}
-              className="na-input"
-            />
-            <span className="na-check" aria-hidden="true">
-              {selecionados.includes(VALOR_OUTRO) ? "✓" : ""}
-            </span>
-            <span>Outro (especificar)</span>
-          </label>
+            <span className="na-select-value">{resumoSelecionados}</span>
+            <span className="na-select-seta" aria-hidden="true" />
+          </button>
+
+          {menuAberto && (
+            <div
+              id="na-select-menu"
+              className="na-select-menu"
+              role="listbox"
+              aria-label="Itens que não se aplicam"
+              aria-multiselectable="true"
+            >
+              <div className="na-select-acoes">
+                <span className="na-select-contagem">
+                  {selecionados.length === 0
+                    ? "Selecione um ou mais itens"
+                    : `${selecionados.length} selecionado(s)`}
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={selecionarTodos}
+                    className="btn"
+                    style={{ fontSize: 11, padding: "5px 9px" }}
+                    disabled={salvando || tipos.every((tipo) => existentes.has(tipo.nome))}
+                  >
+                    Todos
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelecionados([])}
+                    className="btn"
+                    style={{ fontSize: 11, padding: "5px 9px" }}
+                    disabled={salvando || selecionados.length === 0}
+                  >
+                    Nenhum
+                  </button>
+                </div>
+              </div>
+
+              <div className="na-selecao" role="group" aria-label="Itens que não se aplicam">
+                {tipos.map((t) => {
+                  const jaAdicionado = existentes.has(t.nome);
+                  const marcado = jaAdicionado || selecionados.includes(t.nome);
+                  return (
+                    <label
+                      key={t.id}
+                      className={`na-opcao ${marcado ? "selecionada" : ""} ${
+                        jaAdicionado ? "bloqueada" : ""
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={marcado}
+                        disabled={salvando || jaAdicionado}
+                        onChange={() => alternarTipo(t.nome)}
+                        className="na-input"
+                      />
+                      <span className="na-check" aria-hidden="true">
+                        {marcado ? "✓" : ""}
+                      </span>
+                      <span>{t.nome}</span>
+                      {jaAdicionado && <span className="na-ja-adicionado">já salvo</span>}
+                    </label>
+                  );
+                })}
+                <label
+                  className={`na-opcao ${selecionados.includes(VALOR_OUTRO) ? "selecionada" : ""}`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={selecionados.includes(VALOR_OUTRO)}
+                    disabled={salvando}
+                    onChange={() => alternarTipo(VALOR_OUTRO)}
+                    className="na-input"
+                  />
+                  <span className="na-check" aria-hidden="true">
+                    {selecionados.includes(VALOR_OUTRO) ? "✓" : ""}
+                  </span>
+                  <span>Outro (especificar)</span>
+                </label>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
