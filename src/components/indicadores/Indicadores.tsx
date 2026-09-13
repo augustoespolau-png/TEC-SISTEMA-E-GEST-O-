@@ -122,6 +122,7 @@ export default function Indicadores({ role }: { role: Role }) {
 
   const [paredes, setParedes] = useState<ParedeConferida[] | null>(null);
   const [erros, setErros] = useState<LinhaDash[]>([]);
+  const [itensPorPainel, setItensPorPainel] = useState(0);
   const [regras, setRegras] = useState<Regras>(REGRAS_PADRAO);
   const [erro, setErro] = useState("");
 
@@ -136,18 +137,23 @@ export default function Indicadores({ role }: { role: Role }) {
      deixaria a tela lenta sem necessidade. */
   const carregar = useCallback(async () => {
     const supabase = createClient();
-    const [rp, re, rj] = await Promise.all([
+    const [rp, re, rj, rt] = await Promise.all([
       supabase.from("fpy_paredes").select("*").limit(30000),
       supabase.from("ocorrencias").select(COLUNAS_DASH).limit(30000),
       supabase.from("projetos").select("nome").eq("ativo", true).order("ordem"),
+      supabase.from("tipos_erro").select("id").eq("ativo", true).order("ordem"),
     ]);
-    if (re.error || rp.error) {
-      setErro("Erro ao carregar: " + (re.error?.message ?? rp.error?.message));
+    if (re.error || rp.error || rt.error) {
+      setErro(
+        "Erro ao carregar: " +
+          (re.error?.message ?? rp.error?.message ?? rt.error?.message)
+      );
       return;
     }
     setErro("");
     setParedes((rp.data ?? []) as ParedeConferida[]);
     setErros((re.data ?? []) as LinhaDash[]);
+    setItensPorPainel((rt.data ?? []).length);
     const nomes = (rj.data ?? []).map((p) => (p.nome as string).trim());
     setProjetos(nomes);
     setProjeto((p) => p ?? nomes[0] ?? null);
@@ -345,6 +351,7 @@ export default function Indicadores({ role }: { role: Role }) {
           regra={regra}
           meta={regras.meta}
           limiteRegra={regra.minParedesAfetadas}
+          itensPorPainel={itensPorPainel}
           aoRecortar={aoRecortar}
           aceso={aceso}
         />

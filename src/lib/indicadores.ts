@@ -23,6 +23,123 @@ import { casaZeraOFpy, type RegraFpy } from "@/lib/regras";
  */
 
 /* ------------------------------------------------------------------ */
+/* Índice de qualidade                                                */
+/* ------------------------------------------------------------------ */
+
+export interface IndiceQualidade {
+  paineisAuditados: number;
+  /** null quando a quantidade varia entre os painéis. */
+  itensPorPainel: number | null;
+  totalBruto: number;
+  naoAplicaveis: number;
+  itensValidos: number;
+  desvios: number;
+  itensConformes: number;
+  /** null quando não existe base válida para a divisão. */
+  percentual: number | null;
+}
+
+export interface PainelIndiceQualidade {
+  itensChecklist: number;
+  naoAplicaveis?: number;
+}
+
+const inteiroNaoNegativo = (valor: number) =>
+  Number.isFinite(valor) ? Math.max(0, Math.trunc(valor)) : 0;
+
+function finalizarIndiceQualidade({
+  paineisAuditados,
+  itensPorPainel,
+  totalBruto,
+  naoAplicaveis,
+  desvios,
+}: {
+  paineisAuditados: number;
+  itensPorPainel: number | null;
+  totalBruto: number;
+  naoAplicaveis: number;
+  desvios: number;
+}): IndiceQualidade {
+  const bruto = inteiroNaoNegativo(totalBruto);
+  /* N/A não pode reduzir a base abaixo de zero. O limite também protege
+     contra duplicação acidental de um registro na origem. */
+  const na = Math.min(bruto, inteiroNaoNegativo(naoAplicaveis));
+  const validos = bruto - na;
+  const d = inteiroNaoNegativo(desvios);
+  const conformes = Math.max(0, validos - d);
+
+  return {
+    paineisAuditados: inteiroNaoNegativo(paineisAuditados),
+    itensPorPainel:
+      itensPorPainel === null ? null : inteiroNaoNegativo(itensPorPainel),
+    totalBruto: bruto,
+    naoAplicaveis: na,
+    itensValidos: validos,
+    desvios: d,
+    itensConformes: conformes,
+    percentual:
+      validos === 0 ? null : Math.round((conformes / validos) * 1000) / 10,
+  };
+}
+
+/**
+ * Índice com checklist fixo, usado hoje pelo painel.
+ *
+ * Total bruto = P × I; base válida = total bruto − N/A; conformes = base
+ * válida − D. A base vazia vira null para a tela mostrar "—", em vez de
+ * apresentar 0% como se houvesse inspeção reprovada.
+ */
+export function calcularIndiceQualidade({
+  paineisAuditados,
+  itensPorPainel,
+  naoAplicaveis,
+  desvios,
+}: {
+  paineisAuditados: number;
+  itensPorPainel: number;
+  naoAplicaveis: number;
+  desvios: number;
+}): IndiceQualidade {
+  const p = inteiroNaoNegativo(paineisAuditados);
+  const i = inteiroNaoNegativo(itensPorPainel);
+  return finalizarIndiceQualidade({
+    paineisAuditados: p,
+    itensPorPainel: i,
+    totalBruto: p * i,
+    naoAplicaveis,
+    desvios,
+  });
+}
+
+/**
+ * Variante para um checklist que possa mudar por painel. Mantém a mesma
+ * fórmula sem inventar uma média: `itensPorPainel` só é preenchido quando
+ * todos os painéis usam a mesma quantidade; o total bruto é sempre a soma
+ * real dos checklists individuais.
+ */
+export function calcularIndiceQualidadePorPaineis(
+  paineis: readonly PainelIndiceQualidade[],
+  desvios: number
+): IndiceQualidade {
+  const itens = paineis.map((painel) =>
+    inteiroNaoNegativo(painel.itensChecklist)
+  );
+  const mesmoChecklist =
+    itens.length > 0 && itens.every((item) => item === itens[0]);
+  return finalizarIndiceQualidade({
+    paineisAuditados: paineis.length,
+    itensPorPainel: mesmoChecklist ? itens[0] : null,
+    totalBruto: itens.reduce((soma, item) => soma + item, 0),
+    naoAplicaveis: paineis.reduce(
+      (soma, painel) =>
+        soma + inteiroNaoNegativo(Number(painel.naoAplicaveis ?? 0)),
+      0
+    ),
+    desvios,
+  });
+}
+
+/* ------------------------------------------------------------------ */
 /* FPY por casa                                                        */
 /* ------------------------------------------------------------------ */
 

@@ -458,6 +458,8 @@ export interface ParedeConferida {
   casa: string;
   parede: string;
   erros: number;
+  /** Itens NA registrados na auditoria desta parede (view fpy_paredes). */
+  nao_aplicaveis?: number;
   passou_de_primeira: boolean;
   /** true = deduzida do histórico; false = conferida no sistema */
   reconstruida: boolean;
