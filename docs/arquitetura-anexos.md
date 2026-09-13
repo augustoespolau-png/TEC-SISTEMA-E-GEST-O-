@@ -58,6 +58,13 @@ mesmo prefixo de proprietário e seus próprios IDs de domínio.
 5. O sincronizador materializa os metadados em `produto_anexos` e
    `sistema_anexos`. A leitura cria URLs assinadas de curta duração.
 
+Na baixa de retrabalho, o mesmo fluxo usa `reworkAttachments` no registro
+canônico. O objeto recebe `deviationId` e o RPC
+`qualidade_adicionar_anexo_retrabalho` valida o desvio antes de gravar. Assim,
+a foto pós-retrabalho fica vinculada à ocorrência em `sistema_anexos` (e não
+somente à auditoria da casa). A tela Consulta busca as fotos pelo vínculo,
+gera URLs assinadas por uma hora e nunca persiste essas URLs.
+
 Se a etapa do banco falhar após o upload, o cliente remove o objeto recém-criado
 para evitar órfãos. Ao excluir um erro ou uma casa, os objetos relacionados são
 removidos do Storage antes de a operação ser concluída; uma falha de limpeza é

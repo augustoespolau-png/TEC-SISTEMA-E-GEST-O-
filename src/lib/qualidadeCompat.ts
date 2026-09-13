@@ -22,3 +22,13 @@ export async function mutarQualidade(
     p_dados: dados,
   });
 }
+
+/** Foto de correção: o RPC dedicado grava no estado canônico e deixa os
+ * sincronizadores existentes materializarem produto_anexos/sistema_anexos. */
+export async function adicionarAnexoRetrabalho(
+  dados: Record<string, unknown>
+) {
+  return createClient().rpc("qualidade_adicionar_anexo_retrabalho", {
+    p_dados: dados,
+  });
+}

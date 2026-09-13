@@ -76,6 +76,19 @@ export interface ConfigItem {
   ordem: number;
 }
 
+/** Metadados de um arquivo no Storage, sem URL permanente ou Base64. */
+export interface AnexoOcorrencia {
+  id: string;
+  tipo?: string | null;
+  nome_arquivo: string | null;
+  mime_type: string | null;
+  tamanho_bytes: number | null;
+  storage_bucket: string;
+  storage_path: string | null;
+  /** URL assinada, criada somente para a sessão atual da tela. */
+  url: string | null;
+}
+
 export interface Parede extends ConfigItem {
   projeto_id: number;
   /** metragem da posição, em m². Nula = ainda não levantada (migration 024) */
@@ -104,6 +117,12 @@ export interface Ocorrencia {
   updated_at: string | null;
   criador?: { nome: string } | null;
   aprovador?: { nome: string } | null;
+  /** Vínculo compatível com projeto|casa usado pela view legada. */
+  auditoria_id?: string | null;
+  /** IDs canônicos usados para montar novos caminhos de Storage. */
+  projeto_id?: string | null;
+  parede_id?: string | null;
+  anexos?: AnexoOcorrencia[];
 }
 
 /** Uma linha do log de atividade: um campo alterado, com autor. */

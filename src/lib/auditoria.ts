@@ -1,4 +1,8 @@
-import type { Criticidade, Status } from "@/lib/types";
+import type {
+  AnexoOcorrencia,
+  Criticidade,
+  Status,
+} from "@/lib/types";
 import { fpyDaCasa, REGRA_FPY_PADRAO, type RegraFpy } from "@/lib/regras";
 
 /*
@@ -39,15 +43,7 @@ export interface ErroDaAuditoria {
   anexos?: AnexoDaAuditoria[];
 }
 
-export interface AnexoDaAuditoria {
-  id: string;
-  nome_arquivo: string | null;
-  mime_type: string | null;
-  tamanho_bytes: number | null;
-  storage_bucket: string;
-  storage_path: string | null;
-  url: string | null;
-}
+export type AnexoDaAuditoria = AnexoOcorrencia;
 
 /**
  * NA — item NÃO APLICÁVEL àquela parede.

@@ -2,11 +2,17 @@
 
 import { useRef, useState } from "react";
 import { toast } from "sonner";
-import { mutarQualidade } from "@/lib/qualidadeCompat";
+import { createClient } from "@/lib/supabase/client";
+import {
+  adicionarAnexoRetrabalho,
+  mutarQualidade,
+} from "@/lib/qualidadeCompat";
 import ChipGroup from "@/components/ChipGroup";
 import HistoricoRegistro from "@/components/HistoricoRegistro";
 import { SeloCriticidade, SeloStatus } from "@/components/Selo";
-import type { Ocorrencia, Role, Status } from "@/lib/types";
+import SeletorFoto from "@/components/auditoria/SeletorFoto";
+import { BUCKET_AUDITORIA, caminhoAnexoAuditoria } from "@/lib/anexos";
+import type { AnexoOcorrencia, Ocorrencia, Role, Status } from "@/lib/types";
 import { ROTULO_STATUS } from "@/lib/types";
 
 /* O status RETRABALHO_PENDENTE não é escolhido: ele é a consequência de
@@ -21,6 +27,113 @@ const ESCOLHIVEIS: Status[] = [
 function formatarData(iso: string) {
   const [ano, mes, dia] = iso.slice(0, 10).split("-");
   return `${dia}/${mes}/${ano}`;
+}
+
+type FotoPosRetrabalhoPendente = {
+  id: string;
+  path: string;
+  dados: Record<string, unknown>;
+};
+
+/** Envia somente o JPEG já comprimido; o vínculo ainda será gravado no RPC. */
+async function prepararFotoPosRetrabalho(
+  supabase: ReturnType<typeof createClient>,
+  item: Ocorrencia,
+  arquivo: File
+): Promise<FotoPosRetrabalhoPendente> {
+  const { data } = await supabase.auth.getUser();
+  if (!data.user) throw new Error("Sua sessão expirou. Entre novamente.");
+
+  const anexoUid = crypto.randomUUID();
+  const anexoId = `rework_${anexoUid}`;
+  const projetoId =
+    item.projeto_id || item.auditoria_id?.split("|")[0] || item.projeto;
+  const paredeId = item.parede_id || item.parede;
+  const path = caminhoAnexoAuditoria({
+    usuarioId: data.user.id,
+    projetoId,
+    casaId: item.casa,
+    paredeId,
+    anexoId: anexoUid,
+    extensao: "jpg",
+  });
+
+  const { error } = await supabase.storage
+    .from(BUCKET_AUDITORIA)
+    .upload(path, arquivo, {
+      cacheControl: "3600",
+      contentType: "image/jpeg",
+      upsert: false,
+    });
+  if (error) throw new Error(`Não foi possível enviar a foto: ${error.message}`);
+
+  return {
+    id: anexoId,
+    path,
+    dados: {
+      id: anexoId,
+      name: arquivo.name || "foto-pos-retrabalho.jpg",
+      type: "image/jpeg",
+      size: arquivo.size,
+      path,
+      deviationId: String(item.id),
+      wallId: paredeId,
+      wallName: item.parede,
+      projectId: projetoId,
+      uploadedAt: new Date().toISOString(),
+    },
+  };
+}
+
+function FotosDaOcorrencia({ anexos }: { anexos?: AnexoOcorrencia[] }) {
+  if (!anexos?.length) return null;
+
+  const grupos = [
+    {
+      titulo: "Foto original do desvio",
+      itens: anexos.filter((anexo) => anexo.tipo !== "retrabalho"),
+    },
+    {
+      titulo: "Foto pós-retrabalho",
+      itens: anexos.filter((anexo) => anexo.tipo === "retrabalho"),
+    },
+  ].filter((grupo) => grupo.itens.length > 0);
+
+  return (
+    <section className="ocorrencia-fotos" aria-label="Fotos da ocorrência">
+      <p className="rotulo">Evidências fotográficas</p>
+      {grupos.map((grupo) => (
+        <div key={grupo.titulo}>
+          <p className="ocorrencia-fotos-titulo">{grupo.titulo}</p>
+          <div className="ocorrencia-fotos-lista">
+            {grupo.itens.map((anexo) =>
+              anexo.url ? (
+                <a
+                  key={anexo.id}
+                  href={anexo.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="ocorrencia-foto"
+                  title={`${anexo.nome_arquivo ?? grupo.titulo} · abrir foto`}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={anexo.url}
+                    alt={`${grupo.titulo} — ${anexo.nome_arquivo ?? "imagem"}`}
+                  />
+                  <span>{anexo.nome_arquivo ?? "Abrir foto"}</span>
+                </a>
+              ) : (
+                <span key={anexo.id} className="anexo-indisponivel">
+                  {anexo.nome_arquivo ?? "Foto sem visualização"}
+                </span>
+              )
+            )}
+          </div>
+        </div>
+      ))}
+    </section>
+  );
 }
 
 export default function OcorrenciaCard({
@@ -46,6 +159,8 @@ export default function OcorrenciaCard({
   );
   const [salvando, setSalvando] = useState(false);
   const [faltaObs, setFaltaObs] = useState(false);
+  const [fotoPosRetrabalho, setFotoPosRetrabalho] = useState<File | null>(null);
+  const [processandoFoto, setProcessandoFoto] = useState(false);
   const campoObs = useRef<HTMLTextAreaElement>(null);
 
   const gestao = role === "gestao";
@@ -72,28 +187,109 @@ export default function OcorrenciaCard({
     !gestao && novoStatus === "RETRABALHO" && item.status !== "RETRABALHO";
 
   async function enviar(status: string, observacao: string, avisoOk: string) {
+    if (salvando) return;
     setSalvando(true);
-    // meio-dia em São Paulo: a data não desliza de fuso em nenhuma direção
-    const resolvedAt =
-      (status === "RETRABALHO" || status === "RETRABALHO_PENDENTE") &&
-      dataRetrabalho
-        ? `${dataRetrabalho}T12:00:00-03:00`
-        : null;
+    const supabase = createClient();
+    let fotoPendente: FotoPosRetrabalhoPendente | null = null;
+    let fotoRemovida = false;
 
-    const { data, error } = await mutarQualidade("ATUALIZAR_DESVIO", {
-      id: item.id,
-      status,
-      observacao: observacao.trim() || null,
-      resolved_at: resolvedAt,
-    });
-    setSalvando(false);
-    if (error) {
-      toast.error(error.message);
-      return;
+    const limparFotoPendente = async () => {
+      if (!fotoPendente || fotoRemovida) return;
+      fotoRemovida = true;
+      const { error } = await supabase.storage
+        .from(BUCKET_AUDITORIA)
+        .remove([fotoPendente.path]);
+      if (error) {
+        toast.error(
+          "Não foi possível limpar a foto enviada. O arquivo ficou preservado para revisão."
+        );
+      }
+    };
+
+    try {
+      if (
+        fotoPosRetrabalho &&
+        (status === "RETRABALHO" || status === "RETRABALHO_PENDENTE")
+      ) {
+        fotoPendente = await prepararFotoPosRetrabalho(
+          supabase,
+          item,
+          fotoPosRetrabalho
+        );
+      }
+
+      // Meio-dia em São Paulo: a data não desliza de fuso em nenhuma direção.
+      const resolvedAt =
+        (status === "RETRABALHO" || status === "RETRABALHO_PENDENTE") &&
+        dataRetrabalho
+          ? `${dataRetrabalho}T12:00:00-03:00`
+          : null;
+
+      const { data, error } = await mutarQualidade("ATUALIZAR_DESVIO", {
+        id: item.id,
+        status,
+        observacao: observacao.trim() || null,
+        resolved_at: resolvedAt,
+      });
+      if (error) {
+        await limparFotoPendente();
+        toast.error(error.message);
+        return;
+      }
+
+      let novo =
+        (data as Ocorrencia | null) ??
+        ({
+          ...item,
+          status: status as Status,
+          observacao: observacao.trim() || null,
+        } as Ocorrencia);
+
+      if (fotoPendente) {
+        const { error: vinculoError } = await adicionarAnexoRetrabalho({
+          deviation_id: String(item.id),
+          anexo: fotoPendente.dados,
+        });
+
+        if (vinculoError) {
+          await limparFotoPendente();
+          toast.error(
+            "O status foi salvo, mas não foi possível vincular a foto pós-retrabalho. Tente anexá-la novamente."
+          );
+        } else {
+          const assinado = await supabase.storage
+            .from(BUCKET_AUDITORIA)
+            .createSignedUrl(fotoPendente.path, 60 * 60);
+          const anexo: AnexoOcorrencia = {
+            id: fotoPendente.id,
+            tipo: "retrabalho",
+            nome_arquivo: String(fotoPendente.dados.name),
+            mime_type: "image/jpeg",
+            tamanho_bytes: Number(fotoPendente.dados.size),
+            storage_bucket: BUCKET_AUDITORIA,
+            storage_path: fotoPendente.path,
+            url: assinado.data?.signedUrl ?? null,
+          };
+          novo = {
+            ...novo,
+            anexos: [...(item.anexos ?? []), anexo],
+          };
+        }
+      }
+
+      toast.success(avisoOk);
+      setAberto(false);
+      onSalvo(novo);
+    } catch (error) {
+      await limparFotoPendente();
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível salvar a alteração."
+      );
+    } finally {
+      setSalvando(false);
     }
-    toast.success(avisoOk);
-    setAberto(false);
-    onSalvo(data as Ocorrencia);
   }
 
   async function salvar() {
@@ -215,6 +411,8 @@ export default function OcorrenciaCard({
             background: "var(--color-papel-2)",
           }}
         >
+          <FotosDaOcorrencia anexos={item.anexos} />
+
           {item.status === "RETRABALHO_PENDENTE" && (
             <div
               className="mb-3.5 rounded-lg border p-3"
@@ -269,7 +467,13 @@ export default function OcorrenciaCard({
               opcoes={opcoes}
               rotulos={ROTULO_STATUS}
               valor={novoStatus}
-              onChange={(v) => setNovoStatus(v)}
+              onChange={(v) => {
+                setNovoStatus(v);
+                if (v !== "RETRABALHO") {
+                  setFotoPosRetrabalho(null);
+                  setProcessandoFoto(false);
+                }
+              }}
             />
           </div>
 
@@ -333,9 +537,22 @@ export default function OcorrenciaCard({
             </p>
           )}
 
+          {novoStatus === "RETRABALHO" && (
+            <div className="mt-3">
+              <SeletorFoto
+                id={`foto-pos-retrabalho-${String(item.id)}`}
+                titulo="Foto pós-retrabalho (opcional)"
+                descricao="A evidência será compactada e vinculada a este desvio no Storage privado."
+                salvando={salvando}
+                onArquivoPronto={setFotoPosRetrabalho}
+                onProcessando={setProcessandoFoto}
+              />
+            </div>
+          )}
+
           <button
             onClick={salvar}
-            disabled={salvando}
+            disabled={salvando || processandoFoto}
             className="btn btn-forte mt-3 w-full"
             style={{ padding: "11px 16px", fontSize: 14.5 }}
           >

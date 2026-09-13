@@ -704,6 +704,59 @@ textarea.campo {
   font-size: 10.5px;
 }
 
+/* Galeria compacta no cartão de Consulta. As URLs chegam assinadas e
+   temporárias; o cartão só define a leitura, nunca a persistência do arquivo. */
+.ocorrencia-fotos {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding: 11px;
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  background: var(--color-papel);
+}
+.ocorrencia-fotos-titulo {
+  margin-bottom: 6px;
+  color: var(--color-ink-2);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.ocorrencia-fotos-lista {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+  gap: 8px;
+}
+.ocorrencia-foto {
+  display: block;
+  overflow: hidden;
+  border: 1px solid var(--color-line-2);
+  border-radius: 7px;
+  background: var(--color-papel-2);
+  color: var(--color-ink-3);
+  transition: border-color 130ms, transform 80ms;
+}
+.ocorrencia-foto:hover {
+  border-color: var(--color-brand);
+  transform: translateY(-1px);
+}
+.ocorrencia-foto img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  background: var(--color-papel-2);
+}
+.ocorrencia-foto span {
+  display: block;
+  overflow: hidden;
+  padding: 5px 6px;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Chip preenchido com uma cor de dado. A tinta de dentro é do tema, não
    de quem chama: o vermelho é escuro e pede branco, o âmbar e o verde
    clareiam no tema escuro e pedem tinta escura. Deixar isso em estilo

@@ -16,9 +16,16 @@ import {
   type OrdemKey,
 } from "@/lib/filtros";
 import type { ParedeConferida } from "@/lib/dashboard";
-import { ROTULO_STATUS, type Ocorrencia, type Role, type Status } from "@/lib/types";
+import {
+  ROTULO_STATUS,
+  type AnexoOcorrencia,
+  type Ocorrencia,
+  type Role,
+  type Status,
+} from "@/lib/types";
 import { baixar, montarCsv, nomeDoArquivo } from "@/lib/exportar";
 import { hojeSaoPaulo } from "@/lib/dashboard";
+import { BUCKET_AUDITORIA } from "@/lib/anexos";
 
 const PAGINA = 50;
 /* Teto da exportação. A base tem centenas de linhas hoje; o teto existe
@@ -169,6 +176,136 @@ function filtrarParedes<T extends { eq: unknown }>(q: T, f: Filtros): T {
   return c as unknown as T;
 }
 
+type AnexoConsultaRow = {
+  id: string;
+  registro_id: string | null;
+  tipo: string | null;
+  nome_arquivo: string | null;
+  mime_type: string | null;
+  tamanho_bytes: number | null;
+  storage_bucket: string | null;
+  storage_path: string | null;
+};
+
+type ReferenciaDesvioRow = {
+  id: string;
+  auditoria_id: string | null;
+};
+
+type ReferenciaAuditoriaRow = {
+  id: string;
+  projeto_id: string | null;
+  parede_id: string | null;
+};
+
+const DURACAO_URL_ANEXO = 60 * 60;
+
+/**
+ * A view de Consulta continua simples e compatível. Os anexos são buscados
+ * pela tabela genérica, e só os caminhos estáveis atravessam a fronteira do
+ * Storage: a URL assinada nunca é persistida nem enviada ao banco.
+ */
+async function carregarAnexosDaConsulta(
+  supabase: ReturnType<typeof createClient>,
+  ocorrencias: Ocorrencia[]
+): Promise<{ data: Ocorrencia[]; error: string | null }> {
+  const ids = [...new Set(ocorrencias.map((item) => String(item.id)))];
+  if (!ids.length) return { data: ocorrencias, error: null };
+
+  const [anexosConsulta, desviosConsulta] = await Promise.all([
+    supabase
+      .from("sistema_anexos")
+      .select(
+        "id, registro_id, tipo, nome_arquivo, mime_type, tamanho_bytes, storage_bucket, storage_path"
+      )
+      .in("registro_id", ids)
+      .is("deleted_at", null)
+      .order("created_at", { ascending: true }),
+    supabase
+      .from("produto_desvios")
+      .select("id, auditoria_id")
+      .in("id", ids),
+  ]);
+
+  if (anexosConsulta.error) {
+    return { data: ocorrencias, error: anexosConsulta.error.message };
+  }
+
+  const anexosPorDesvio = new Map<string, AnexoOcorrencia[]>();
+  await Promise.all(
+    ((anexosConsulta.data ?? []) as AnexoConsultaRow[]).map(async (row) => {
+      // Consulta é uma tela de fotos: documentos ou metadados incompletos não
+      // entram na galeria, mas continuam preservados no Storage e no banco.
+      if (!row.registro_id) return;
+      if (row.mime_type && !row.mime_type.startsWith("image/")) return;
+
+      const anexo: AnexoOcorrencia = {
+        id: row.id,
+        tipo: row.tipo,
+        nome_arquivo: row.nome_arquivo,
+        mime_type: row.mime_type,
+        tamanho_bytes: row.tamanho_bytes,
+        storage_bucket: row.storage_bucket || BUCKET_AUDITORIA,
+        storage_path: row.storage_path,
+        url: null,
+      };
+
+      if (anexo.storage_path) {
+        const assinado = await supabase.storage
+          .from(anexo.storage_bucket)
+          .createSignedUrl(anexo.storage_path, DURACAO_URL_ANEXO);
+        anexo.url = assinado.data?.signedUrl ?? null;
+      }
+
+      const lista = anexosPorDesvio.get(row.registro_id) ?? [];
+      lista.push(anexo);
+      anexosPorDesvio.set(row.registro_id, lista);
+    })
+  );
+
+  /* A view legada não expõe os IDs canônicos do projeto e da parede. Eles
+     são carregados somente para o caminho de um eventual novo anexo; se uma
+     linha histórica não possuir a projeção, o cartão usa seus identificadores
+     de compatibilidade como fallback determinístico. */
+  const referencias = (desviosConsulta.data ?? []) as ReferenciaDesvioRow[];
+  const auditoriaIds = [
+    ...new Set(
+      referencias
+        .map((item) => item.auditoria_id)
+        .filter((id): id is string => Boolean(id))
+    ),
+  ];
+  const auditoriasConsulta = auditoriaIds.length
+    ? await supabase
+        .from("produto_auditorias")
+        .select("id, projeto_id, parede_id")
+        .in("id", auditoriaIds)
+    : { data: [], error: null };
+  const auditorias = new Map(
+    ((auditoriasConsulta.data ?? []) as ReferenciaAuditoriaRow[]).map((row) => [
+      row.id,
+      row,
+    ])
+  );
+  const auditoriaPorDesvio = new Map(
+    referencias.map((row) => [row.id, auditorias.get(row.auditoria_id ?? "")])
+  );
+
+  return {
+    data: ocorrencias.map((item) => {
+      const referencia = auditoriaPorDesvio.get(String(item.id));
+      return {
+        ...item,
+        anexos: anexosPorDesvio.get(String(item.id)) ?? [],
+        projeto_id:
+          referencia?.projeto_id ?? item.auditoria_id?.split("|")[0] ?? null,
+        parede_id: referencia?.parede_id ?? null,
+      };
+    }),
+    error: null,
+  };
+}
+
 export default function TelaConsultar({ role }: { role: Role }) {
   const [filtros, setFiltros] = useState<Filtros>(FILTROS_PADRAO);
   const [gaveta, setGaveta] = useState(false);
@@ -283,15 +420,38 @@ export default function TelaConsultar({ role }: { role: Role }) {
         .eq("status", "RETRABALHO_PENDENTE"),
     ]);
 
-    setBuscando(false);
     const falha = erros.error ?? paredesOk.error;
     if (falha) {
+      setBuscando(false);
       setErro("Erro ao buscar: " + falha.message);
       return;
     }
+
+    let errosComAnexos: Ocorrencia[];
+    try {
+      const resultado = await carregarAnexosDaConsulta(
+        supabase,
+        (erros.data ?? []) as Ocorrencia[]
+      );
+      if (resultado.error) {
+        setBuscando(false);
+        setErro("Erro ao buscar fotos: " + resultado.error);
+        return;
+      }
+      errosComAnexos = resultado.data;
+    } catch (error) {
+      setBuscando(false);
+      setErro(
+        "Erro ao buscar fotos: " +
+          (error instanceof Error ? error.message : "tente novamente")
+      );
+      return;
+    }
+
+    setBuscando(false);
     setItens(
       juntar(
-        (erros.data ?? []) as Ocorrencia[],
+        errosComAnexos,
         (paredesOk.data ?? []) as ParedeConferida[],
         f.ordem
       ).slice(0, lim)
