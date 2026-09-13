@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
-import type { ConfigItem } from "@/lib/types";
+import type { AnexoProjetoParede, ConfigItem } from "@/lib/types";
+import SeletorProjetoParede from "./SeletorProjetoParede";
 
 export type TabelaConfig = "projetos" | "paredes" | "setores" | "tipos_erro";
 
@@ -54,6 +55,9 @@ export default function LinhaConfig({
   tabela,
   projetoDaParede,
   area,
+  anexoProjeto,
+  anexandoProjeto,
+  aoAnexarProjeto,
   onRenomear,
   onReativar,
   onExcluir,
@@ -64,6 +68,10 @@ export default function LinhaConfig({
   projetoDaParede?: string;
   /** só para paredes: a metragem, editável na própria linha */
   area?: { valor: number | null; aoSalvar: (m2: number | null) => Promise<void> };
+  /** só para paredes: documento técnico da posição. */
+  anexoProjeto?: AnexoProjetoParede | null;
+  anexandoProjeto?: boolean;
+  aoAnexarProjeto?: (arquivo: File) => void;
   onRenomear: (nome: string) => Promise<void> | void;
   onReativar: () => void;
   onExcluir: () => void;
@@ -213,43 +221,55 @@ export default function LinhaConfig({
   /* ---------------- normal ---------------- */
   return (
     <li
-      className="flex items-center justify-between gap-2 py-2"
+      className="py-2"
       style={{ borderBottom: "1px solid var(--color-line)" }}
     >
-      <span
-        className={`min-w-0 flex-1 truncate text-[13px] ${
-          item.ativo ? "" : "text-ink-3 line-through"
-        }`}
-        title={item.nome}
-      >
-        {item.nome}
-      </span>
-      {area && <CampoArea {...area} nome={item.nome} />}
-      <span className="flex shrink-0 gap-1.5">
-        {/* Desativar saiu da tela. Este botão só aparece para item que já
-            estava inativo (dá para mexer no ativo pelo painel do Supabase),
-            senão ele ficaria escondido do formulário para sempre. */}
-        {!item.ativo && (
-          <button onClick={onReativar} className="btn" style={{ fontSize: 11.5 }}>
-            Reativar
+      <div className="flex items-center justify-between gap-2">
+        <span
+          className={`min-w-0 flex-1 truncate text-[13px] ${
+            item.ativo ? "" : "text-ink-3 line-through"
+          }`}
+          title={item.nome}
+        >
+          {item.nome}
+        </span>
+        {area && <CampoArea {...area} nome={item.nome} />}
+        <span className="flex shrink-0 gap-1.5">
+          {/* Desativar saiu da tela. Este botão só aparece para item que já
+              estava inativo (dá para mexer no ativo pelo painel do Supabase),
+              senão ele ficaria escondido do formulário para sempre. */}
+          {!item.ativo && (
+            <button onClick={onReativar} className="btn" style={{ fontSize: 11.5 }}>
+              Reativar
+            </button>
+          )}
+          <button
+            onClick={() => setEditando(true)}
+            className="btn"
+            style={{ fontSize: 11.5 }}
+          >
+            Editar
           </button>
-        )}
-        <button
-          onClick={() => setEditando(true)}
-          className="btn"
-          style={{ fontSize: 11.5 }}
-        >
-          Editar
-        </button>
-        <button
-          onClick={pedirConfirmacao}
-          className="btn"
-          style={{ fontSize: 11.5, color: "var(--color-alta)" }}
-          title={`Excluir ${item.nome} de vez`}
-        >
-          Excluir
-        </button>
-      </span>
+          <button
+            onClick={pedirConfirmacao}
+            className="btn"
+            style={{ fontSize: 11.5, color: "var(--color-alta)" }}
+            title={`Excluir ${item.nome} de vez`}
+          >
+            Excluir
+          </button>
+        </span>
+      </div>
+      {tabela === "paredes" && aoAnexarProjeto && (
+        <SeletorProjetoParede
+          id={`projeto-parede-${item.origem_id ?? item.id}`}
+          anexo={anexoProjeto ?? null}
+          salvando={anexandoProjeto ?? false}
+          onArquivoPronto={(arquivo) => {
+            if (arquivo) aoAnexarProjeto(arquivo);
+          }}
+        />
+      )}
     </li>
   );
 }

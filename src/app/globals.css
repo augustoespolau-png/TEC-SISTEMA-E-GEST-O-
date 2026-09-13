@@ -653,8 +653,90 @@ textarea.campo {
   color: var(--color-brand);
   font-size: 20px;
 }
+.anexo-documento {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 76px;
+  height: 56px;
+  border: 1px solid var(--color-line-2);
+  border-radius: 8px;
+  background: var(--color-papel-2);
+  color: var(--color-brand);
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
 .anexo-preview {
   border-style: solid;
+}
+
+.projeto-parede-anexo {
+  margin-top: 10px;
+  min-width: 0;
+}
+.projeto-parede-acesso {
+  min-width: 0;
+}
+.projeto-parede-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+  padding: 9px 11px;
+  border: 1px solid color-mix(in srgb, var(--color-info) 45%, var(--color-line-2));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--color-info) 8%, var(--color-papel));
+  color: var(--color-ink);
+  text-decoration: none;
+  transition: border-color 130ms, background 130ms;
+}
+.projeto-parede-link:hover,
+.projeto-parede-link:focus-visible {
+  border-color: var(--color-info);
+  background: color-mix(in srgb, var(--color-info) 14%, var(--color-papel));
+}
+.projeto-parede-link:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--color-info) 22%, transparent);
+  outline-offset: 1px;
+}
+.projeto-parede-link b,
+.projeto-parede-link small {
+  display: block;
+}
+.projeto-parede-link b {
+  color: var(--color-info);
+  font-size: 12.5px;
+}
+.projeto-parede-link small {
+  margin-top: 2px;
+  overflow: hidden;
+  color: var(--color-ink-3);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.projeto-parede-icone {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--color-info) 16%, var(--color-papel));
+  color: var(--color-info);
+  font-size: 16px;
+}
+.projeto-parede-indisponivel {
+  display: block;
+  padding: 9px 11px;
+  border: 1px dashed var(--color-line-2);
+  border-radius: 8px;
+  color: var(--color-ink-3);
+  font-size: 11.5px;
 }
 .anexo-imagem {
   display: block;

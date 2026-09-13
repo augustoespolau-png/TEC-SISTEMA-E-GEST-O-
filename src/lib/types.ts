@@ -74,6 +74,8 @@ export interface ConfigItem {
   nome: string;
   ativo: boolean;
   ordem: number;
+  /** ID estável da linha nas tabelas produto_* por trás da view. */
+  origem_id?: string | null;
 }
 
 /** Metadados de um arquivo no Storage, sem URL permanente ou Base64. */
@@ -89,8 +91,22 @@ export interface AnexoOcorrencia {
   url: string | null;
 }
 
+/** Documento técnico vinculado à posição de uma parede. */
+export interface AnexoProjetoParede {
+  id: string;
+  nome_arquivo: string;
+  mime_type: string | null;
+  tamanho_bytes: number | null;
+  storage_bucket: string;
+  storage_path: string;
+  /** URL assinada, criada somente para a sessão atual da tela. */
+  url: string | null;
+}
+
 export interface Parede extends ConfigItem {
   projeto_id: number;
+  /** ID estável do projeto nas tabelas produto_* por trás da view. */
+  projeto_origem_id?: string | null;
   /** metragem da posição, em m². Nula = ainda não levantada (migration 024) */
   area_m2: number | null;
 }

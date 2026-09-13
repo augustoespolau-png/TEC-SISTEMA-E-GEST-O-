@@ -7,6 +7,7 @@ import {
   BUCKET_AUDITORIA,
   caminhoAnexoAuditoria,
 } from "@/lib/anexos";
+import { carregarAnexosProjetoParede } from "@/lib/anexosProjetoParede";
 import { mutarQualidade } from "@/lib/qualidadeCompat";
 import PainelParede from "./PainelParede";
 import ListaAuditorias, { type ResumoDaCasa } from "./ListaAuditorias";
@@ -22,7 +23,12 @@ import {
   type NaDaAuditoria,
   type SituacaoParede,
 } from "@/lib/auditoria";
-import type { ConfigItem, Parede, Role } from "@/lib/types";
+import type {
+  AnexoProjetoParede,
+  ConfigItem,
+  Parede,
+  Role,
+} from "@/lib/types";
 import {
   carregarRegras,
   casaZeraOFpy,
@@ -125,6 +131,9 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
   const [salvando, setSalvando] = useState(false);
   const [todas, setTodas] = useState<Auditoria[]>([]);
   const [resumos, setResumos] = useState<Record<string, ResumoDaCasa>>({});
+  const [anexosProjetoParede, setAnexosProjetoParede] = useState<
+    Record<string, AnexoProjetoParede>
+  >({});
   // regras da qualidade vindas de Configurações; o FPY desta tela obedece
   // exatamente as mesmas do painel
   const [regras, setRegras] = useState<Regras>(REGRAS_PADRAO);
@@ -233,6 +242,47 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
       .filter((p) => p.projeto_id === proj.id)
       .map((p) => p.nome);
   }, [cfg, projeto]);
+
+  /* Os desenhos pertencem à posição da parede, não à casa auditada. Eles
+     são lidos uma vez para as paredes visíveis e assinados só na sessão. */
+  useEffect(() => {
+    if (!cfg) return;
+    let ativo = true;
+    const ids = cfg.paredes
+      .map((parede) => parede.origem_id)
+      .filter((id): id is string => Boolean(id));
+
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- troca o mapa ao trocar a configuração carregada
+    setAnexosProjetoParede({});
+    if (ids.length === 0) return () => { ativo = false; };
+
+    carregarAnexosProjetoParede(ids).then(({ data, error }) => {
+      if (!ativo) return;
+      if (error) {
+        toast.error("Não foi possível carregar os projetos das paredes: " + error.message);
+        return;
+      }
+      setAnexosProjetoParede(data);
+    });
+
+    return () => {
+      ativo = false;
+    };
+  }, [cfg]);
+
+  const anexoDaParedeAberta = useMemo(() => {
+    if (!cfg || !paredeAberta) return null;
+    const projetoAtual = cfg.projetos.find(
+      (item) => item.nome === (auditoria?.projeto ?? projeto)
+    );
+    const paredeAtual = cfg.paredes.find(
+      (item) =>
+        item.projeto_id === projetoAtual?.id && item.nome === paredeAberta
+    );
+    return paredeAtual?.origem_id
+      ? anexosProjetoParede[String(paredeAtual.origem_id)] ?? null
+      : null;
+  }, [anexosProjetoParede, auditoria?.projeto, cfg, paredeAberta, projeto]);
 
   /* ---------- abrir ou retomar a auditoria da casa ---------- */
   const carregarConteudo = useCallback(async (a: Auditoria) => {
@@ -961,6 +1011,7 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
                 hoje={hojeISO()}
                 tipos={cfg.tipos}
                 setores={cfg.setores}
+                projetoAnexo={anexoDaParedeAberta}
                 salvando={salvando}
                 aoMarcarOk={(dia) => marcarOk(paredeAberta, dia)}
                 aoAdicionarErro={(e, dia) =>

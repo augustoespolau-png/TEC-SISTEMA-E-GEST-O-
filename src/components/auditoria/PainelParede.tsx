@@ -5,7 +5,7 @@ import FormularioErro, { type NovoErro } from "./FormularioErro";
 import FormularioNa, { type NovoNa } from "./FormularioNa";
 import { SeloCriticidade, SeloStatus } from "@/components/Selo";
 import type { ErroDaAuditoria, NaDaAuditoria } from "@/lib/auditoria";
-import type { ConfigItem } from "@/lib/types";
+import type { AnexoProjetoParede, ConfigItem } from "@/lib/types";
 
 /** O que abre embaixo quando o auditor toca numa parede. */
 export default function PainelParede({
@@ -25,6 +25,7 @@ export default function PainelParede({
   aoAdicionarNa,
   aoRemoverNa,
   aoMudarData,
+  projetoAnexo,
   salvando,
 }: {
   parede: string;
@@ -49,6 +50,8 @@ export default function PainelParede({
   aoRemoverNa: (id: string) => void;
   /** só é chamado quando a parede JÁ está conferida */
   aoMudarData: (dia: string) => void;
+  /** desenho técnico da posição, com URL assinada da sessão atual */
+  projetoAnexo?: AnexoProjetoParede | null;
   salvando: boolean;
 }) {
   const [adicionando, setAdicionando] = useState(false);
@@ -83,6 +86,32 @@ export default function PainelParede({
           </span>
         )}
       </div>
+
+      {projetoAnexo && (
+        <div className="projeto-parede-acesso">
+          {projetoAnexo.url ? (
+            <a
+              href={projetoAnexo.url}
+              target="_blank"
+              rel="noreferrer"
+              className="projeto-parede-link"
+            >
+              <span className="projeto-parede-icone" aria-hidden="true">
+                ▣
+              </span>
+              <span className="min-w-0 flex-1">
+                <b>Ver Projeto da Parede</b>
+                <small>{projetoAnexo.nome_arquivo}</small>
+              </span>
+              <span aria-hidden="true">↗</span>
+            </a>
+          ) : (
+            <span className="projeto-parede-indisponivel">
+              Projeto da parede cadastrado, mas indisponível no momento.
+            </span>
+          )}
+        </div>
+      )}
 
       {/* A data é DESTA parede: a casa inteira leva dias para passar por
           todas as estações, e o erro encontrado aqui é do dia em que esta

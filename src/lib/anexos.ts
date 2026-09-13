@@ -79,6 +79,15 @@ export interface CaminhoAnexoAuditoria {
   agora?: Date;
 }
 
+export interface CaminhoProjetoParede {
+  usuarioId: string;
+  projetoId: string;
+  paredeId: string;
+  anexoId: string;
+  extensao?: string;
+  agora?: Date;
+}
+
 /**
  * Caminho canônico dos anexos da Auditoria de Produto.
  *
@@ -106,6 +115,37 @@ export function caminhoAnexoAuditoria({
     segmentoSeguro(projetoId),
     segmentoSeguro(casaId),
     segmentoSeguro(paredeId),
+    `${timestamp}-${segmentoSeguro(anexoId)}.${segmentoSeguro(extensao)}`,
+  ].join("/");
+}
+
+/**
+ * Caminho dos desenhos técnicos cadastrados na configuração da parede.
+ *
+ * O segmento `projeto` separa esse tipo de documento das fotos de uma casa,
+ * mas mantém o mesmo proprietário e os mesmos IDs estáveis exigidos pelo
+ * Storage. O nome da parede nunca entra no caminho: renomear a posição não
+ * quebra o vínculo do arquivo.
+ */
+export function caminhoProjetoParede({
+  usuarioId,
+  projetoId,
+  paredeId,
+  anexoId,
+  extensao = "pdf",
+  agora = new Date(),
+}: CaminhoProjetoParede) {
+  const timestamp = agora
+    .toISOString()
+    .replace(/[-:]/g, "")
+    .replace(/\.\d{3}Z$/, "Z");
+
+  return [
+    "produto",
+    segmentoSeguro(usuarioId),
+    segmentoSeguro(projetoId),
+    segmentoSeguro(paredeId),
+    "projeto",
     `${timestamp}-${segmentoSeguro(anexoId)}.${segmentoSeguro(extensao)}`,
   ].join("/");
 }

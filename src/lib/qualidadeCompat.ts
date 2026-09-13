@@ -32,3 +32,12 @@ export async function adicionarAnexoRetrabalho(
     p_dados: dados,
   });
 }
+
+/** Atualiza o documento técnico de uma parede no estado canônico. */
+export async function salvarProjetoParedeAnexo(
+  dados: Record<string, unknown>
+) {
+  return createClient().rpc("qualidade_salvar_projeto_parede_anexo", {
+    p_dados: dados,
+  });
+}

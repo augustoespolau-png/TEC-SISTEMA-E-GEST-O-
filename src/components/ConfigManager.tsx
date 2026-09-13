@@ -3,10 +3,18 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
-import { mutarQualidade } from "@/lib/qualidadeCompat";
+import {
+  BUCKET_AUDITORIA,
+  caminhoProjetoParede,
+  MAX_FOTO_BYTES,
+  otimizarFoto,
+  segmentoSeguro,
+} from "@/lib/anexos";
+import { carregarAnexosProjetoParede } from "@/lib/anexosProjetoParede";
+import { mutarQualidade, salvarProjetoParedeAnexo } from "@/lib/qualidadeCompat";
 import LinhaConfig from "@/components/config/LinhaConfig";
 import RegrasQualidade from "@/components/config/RegrasQualidade";
-import type { ConfigItem, Parede } from "@/lib/types";
+import type { AnexoProjetoParede, ConfigItem, Parede } from "@/lib/types";
 
 type Tabela = "projetos" | "setores" | "tipos_erro";
 
@@ -232,6 +240,12 @@ function ParedesSection({ versaoProjetos }: { versaoProjetos: number }) {
   const [projetos, setProjetos] = useState<ConfigItem[]>([]);
   const [projetoId, setProjetoId] = useState<number | null>(null);
   const [paredes, setParedes] = useState<Parede[] | null>(null);
+  const [anexosProjeto, setAnexosProjeto] = useState<
+    Record<string, AnexoProjetoParede>
+  >({});
+  const [anexandoProjeto, setAnexandoProjeto] = useState<Record<string, boolean>>(
+    {}
+  );
   const [novo, setNovo] = useState("");
   const [ocupado, setOcupado] = useState(false);
 
@@ -282,7 +296,136 @@ function ParedesSection({ versaoProjetos }: { versaoProjetos: number }) {
     carregar();
   }, [carregar]);
 
+  useEffect(() => {
+    let ativo = true;
+    const ids = (paredes ?? [])
+      .map((parede) => parede.origem_id)
+      .filter((id): id is string => Boolean(id));
+
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- limpa o projeto anterior antes da leitura assíncrona
+    setAnexosProjeto({});
+    if (ids.length === 0) return () => { ativo = false; };
+
+    carregarAnexosProjetoParede(ids).then(({ data, error }) => {
+      if (!ativo) return;
+      if (error) {
+        toast.error("Não foi possível carregar os projetos das paredes: " + error.message);
+        return;
+      }
+      setAnexosProjeto(data);
+    });
+
+    return () => {
+      ativo = false;
+    };
+  }, [paredes]);
+
   const projeto = projetos.find((p) => p.id === projetoId);
+
+  async function anexarProjetoParede(item: Parede, arquivo: File) {
+    const projetoOrigem = projeto?.origem_id;
+    const paredeOrigem = item.origem_id;
+    const chave = String(paredeOrigem ?? item.id);
+    if (!projetoOrigem || !paredeOrigem) {
+      toast.error("Não foi possível identificar esta parede no cadastro canônico.");
+      return;
+    }
+
+    setAnexandoProjeto((estado) => ({ ...estado, [chave]: true }));
+    const supabase = createClient();
+    let caminho = "";
+    let enviado = false;
+    let metadadoSalvo = false;
+
+    try {
+      if (arquivo.size <= 0 || arquivo.size > MAX_FOTO_BYTES) {
+        throw new Error("O arquivo precisa ter no máximo 20 MB.");
+      }
+      const ehPdf = arquivo.type === "application/pdf";
+      if (!ehPdf && !arquivo.type.startsWith("image/")) {
+        throw new Error("Escolha um PDF ou uma imagem técnica.");
+      }
+
+      const pronto = ehPdf ? arquivo : await otimizarFoto(arquivo);
+      const extensao = pronto.type === "application/pdf" ? "pdf" : "jpg";
+      const arquivoId = crypto.randomUUID();
+      const metadadoId = crypto.randomUUID();
+      const { data: sessao } = await supabase.auth.getUser();
+      if (!sessao.user) {
+        throw new Error("Sua sessão expirou. Entre novamente para anexar o projeto.");
+      }
+
+      caminho = caminhoProjetoParede({
+        usuarioId: sessao.user.id,
+        projetoId: projetoOrigem,
+        paredeId: paredeOrigem,
+        anexoId: arquivoId,
+        extensao,
+      });
+      const envio = await supabase.storage.from(BUCKET_AUDITORIA).upload(caminho, pronto, {
+        cacheControl: "3600",
+        contentType: pronto.type,
+        upsert: false,
+      });
+      if (envio.error) throw new Error("Não foi possível enviar o projeto: " + envio.error.message);
+      enviado = true;
+
+      const { data, error } = await salvarProjetoParedeAnexo({
+        projeto_id: projetoOrigem,
+        parede_id: paredeOrigem,
+        anexo: {
+          id: metadadoId,
+          name: pronto.name,
+          type: pronto.type,
+          size: pronto.size,
+          path: caminho,
+        },
+      });
+      if (error) throw error;
+      metadadoSalvo = true;
+
+      const resultado = (data ?? {}) as {
+        id?: string;
+        old_path?: string | null;
+        storage_bucket?: string;
+        storage_path?: string;
+        nome_arquivo?: string;
+        mime_type?: string;
+        tamanho_bytes?: number;
+      };
+      const assinado = await supabase.storage
+        .from(BUCKET_AUDITORIA)
+        .createSignedUrl(caminho, 60 * 60);
+      const caminhoDoUsuario = `produto/${segmentoSeguro(sessao.user.id)}/`;
+      if (resultado.old_path?.startsWith(caminhoDoUsuario)) {
+        await supabase.storage.from(BUCKET_AUDITORIA).remove([resultado.old_path]);
+      }
+
+      setAnexosProjeto((estado) => ({
+        ...estado,
+        [chave]: {
+          id: resultado.id ?? metadadoId,
+          nome_arquivo: resultado.nome_arquivo ?? pronto.name,
+          mime_type: resultado.mime_type ?? pronto.type,
+          tamanho_bytes: resultado.tamanho_bytes ?? pronto.size,
+          storage_bucket: resultado.storage_bucket ?? BUCKET_AUDITORIA,
+          storage_path: resultado.storage_path ?? caminho,
+          url: assinado.data?.signedUrl ?? null,
+        },
+      }));
+      toast.success(`Projeto da ${item.nome} salvo.`);
+    } catch (caught) {
+      if (enviado && !metadadoSalvo && caminho) {
+        await supabase.storage.from(BUCKET_AUDITORIA).remove([caminho]);
+      }
+      toast.error(
+        "Não foi possível salvar o projeto da parede: " +
+          (caught instanceof Error ? caught.message : "erro inesperado")
+      );
+    } finally {
+      setAnexandoProjeto((estado) => ({ ...estado, [chave]: false }));
+    }
+  }
 
   async function adicionar(e: React.FormEvent) {
     e.preventDefault();
@@ -465,6 +608,15 @@ function ParedesSection({ versaoProjetos }: { versaoProjetos: number }) {
                 area={{
                   valor: i.area_m2 == null ? null : Number(i.area_m2),
                   aoSalvar: (m2) => salvarArea(i, m2),
+                }}
+                anexoProjeto={
+                  i.origem_id ? anexosProjeto[String(i.origem_id)] ?? null : null
+                }
+                anexandoProjeto={
+                  Boolean(anexandoProjeto[String(i.origem_id ?? i.id)])
+                }
+                aoAnexarProjeto={(arquivo) => {
+                  void anexarProjetoParede(i, arquivo);
                 }}
                 onRenomear={(nome) => renomear(i, nome)}
                 onReativar={() => reativar(i)}

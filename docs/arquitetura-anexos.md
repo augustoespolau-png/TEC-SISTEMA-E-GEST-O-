@@ -46,6 +46,21 @@ O helper `src/lib/anexos.ts:caminhoAnexoAuditoria` é a única forma de montar o
 caminho no frontend. Novos módulos devem criar um helper equivalente usando o
 mesmo prefixo de proprietário e seus próprios IDs de domínio.
 
+Os desenhos técnicos cadastrados em Configuração usam o mesmo bucket e a
+mesma tabela, com a posição da parede como vínculo:
+
+```text
+produto/{usuario_id}/{projeto_id}/{parede_id}/projeto/{timestamp}-{uuid}.pdf
+produto/{usuario_id}/{projeto_id}/{parede_id}/projeto/{timestamp}-{uuid}.jpg
+```
+
+O campo `projectDocument` continua sendo parte do estado canônico da parede.
+Ao salvar pela tela Configuração, o RPC atualiza esse estado e o sincronizador
+existente mantém `produto_paredes` e `sistema_anexos` consistentes. Assim, a
+Auditoria localiza o mesmo documento por `produto_paredes_documento`, sem uma
+tabela paralela. Documentos antigos permanecem legíveis; a tela só gera uma
+URL assinada temporária quando o inspetor abre a parede.
+
 ## Fluxo de upload
 
 1. O inspetor escolhe a imagem ou abre a câmera do celular/tablet.
@@ -57,6 +72,12 @@ mesmo prefixo de proprietário e seus próprios IDs de domínio.
    anexo, nome, tipo, tamanho, `path`, `deviationId` e `wallId`.
 5. O sincronizador materializa os metadados em `produto_anexos` e
    `sistema_anexos`. A leitura cria URLs assinadas de curta duração.
+
+Para um desenho de parede, o mesmo ciclo é usado: a foto técnica é comprimida
+no navegador, o PDF é enviado como PDF, o Storage recebe o caminho
+determinístico e o RPC só grava metadados no estado. Se a escrita do estado
+falhar, o objeto recém-enviado é removido; uma substituição só tenta remover o
+arquivo anterior quando ele pertence ao usuário atual.
 
 Na baixa de retrabalho, o mesmo fluxo usa `reworkAttachments` no registro
 canônico. O objeto recebe `deviationId` e o RPC
@@ -112,3 +133,7 @@ duplique a tabela de anexos.
 - [ ] Leitura usa URL assinada temporária.
 - [ ] Exclusão remove o registro lógico e tenta remover o objeto físico.
 - [ ] Índice existe para o vínculo usado nas consultas do módulo.
+- [ ] Desenho técnico de parede usa `produto_paredes_documento` em
+      `sistema_anexos`, com projeto e parede de origem estáveis.
+- [ ] PDFs e imagens técnicas são exibidos por URL assinada, sem URL permanente
+      ou Base64 no estado.
