@@ -4,6 +4,7 @@ import type { LinhaDash, ParedeConferida } from "@/lib/dashboard";
 import type { RegraFpy } from "@/lib/regras";
 import {
   casasMaisCriticas,
+  calcularIndiceQualidade,
   errosPorDia,
   pct,
   porSemanaDoMes,
@@ -32,14 +33,26 @@ export default function FolhaDesvios({
   paredes,
   erros,
   regra,
+  itensPorPainel,
   aoRecortar,
   aceso,
 }: {
   paredes: ParedeConferida[];
   erros: LinhaDash[];
   regra: RegraFpy;
+  /** Quantidade de tipos de erro ativos, o checklist efetivo do produto. */
+  itensPorPainel: number;
 } & Clicavel) {
   const r = resumir(paredes, erros, regra);
+  const indiceQualidade = calcularIndiceQualidade({
+    paineisAuditados: paredes.length,
+    itensPorPainel,
+    naoAplicaveis: paredes.reduce(
+      (soma, parede) => soma + Number(parede.nao_aplicaveis ?? 0),
+      0
+    ),
+    desvios: erros.length,
+  });
   const criticos = erros.filter((e) => e.criticidade === "CRITICO");
   const medios = erros.filter((e) => e.criticidade === "MEDIO");
   const semanas = porSemanaDoMes(paredes, erros);
@@ -77,6 +90,18 @@ export default function FolhaDesvios({
             valor: nBR(r.erros),
             pe: `${dBR(r.errosPorParedeAfetada)} por parede afetada`,
             dica: `${nBR(r.erros)} desvios no período: ${nBR(r.critico)} críticos, ${nBR(r.medio)} médios e ${nBR(r.baixo)} baixos.`,
+          },
+          {
+            rotulo: "Índice de qualidade",
+            valor:
+              indiceQualidade.percentual === null
+                ? "—"
+                : `${dBR(indiceQualidade.percentual, 1)}%`,
+            pe:
+              indiceQualidade.itensValidos > 0
+                ? `${nBR(indiceQualidade.itensConformes)} de ${nBR(indiceQualidade.itensValidos)} conformes`
+                : "sem base válida",
+            dica: `Cálculo do período: ${nBR(indiceQualidade.paineisAuditados)} paredes × ${nBR(indiceQualidade.itensPorPainel ?? itensPorPainel)} itens = ${nBR(indiceQualidade.totalBruto)} brutos; menos ${nBR(indiceQualidade.naoAplicaveis)} N/A = ${nBR(indiceQualidade.itensValidos)} válidos; menos ${nBR(indiceQualidade.desvios)} desvios = ${nBR(indiceQualidade.itensConformes)} conformes. Índice = conformes ÷ válidos × 100.`,
           },
           {
             rotulo: "Não conformidades",

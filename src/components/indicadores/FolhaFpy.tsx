@@ -7,7 +7,6 @@ import {
   mesAnterior,
   fpyPorDia,
   fpyPorSemana,
-  calcularIndiceQualidade,
   pct,
   resumir,
 } from "@/lib/indicadores";
@@ -44,7 +43,6 @@ export default function FolhaFpy({
   regra,
   meta,
   limiteRegra,
-  itensPorPainel,
   aoRecortar,
   aceso,
 }: {
@@ -63,19 +61,8 @@ export default function FolhaFpy({
   regra: RegraFpy;
   meta: number;
   limiteRegra: number;
-  /** Quantidade de tipos de erro ativos, o checklist efetivo do produto. */
-  itensPorPainel: number;
 } & Clicavel) {
   const r = resumir(paredes, erros, regra);
-  const indiceQualidade = calcularIndiceQualidade({
-    paineisAuditados: paredes.length,
-    itensPorPainel,
-    naoAplicaveis: paredes.reduce(
-      (soma, parede) => soma + Number(parede.nao_aplicaveis ?? 0),
-      0
-    ),
-    desvios: erros.length,
-  });
   /* O MES ANTERIOR AO FILTRO, sempre pelo calendario: filtro em
      setembro mostra agosto, filtro em agosto mostra julho. O mes do
      filtro ja esta no cartao ao lado ("FPY do periodo"); repetir ele
@@ -126,18 +113,6 @@ export default function FolhaFpy({
             pe: `${pct(r.paredesAfetadas, r.paredesAuditadas)}% do total`,
             tom: "alta",
             dica: `${nBR(r.paredesAfetadas)} paredes tiveram ao menos um desvio, e nelas foram registrados ${nBR(r.erros)} desvios — ${dBR(r.errosPorParedeAfetada)} por parede afetada.`,
-          },
-          {
-            rotulo: "Índice de qualidade",
-            valor:
-              indiceQualidade.percentual === null
-                ? "—"
-                : `${dBR(indiceQualidade.percentual, 1)}%`,
-            pe:
-              indiceQualidade.itensValidos > 0
-                ? `${nBR(indiceQualidade.itensConformes)} de ${nBR(indiceQualidade.itensValidos)} conformes`
-                : "sem base válida",
-            dica: `Cálculo do período: ${nBR(indiceQualidade.paineisAuditados)} paredes × ${nBR(indiceQualidade.itensPorPainel ?? itensPorPainel)} itens = ${nBR(indiceQualidade.totalBruto)} brutos; menos ${nBR(indiceQualidade.naoAplicaveis)} N/A = ${nBR(indiceQualidade.itensValidos)} válidos; menos ${nBR(indiceQualidade.desvios)} desvios = ${nBR(indiceQualidade.itensConformes)} conformes. Índice = conformes ÷ válidos × 100.`,
           },
           {
             /* Os TRÊS FPY fecham a régua, cada um com a sua barrinha e

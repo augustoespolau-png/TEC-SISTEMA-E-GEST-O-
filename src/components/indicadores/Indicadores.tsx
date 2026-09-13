@@ -351,7 +351,6 @@ export default function Indicadores({ role }: { role: Role }) {
           regra={regra}
           meta={regras.meta}
           limiteRegra={regra.minParedesAfetadas}
-          itensPorPainel={itensPorPainel}
           aoRecortar={aoRecortar}
           aceso={aceso}
         />
@@ -361,6 +360,7 @@ export default function Indicadores({ role }: { role: Role }) {
           paredes={recorte.paredes}
           erros={recorte.erros}
           regra={regra}
+          itensPorPainel={itensPorPainel}
           aoRecortar={aoRecortar}
           aceso={aceso}
         />
