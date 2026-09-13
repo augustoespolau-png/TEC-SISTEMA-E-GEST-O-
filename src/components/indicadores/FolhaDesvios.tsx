@@ -104,7 +104,7 @@ export default function FolhaDesvios({
             dica: `Cálculo do período: ${nBR(indiceQualidade.paineisAuditados)} paredes × ${nBR(indiceQualidade.itensPorPainel ?? itensPorPainel)} itens = ${nBR(indiceQualidade.totalBruto)} brutos; menos ${nBR(indiceQualidade.naoAplicaveis)} N/A = ${nBR(indiceQualidade.itensValidos)} válidos; menos ${nBR(indiceQualidade.desvios)} desvios = ${nBR(indiceQualidade.itensConformes)} conformes. Índice = conformes ÷ válidos × 100.`,
           },
           {
-            rotulo: "Não conformidades",
+            rotulo: "Sem devolutivas",
             valor: nBR(r.naoConformidades),
             pe: "sem devolutiva em 48 h",
             tom: r.naoConformidades ? "alta" : undefined,
