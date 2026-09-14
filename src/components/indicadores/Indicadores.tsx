@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { cachedClientRequest } from "@/lib/clientCache";
 import {
   alternarRecorte,
   aplicarRecortes,
@@ -36,39 +35,10 @@ import FolhaComparativos from "./FolhaComparativos";
 import FolhaFluxo from "./FolhaFluxo";
 import EscolhaDeDatas from "@/components/EscolhaDeDatas";
 
-/*
- * INDICADORES — três folhas para a diretoria: FPY, Qualidade e
- * Comparativos.
- *
- * A folha de Qualidade se chamava Desvios. O nome na URL continua
- * `desvios` de propósito: endereço já salvo por alguém não pode virar
- * página em branco por causa de uma troca de rótulo.
- *
- * Convive com o Painel, não o substitui. O Painel acompanha a EXECUÇÃO
- * da obra (quantas paredes já foram resolvidas, o que trava). Aqui a
- * pergunta é de qualidade ao longo do tempo: quanto se erra, de que
- * gravidade, e a fábrica está melhorando ou piorando.
- *
- * O seletor pode apontar para um projeto ou para a visão consolidada. Na
- * segunda opção, as linhas continuam sendo recortadas na memória — a base
- * já é carregada sem filtro de projeto e fica protegida pelo cache curto.
- * Projetos têm quantidade de paredes por casa muito diferente — 12 no C4A,
- * 101 na escola —, por isso a conta consolidada soma as linhas reais em vez
- * de fazer uma média entre projetos.
- */
-
-/* A folha EXECUÇÃO saiu: era o Painel 2.0 inteiro embutido aqui, e
-   deixou de ser usado. O componente continua no repositório e a rota
-   /painel continua de pé para quem tiver o endereço salvo. */
 type Folha = "fpy" | "desvios" | "fluxo" | "comparativos";
 
-/** Valor interno do seletor; não é o nome de nenhum projeto no banco. */
 export const PROJETO_CONSOLIDADO = "all";
 export const ROTULO_PROJETO_CONSOLIDADO = "Todos os Projetos (Consolidado)";
-
-/* A lista das folhas mora no TabBar (FOLHAS_INDICADORES), junto com a
-   regra de quem alcança quais. Duas listas em dois arquivos sempre
-   acabam discordando uma da outra. */
 
 const ROTULO_FOLHA: Record<Folha, string> = {
   fpy: "FPY",
@@ -85,40 +55,40 @@ interface DadosIndicadores {
   regras: Regras;
 }
 
+/*
+ * Indicadores não usam o cache de 30 s da navegação. Esta base muda no chão
+ * de fábrica enquanto a própria tela está aberta; um snapshot reaproveitado
+ * fez as casas 149/150 existirem na Auditoria e ainda não aparecerem aqui.
+ * A consulta é pequena para o volume atual e é refeita ao entrar/focar a aba.
+ */
 async function carregarDadosIndicadores(): Promise<DadosIndicadores> {
-  return cachedClientRequest("indicadores:base", async () => {
-    const supabase = createClient();
-    const [rp, re, rj, rt] = await Promise.all([
-      supabase.from("fpy_paredes").select("*").limit(30000),
-      supabase.from("ocorrencias").select(COLUNAS_DASH).limit(30000),
-      supabase.from("projetos").select("nome").eq("ativo", true).order("ordem"),
-      supabase.from("tipos_erro").select("id").eq("ativo", true).order("ordem"),
-    ]);
-    const falha = re.error ?? rp.error ?? rj.error ?? rt.error;
-    if (falha) throw new Error("Erro ao carregar: " + falha.message);
+  const supabase = createClient();
+  const [rp, re, rj, rt] = await Promise.all([
+    supabase.from("fpy_paredes").select("*").limit(50000),
+    supabase.from("ocorrencias").select(COLUNAS_DASH).limit(50000),
+    supabase.from("projetos").select("nome").eq("ativo", true).order("ordem"),
+    supabase.from("tipos_erro").select("id").eq("ativo", true).order("ordem"),
+  ]);
+  const falha = re.error ?? rp.error ?? rj.error ?? rt.error;
+  if (falha) throw new Error("Erro ao carregar: " + falha.message);
 
-    const projetos = [
-      ...new Set(
-        (rj.data ?? [])
-          .map((p) => (p.nome as string).trim())
-          .filter(Boolean)
-      ),
-    ];
-    return {
-      paredes: (rp.data ?? []) as ParedeConferida[],
-      erros: (re.data ?? []) as LinhaDash[],
-      projetos,
-      itensPorPainel: (rt.data ?? []).length,
-      regras: await carregarRegras(),
-    };
-  });
+  const projetos = [
+    ...new Set(
+      (rj.data ?? [])
+        .map((p) => (p.nome as string).trim())
+        .filter(Boolean)
+    ),
+  ];
+  return {
+    paredes: (rp.data ?? []) as ParedeConferida[],
+    erros: (re.data ?? []) as LinhaDash[],
+    projetos,
+    itensPorPainel: (rt.data ?? []).length,
+    regras: await carregarRegras(),
+  };
 }
 
 export default function Indicadores({ role }: { role: Role }) {
-  /* AS FOLHAS QUE ESTE PAPEL ALCANÇA. O operador só tem a de FPY: ele
-     precisa do resultado do próprio trabalho, não do painel de gestão.
-     A conferência é aqui e não só no menu — sem ela, /indicadores?folha=
-     desvios entregaria a folha inteira a quem digitasse o endereço. */
   const folhasVisiveis = useMemo(
     () => folhasDoPapel(role).map((f) => f.id as Folha),
     [role]
@@ -127,17 +97,11 @@ export default function Indicadores({ role }: { role: Role }) {
   const [projeto, setProjeto] = useState(PROJETO_CONSOLIDADO);
   const [periodo, setPeriodo] = useState<Periodo>("tudo");
   const [datas, setDatas] = useState<DatasEscolhidas>({ de: "", ate: "" });
-  /* A folha vem da URL, escolhida na barra lateral. Estado interno
-     daria uma tela que nao se pode marcar nem compartilhar, e a lateral
-     nao teria como saber qual esta acesa. */
   const busca = useSearchParams();
   const pedida = busca.get("folha") as Folha | null;
   const folha: Folha =
     pedida && folhasVisiveis.includes(pedida) ? pedida : "fpy";
 
-  /* MODO TV: some tudo que nao e grafico — a lateral, o topo do
-     aplicativo e a faixa de filtros — para a tela ficar legivel de
-     longe. Sai com Esc ou pelo botao que fica no canto. */
   const [tv, setTv] = useState(false);
   useEffect(() => {
     if (!tv) return;
@@ -150,12 +114,6 @@ export default function Indicadores({ role }: { role: Role }) {
     };
   }, [tv]);
 
-  /* O CLIQUE NO GRÁFICO. Cada marca clicada entra aqui, e daqui recorta
-     as QUATRO folhas ao mesmo tempo — clicar numa semana no FPY leva a
-     mesma semana para os desvios e para os comparativos. Vários recortes
-     valem juntos (semana E setor E gravidade), e clicar de novo na mesma
-     marca desfaz. A barra logo abaixo dos filtros escreve o que está
-     valendo: filtro que não aparece na tela é número mentindo. */
   const [recortes, setRecortes] = useState<Recorte[]>([]);
   const aoRecortar = useCallback((campo: CampoRecorte, valor: string) => {
     setRecortes((rs) => alternarRecorte(rs, campo, valor));
@@ -188,9 +146,6 @@ export default function Indicadores({ role }: { role: Role }) {
     [periodo, hoje, datas]
   );
 
-  /* Busca a base inteira uma vez e recorta na memória. São centenas de
-     linhas, não milhares: ir ao servidor a cada clique de período
-     deixaria a tela lenta sem necessidade. */
   const carregar = useCallback(async () => {
     try {
       const dados = await carregarDadosIndicadores();
@@ -213,8 +168,18 @@ export default function Indicadores({ role }: { role: Role }) {
   }, []);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- busca de rede
-    carregar();
+    void carregar();
+
+    const aoFocar = () => void carregar();
+    const aoVisivel = () => {
+      if (document.visibilityState === "visible") void carregar();
+    };
+    window.addEventListener("focus", aoFocar);
+    document.addEventListener("visibilitychange", aoVisivel);
+    return () => {
+      window.removeEventListener("focus", aoFocar);
+      document.removeEventListener("visibilitychange", aoVisivel);
+    };
   }, [carregar]);
 
   const recorte = useMemo(() => {
@@ -222,12 +187,6 @@ export default function Indicadores({ role }: { role: Role }) {
     const { inicio, fim } = intervalo;
     const dentro = (d: string) =>
       (!inicio || d >= inicio) && (!fim || d <= fim);
-    /* Duas camadas, nesta ordem: primeiro o filtro de cima (projeto e
-       período), depois os recortes vindos dos cliques. E cada lado com a
-       sua regra — aplicarRecortesEmParedes ignora de propósito setor,
-       tipo e gravidade, porque descartar as paredes sem aquele erro
-       tiraria do denominador justamente as que passaram, e o FPY subiria
-       sozinho. */
     return {
       paredes: aplicarRecortesEmParedes(
         paredes.filter((p) => pertenceAoEscopo(p.projeto) && dentro(p.data)),
@@ -240,11 +199,6 @@ export default function Indicadores({ role }: { role: Role }) {
     };
   }, [paredes, erros, intervalo, recortes, pertenceAoEscopo]);
 
-  /* O ANO CORRENTE, do dia 1º de janeiro até hoje.
-     Ele ignora o filtro de período de propósito — é o número que a
-     fábrica olha para saber onde o ano está, e mudaria de significado se
-     acompanhasse o recorte. O filtro de projeto ele respeita; no modo
-     consolidado, reúne os projetos ativos no mesmo acumulado. */
   const anoCorrente = useMemo(() => {
     if (!paredes) return null;
     const primeiroDeJaneiro = `${hoje.slice(0, 4)}-01-01`;
@@ -259,9 +213,6 @@ export default function Indicadores({ role }: { role: Role }) {
     };
   }, [paredes, erros, hoje, pertenceAoEscopo]);
 
-  /* TODAS as paredes do escopo, sem corte de data: o cartão do mês
-     anterior precisa alcançar dezembro quando o filtro está em janeiro,
-     e o ano corrente pararia em 1º de janeiro. */
   const doProjeto = useMemo(
     () => (paredes ?? []).filter((p) => pertenceAoEscopo(p.projeto)),
     [paredes, pertenceAoEscopo]
@@ -297,8 +248,6 @@ export default function Indicadores({ role }: { role: Role }) {
 
   return (
     <div className="tela ind-tela">
-      {/* O botao de sair fica FORA do topo, que e justamente o que o
-          modo TV esconde — senao nao haveria como voltar sem teclado. */}
       {tv && (
         <button
           type="button"
@@ -341,10 +290,6 @@ export default function Indicadores({ role }: { role: Role }) {
               {p.rotulo}
             </button>
           ))}
-          {/* O intervalo mora AQUI, na mesma faixa dos botões, e não
-              numa linha própria embaixo: sobrava espaço à direita, e a
-              linha extra empurrava os gráficos para baixo justamente no
-              modo em que a pessoa quer olhar os gráficos. */}
           {periodo === "custom" && (
             <EscolhaDeDatas
               de={datas.de}
@@ -364,8 +309,6 @@ export default function Indicadores({ role }: { role: Role }) {
           </button>
         </div>
 
-        {/* O que os cliques nos gráficos estão recortando agora. Some
-            quando não há nenhum. */}
         {recortes.length > 0 && (
           <div className="ind-periodos ind-recortes">
             <BarraRecortes
@@ -377,29 +320,21 @@ export default function Indicadores({ role }: { role: Role }) {
           </div>
         )}
 
-        {/* AS FOLHAS NO CELULAR. Elas moram na barra lateral, que só
-            existe a partir de 1024px — abaixo disso a lateral vira a
-            barra de baixo, que só leva às telas principais. Sem esta
-            nav, quem abrisse os indicadores no telefone ficava preso na
-            folha de FPY, sem caminho nenhum para as outras três. O CSS
-            esconde esta faixa no computador, onde a lateral já as tem. */}
-        {/* uma folha só não é escolha: para o operador a faixa some */}
         {folhasVisiveis.length > 1 && (
-        <nav className="ind-abas ind-abas-celular" role="tablist">
-          {folhasVisiveis.map((f) => (
-            <Link
-              key={f}
-              href={`/indicadores?folha=${f}`}
-              role="tab"
-              aria-selected={folha === f}
-              scroll={false}
-            >
-              {ROTULO_FOLHA[f]}
-            </Link>
-          ))}
-        </nav>
+          <nav className="ind-abas ind-abas-celular" role="tablist">
+            {folhasVisiveis.map((f) => (
+              <Link
+                key={f}
+                href={`/indicadores?folha=${f}`}
+                role="tab"
+                aria-selected={folha === f}
+                scroll={false}
+              >
+                {ROTULO_FOLHA[f]}
+              </Link>
+            ))}
+          </nav>
         )}
-
       </div>
 
       {folha === "fpy" && (
@@ -408,8 +343,6 @@ export default function Indicadores({ role }: { role: Role }) {
           erros={recorte.erros}
           paredesDoAno={anoCorrente?.paredes ?? []}
           paredesDoProjeto={doProjeto}
-          /* o mês que o filtro está mostrando é o do FIM do intervalo;
-             em "Tudo", que não tem fim, é o mês de hoje */
           mesSelecionado={(intervalo.fim ?? hoje).slice(0, 7)}
           ano={hoje.slice(0, 4)}
           periodoRotulo={descrever(periodo, intervalo)}
