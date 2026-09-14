@@ -1,0 +1,338 @@
+name: Apply obra UI patch
+
+on:
+  push:
+    paths:
+      - .github/workflows/apply-obra-ui.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Patch audit UI and FPY chart
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(text, old, new, label):
+              if old not in text:
+                  raise SystemExit(f"Trecho não encontrado: {label}")
+              return text.replace(old, new, 1)
+
+          p = Path('src/components/auditoria/AuditoriaCasa.tsx')
+          s = p.read_text()
+
+          s = replace_once(s,
+          '''interface Config {
+            projetos: ConfigItem[];
+            paredes: Parede[];
+            setores: ConfigItem[];
+            tipos: ConfigItem[];
+          }
+          ''',
+          '''interface ObraItem {
+            id: string;
+            codigo: string;
+            nome: string;
+          }
+
+          interface Config {
+            projetos: ConfigItem[];
+            paredes: Parede[];
+            setores: ConfigItem[];
+            tipos: ConfigItem[];
+            obras: ObraItem[];
+          }
+          ''', 'Config com obras')
+
+          s = replace_once(s,
+          '''function chaveDaAuditoria(projeto: string, casa: string) {
+            return `${projeto.trim().toLocaleLowerCase("pt-BR")}|${casa.trim()}`;
+          }
+          ''',
+          '''function chaveDaAuditoria(projeto: string, casa: string) {
+            return `${projeto.trim().toLocaleLowerCase("pt-BR")}|${casa.trim()}`;
+          }
+
+          function obraPadrao(projeto: string, casa: string) {
+            const p = projeto.trim().toLocaleUpperCase("pt-BR");
+            const numero = Number(casa.trim().match(/^\\d+/)?.[0] ?? NaN);
+            if (p === "C4A") return Number.isFinite(numero) && numero <= 149 ? "Morro Verde" : "";
+            if (p.includes("SÃO BERN") && p.includes("DO CAMPO - SP")) return "São Bernardo";
+            if (p === "ESCOLA ZACARIAS PR") return "Zacarias";
+            return "";
+          }
+          ''', 'obraPadrao')
+
+          s = replace_once(s,
+          '''  const [p, w, s, t, r] = await Promise.all([
+              supabase.from("projetos").select("*").eq("ativo", true).order("ordem"),
+              supabase.from("paredes").select("*").eq("ativo", true).order("ordem"),
+              supabase.from("setores").select("*").eq("ativo", true).order("ordem"),
+              supabase.from("tipos_erro").select("*").eq("ativo", true).order("ordem"),
+          ''',
+          '''  const [p, w, s, t, o, r] = await Promise.all([
+              supabase.from("projetos").select("*").eq("ativo", true).order("ordem"),
+              supabase.from("paredes").select("*").eq("ativo", true).order("ordem"),
+              supabase.from("setores").select("*").eq("ativo", true).order("ordem"),
+              supabase.from("tipos_erro").select("*").eq("ativo", true).order("ordem"),
+              supabase.from("qualidade_obras").select("id, codigo, nome").order("nome"),
+          ''', 'Promise obras')
+
+          s = replace_once(s,
+          '''      .select("id, projeto, casa, created_at, observacao")
+          ''',
+          '''      .select("id, projeto, casa, obra, created_at, observacao")
+          ''', 'select obra auditorias')
+
+          s = replace_once(s,
+          '''  const falha = p.error || w.error || s.error || t.error || r.error;
+          ''',
+          '''  const falha = p.error || w.error || s.error || t.error || o.error || r.error;
+          ''', 'falha obras')
+
+          s = replace_once(s,
+          '''      setores: s.data ?? [],
+              tipos: t.data ?? [],
+          ''',
+          '''      setores: s.data ?? [],
+              tipos: t.data ?? [],
+              obras: (o.data ?? []) as ObraItem[],
+          ''', 'cfg obras')
+
+          s = replace_once(s,
+          '''  const [projeto, setProjeto] = useState("");
+            const [casa, setCasa] = useState("");
+          ''',
+          '''  const [projeto, setProjeto] = useState("");
+            const [casa, setCasa] = useState("");
+            const [obra, setObra] = useState("");
+          ''', 'estado obra')
+
+          s = replace_once(s,
+          '''  const [abrindo, setAbrindo] = useState(false);
+            const [salvando, setSalvando] = useState(false);
+          ''',
+          '''  const [abrindo, setAbrindo] = useState(false);
+            const [salvando, setSalvando] = useState(false);
+            const [salvandoObra, setSalvandoObra] = useState(false);
+          ''', 'estado salvando obra')
+
+          marker = '''  /* ---------- abrir ou retomar a auditoria da casa ---------- */
+            const carregarConteudo = useCallback(async (a: Auditoria) => {
+          '''
+          injected = '''  async function persistirObra(a: Auditoria, novaObra: string) {
+            const valor = novaObra.trim() || null;
+            const { error } = await createClient()
+              .from("qualidade_casas")
+              .upsert(
+                {
+                  auditoria_id: a.id,
+                  projeto: a.projeto,
+                  casa: a.casa,
+                  obra: valor,
+                  updated_by: "app:auditoria",
+                },
+                { onConflict: "auditoria_id" }
+              );
+            if (error) return error;
+            const atualizada: Auditoria = { ...a, obra: valor };
+            setTodas((lista) =>
+              lista.map((item) => (item.id === a.id ? atualizada : item))
+            );
+            return null;
+          }
+
+            async function alterarObra(novaObra: string) {
+              if (!auditoria || salvandoObra || somenteLeitura) return;
+              setSalvandoObra(true);
+              const error = await persistirObra(auditoria, novaObra);
+              setSalvandoObra(false);
+              if (error) {
+                toast.error("Não foi possível alterar a obra: " + error.message);
+                return;
+              }
+              const valor = novaObra.trim() || null;
+              setAuditoria((atual) => (atual ? { ...atual, obra: valor } : atual));
+              setObra(novaObra);
+              toast.success(valor ? `Obra alterada para ${valor}.` : "Casa marcada como Sem Obra.");
+            }
+
+            /* ---------- abrir ou retomar a auditoria da casa ---------- */
+            const carregarConteudo = useCallback(async (a: Auditoria) => {
+          '''
+          s = replace_once(s, marker, injected, 'persistir obra')
+
+          s = replace_once(s,
+          '''      a = leitura.data as Auditoria;
+              setTodas((lista) => [a as Auditoria, ...lista]);
+              toast.success(`Auditoria da casa ${numero} aberta.`);
+            } else {
+              toast.success(`Auditoria da casa ${numero} retomada.`);
+            }
+            setAuditoria(a);
+          ''',
+          '''      a = leitura.data as Auditoria;
+              const erroObra = await persistirObra(a, obra);
+              if (erroObra) {
+                toast.error("A auditoria foi criada, mas a obra não pôde ser salva: " + erroObra.message);
+              } else {
+                a = { ...a, obra: obra.trim() || null };
+              }
+              setTodas((lista) => [a as Auditoria, ...lista.filter((item) => item.id !== a?.id)]);
+              toast.success(`Auditoria da casa ${numero} aberta.`);
+            } else {
+              setObra(a.obra ?? "");
+              toast.success(`Auditoria da casa ${numero} retomada.`);
+            }
+            setAuditoria(a);
+          ''', 'salvar obra na criação')
+
+          s = replace_once(s,
+          '''                <input
+                            type="text"
+                            value={casa}
+                            onChange={(e) => setCasa(e.target.value)}
+          ''',
+          '''                <input
+                            type="text"
+                            value={casa}
+                            onChange={(e) => {
+                              const numero = e.target.value;
+                              setCasa(numero);
+                              setObra(obraPadrao(projeto, numero));
+                            }}
+          ''', 'casa atualiza obra padrão')
+
+          s = replace_once(s,
+          '''                <select
+                            value={projeto}
+                            onChange={(e) => setProjeto(e.target.value)}
+                            className="campo"
+                          >
+          ''',
+          '''                <select
+                            value={projeto}
+                            onChange={(e) => {
+                              const novoProjeto = e.target.value;
+                              setProjeto(novoProjeto);
+                              setObra(obraPadrao(novoProjeto, casa));
+                            }}
+                            className="campo"
+                          >
+          ''', 'projeto atualiza obra padrão')
+
+          s = replace_once(s,
+          '''              </div>
+                        <button
+                          onClick={abrirCasa}
+          ''',
+          '''              </div>
+                        <div className="min-w-0">
+                          <label className="rotulo">Obra / Empreendimento</label>
+                          <select
+                            value={obra}
+                            onChange={(e) => setObra(e.target.value)}
+                            className="campo"
+                          >
+                            <option value="">Sem Obra / A definir</option>
+                            {cfg.obras.map((item) => (
+                              <option key={item.id} value={item.nome}>
+                                {item.nome}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <button
+                          onClick={abrirCasa}
+          ''', 'select obra na abertura')
+
+          s = replace_once(s,
+          '''          <div className="corpo">
+                    <div className="flex flex-wrap items-center gap-3">
+          ''',
+          '''          <div className="corpo">
+                    <div className="flex flex-wrap items-center gap-3">
+          ''', 'ancora detalhe')
+
+          s = replace_once(s,
+          '''            </div>
+
+                    {/* progresso e FPY da casa */}
+          ''',
+          '''            </div>
+
+                    <div className="mt-3 max-w-[420px]">
+                      <label className="rotulo">Obra / Empreendimento</label>
+                      <select
+                        className="campo"
+                        value={auditoria.obra ?? ""}
+                        disabled={somenteLeitura || salvandoObra}
+                        onChange={(e) => void alterarObra(e.target.value)}
+                      >
+                        <option value="">Sem Obra / A definir</option>
+                        {cfg.obras.map((item) => (
+                          <option key={item.id} value={item.nome}>
+                            {item.nome}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* progresso e FPY da casa */}
+          ''', 'editar obra no detalhe')
+
+          s = replace_once(s,
+          '''            setProjeto(a.projeto);
+                      setCasa(a.casa);
+                      setAuditoria(a);
+          ''',
+          '''            setProjeto(a.projeto);
+                      setCasa(a.casa);
+                      setObra(a.obra ?? "");
+                      setAuditoria(a);
+          ''', 'obra ao abrir card')
+
+          p.write_text(s)
+
+          css = Path('src/app/globals.css')
+          c = css.read_text()
+          c = replace_once(c,
+          '''  .aud-abrir {
+              grid-template-columns: 1fr 1fr minmax(200px, 0.9fr);
+            }
+          ''',
+          '''  .aud-abrir {
+              grid-template-columns: minmax(150px, 0.8fr) minmax(190px, 1fr) minmax(190px, 1fr) minmax(220px, 0.9fr);
+            }
+          ''', 'grid abertura com obra')
+          css.write_text(c)
+
+          f = Path('src/components/indicadores/FolhaFpy.tsx')
+          t = f.read_text()
+          t = replace_once(t,
+          '''          casas={r.casas}
+          ''',
+          '''          casas={[...r.casas].reverse()}
+          ''', 'casas recentes primeiro no FPY')
+          f.write_text(t)
+          PY
+      - name: Validate patch
+        run: |
+          grep -q 'qualidade_obras' src/components/auditoria/AuditoriaCasa.tsx
+          grep -q 'Obra / Empreendimento' src/components/auditoria/AuditoriaCasa.tsx
+          grep -q 'casas={[...r.casas].reverse()}' src/components/indicadores/FolhaFpy.tsx
+      - name: Commit patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/components/auditoria/AuditoriaCasa.tsx src/components/indicadores/FolhaFpy.tsx src/app/globals.css
+          git commit -m "Adiciona obra às auditorias e destaca casas recentes"
+          git push origin HEAD:main
