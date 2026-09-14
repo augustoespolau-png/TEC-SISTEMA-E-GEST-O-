@@ -70,15 +70,12 @@ export default function ListaAuditorias({
    * Por isso a própria lista refaz a MESMA leitura oficial usada pelo
    * restante do módulo: fpy_paredes + ocorrencias + regras de FPY. Assim
    * casa importada, criada manualmente ou completada por esqueleto entra no
-   * mesmo caminho de cálculo.
+   * mesmo caminho de cálculo. Enquanto a leitura fresca chega, usamos o
+   * resumo recebido do pai apenas como fallback visual.
    */
   const [resumosAtuais, setResumosAtuais] = useState<
     Record<string, ResumoDaCasa>
-  >(resumos);
-
-  useEffect(() => {
-    setResumosAtuais(resumos);
-  }, [resumos]);
+  >({});
 
   useEffect(() => {
     let ativo = true;
@@ -253,7 +250,7 @@ export default function ListaAuditorias({
           <>
             <div className="aud-casas">
               {visiveis.map((a) => {
-                const r = resumosAtuais[a.id];
+                const r = resumosAtuais[a.id] ?? resumos[a.id];
                 const fpy = r?.fpy ?? null;
                 const cor =
                   fpy === null
