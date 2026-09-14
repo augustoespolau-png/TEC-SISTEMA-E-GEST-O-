@@ -1,0 +1,103 @@
+name: Apply performance audit
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/apply-performance-audit.yml
+
+permissions:
+  contents: write
+
+jobs:
+  optimize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Patch audit summary loading
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('src/components/auditoria/AuditoriaCasa.tsx')
+          text = path.read_text()
+          start_marker = '  const auditoriasCarregadas = (r.data ?? []) as Auditoria[];'
+          end_marker = '\n  return {\n'
+          start = text.index(start_marker)
+          end = text.index(end_marker, start)
+
+          replacement = '''  const auditoriasCarregadas = (r.data ?? []) as Auditoria[];
+
+  // O banco devolve uma linha agregada por casa. Antes esta tela baixava
+  // até 50 mil linhas de FPY + 50 mil ocorrências para somar tudo no celular.
+  const [resumo, regras] = await Promise.all([
+    supabase.rpc("qualidade_resumo_auditorias"),
+    carregarRegras(),
+  ]);
+  if (resumo.error) {
+    throw new Error(
+      "Falha ao calcular o resumo das casas: " + resumo.error.message
+    );
+  }
+
+  const acc: Record<string, ResumoDaCasa> = {};
+  const projetoDaCasa = new Map<string, string>();
+  for (const linha of resumo.data ?? []) {
+    const id = String(linha.auditoria_id ?? "");
+    if (!id) continue;
+    projetoDaCasa.set(id, String(linha.projeto ?? ""));
+    acc[id] = {
+      conferidas: Number(linha.conferidas ?? 0),
+      ok: Number(linha.ok ?? 0),
+      erros: Number(linha.erros ?? 0),
+      naoConformidades: Number(linha.nao_conformidades ?? 0),
+      fpy: null,
+      zeradaPelaRegra: false,
+    };
+  }
+
+  /* Mesma função do painel. A regra de zeramento continua sendo aplicada
+     no cliente, mas agora sobre dezenas de resumos, não milhares de linhas. */
+  for (const [id, a] of Object.entries(acc)) {
+    const afetadas = a.conferidas - a.ok;
+    const regra = regraDoProjeto(regras, projetoDaCasa.get(id));
+    a.fpy = fpyDaCasa(a.conferidas, afetadas, regra);
+    a.zeradaPelaRegra = a.ok > 0 && casaZeraOFpy(afetadas, regra);
+  }
+'''
+
+          path.write_text(text[:start] + replacement + text[end:])
+          PY
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Clean caches
+        run: rm -rf .next node_modules/.cache
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: dummy-build-key
+        run: npm run build
+
+      - name: Commit optimized loader
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/components/auditoria/AuditoriaCasa.tsx
+          git diff --cached --quiet && exit 0
+          git commit -m "Agrega resumos da auditoria no banco"
+          git push
