@@ -14,8 +14,9 @@ import type { Auditoria } from "@/lib/auditoria";
 import type { ConfigItem } from "@/lib/types";
 
 const POR_PAGINA = 50;
-/** quantas casas a fila mostra antes de alguém pedir todas */
 const PREVIA = 4;
+const TODAS_OBRAS = "__todas__";
+const SEM_OBRA = "__sem_obra__";
 
 export interface ResumoDaCasa {
   conferidas: number;
@@ -23,7 +24,6 @@ export interface ResumoDaCasa {
   erros: number;
   naoConformidades: number;
   fpy: number | null;
-  /** a casa tinha parede limpa, mas a regra zerou o FPY dela */
   zeradaPelaRegra: boolean;
 }
 
@@ -31,11 +31,6 @@ function chaveDaAuditoria(projeto: string, casa: string) {
   return `${projeto.trim().toLocaleLowerCase("pt-BR")}|${casa.trim()}`;
 }
 
-/**
- * Todas as casas auditadas, em ordem numérica sequencial (88, 89, 110…),
- * filtradas por projeto e paginadas. É por aqui que o auditor reabre
- * qualquer casa, não só as recentes.
- */
 export default function ListaAuditorias({
   auditorias,
   resumos,
@@ -53,26 +48,8 @@ export default function ListaAuditorias({
 }) {
   const [pagina, setPagina] = useState(0);
   const [busca, setBusca] = useState("");
-  /* A tela abre com uma FILA CURTA das casas mais novas. Setenta e uma
-     fichas de uma vez enterravam o resto da tela, e quem chega aqui
-     quer, quase sempre, a casa que acabou de sair da linha. O resto
-     está a um clique — e a busca abre tudo sozinha, porque esconder
-     resultado de quem acabou de procurar seria o contrário de ajudar. */
+  const [obra, setObra] = useState(TODAS_OBRAS);
   const [todas, setTodas] = useState(false);
-
-  /*
-   * O resumo recebido do pai é útil para a primeira pintura, mas não pode
-   * ser a fonte definitiva do card. A auditoria aberta atualiza o banco em
-   * tempo real e, ao voltar para a lista, o snapshot inicial pode estar
-   * velho. Isso foi visível nas casas 148/149/150: a tela interna mostrava
-   * 12/12 e o card ainda mostrava 6 ou "sem paredes".
-   *
-   * Por isso a própria lista refaz a MESMA leitura oficial usada pelo
-   * restante do módulo: fpy_paredes + ocorrencias + regras de FPY. Assim
-   * casa importada, criada manualmente ou completada por esqueleto entra no
-   * mesmo caminho de cálculo. Enquanto a leitura fresca chega, usamos o
-   * resumo recebido do pai apenas como fallback visual.
-   */
   const [resumosAtuais, setResumosAtuais] = useState<
     Record<string, ResumoDaCasa>
   >({});
@@ -117,10 +94,6 @@ export default function ListaAuditorias({
       if (!ativo || fp.error || oc.error) return;
 
       const proximos: Record<string, ResumoDaCasa> = {};
-
-      /* Toda casa ganha uma estrutura real de resumo, mesmo com zero
-         conferidas. Dessa forma um esqueleto pendente aparece como
-         "0 conferidas", nunca como o texto enganoso "sem paredes". */
       for (const a of auditoriasDoProjeto) {
         proximos[a.id] = {
           conferidas: 0,
@@ -175,6 +148,18 @@ export default function ListaAuditorias({
     };
   }, [auditorias, projeto]);
 
+  const obrasDisponiveis = useMemo(() => {
+    const projetoNormalizado = projeto.trim().toLocaleLowerCase("pt-BR");
+    const nomes = auditorias
+      .filter(
+        (a) =>
+          a.projeto.trim().toLocaleLowerCase("pt-BR") === projetoNormalizado
+      )
+      .map((a) => a.obra?.trim() ?? "")
+      .filter(Boolean);
+    return [...new Set(nomes)].sort((a, b) => a.localeCompare(b, "pt-BR"));
+  }, [auditorias, projeto]);
+
   const filtradas = useMemo(() => {
     const termo = busca.trim().toLowerCase();
     const projetoNormalizado = projeto.trim().toLocaleLowerCase("pt-BR");
@@ -183,22 +168,26 @@ export default function ListaAuditorias({
         (a) =>
           a.projeto.trim().toLocaleLowerCase("pt-BR") === projetoNormalizado
       )
+      .filter((a) => {
+        if (obra === TODAS_OBRAS) return true;
+        if (obra === SEM_OBRA) return !a.obra;
+        return a.obra === obra;
+      })
       .filter((a) => !termo || a.casa.toLowerCase().includes(termo))
-      // decrescente: as casas mais novas da produção aparecem primeiro
       .sort((a, b) => ordemNaturalCasa(b.casa, a.casa));
-  }, [auditorias, projeto, busca]);
+  }, [auditorias, projeto, obra, busca]);
 
-  const aberta = todas || busca.trim() !== "";
+  const aberta = todas || busca.trim() !== "" || obra !== TODAS_OBRAS;
   const paginas = Math.max(1, Math.ceil(filtradas.length / POR_PAGINA));
   const atual = Math.min(pagina, paginas - 1);
   const visiveis = aberta
     ? filtradas.slice(atual * POR_PAGINA, atual * POR_PAGINA + POR_PAGINA)
     : filtradas.slice(0, PREVIA);
-  /* o "ver todas" só ocupa uma vaga da fila quando há mais para ver */
   const sobram = filtradas.length - visiveis.length;
 
   function trocarProjeto(p: string) {
     setPagina(0);
+    setObra(TODAS_OBRAS);
     aoTrocarProjeto(p);
   }
 
@@ -212,7 +201,7 @@ export default function ListaAuditorias({
       </p>
 
       <div className="corpo grid gap-3">
-        <div className="grid gap-2 sm:grid-cols-[1fr_1fr]">
+        <div className="grid gap-2 sm:grid-cols-3">
           <div>
             <label className="rotulo">Projeto</label>
             <select
@@ -225,6 +214,25 @@ export default function ListaAuditorias({
                   {p.nome}
                 </option>
               ))}
+            </select>
+          </div>
+          <div>
+            <label className="rotulo">Obra / Empreendimento</label>
+            <select
+              value={obra}
+              onChange={(e) => {
+                setObra(e.target.value);
+                setPagina(0);
+              }}
+              className="campo"
+            >
+              <option value={TODAS_OBRAS}>Todas as obras</option>
+              {obrasDisponiveis.map((nome) => (
+                <option key={nome} value={nome}>
+                  {nome}
+                </option>
+              ))}
+              <option value={SEM_OBRA}>Sem Obra / A definir</option>
             </select>
           </div>
           <div>
@@ -244,7 +252,7 @@ export default function ListaAuditorias({
 
         {filtradas.length === 0 ? (
           <p className="py-6 text-center text-[12.5px] text-ink-3">
-            Nenhuma casa auditada em {projeto} ainda.
+            Nenhuma casa encontrada para os filtros selecionados.
           </p>
         ) : (
           <>
@@ -265,7 +273,7 @@ export default function ListaAuditorias({
                     key={a.id}
                     onClick={() => aoAbrir(a)}
                     className="aud-casa"
-                    title={`Casa ${a.casa}: ${r ? `${r.conferidas} paredes conferidas, ${r.ok} sem erro` : "0 paredes conferidas"}. Abrir.`}
+                    title={`Casa ${a.casa} · ${a.obra ?? "Sem Obra"}: ${r ? `${r.conferidas} paredes conferidas, ${r.ok} sem erro` : "0 paredes conferidas"}. Abrir.`}
                   >
                     <span className="aud-casa-topo">
                       <b className="num">{a.casa}</b>
@@ -274,11 +282,8 @@ export default function ListaAuditorias({
                       </em>
                     </span>
                     <span className="aud-casa-pe">
-                      {`${r?.conferidas ?? 0} conferidas`}
+                      {a.obra ?? "Sem Obra"} · {r?.conferidas ?? 0} conferidas
                     </span>
-                    {/* Os marcadores só aparecem quando existem: uma
-                        ficha limpa não deve ter espaço reservado para
-                        problema nenhum. */}
                     {r &&
                       (r.erros > 0 ||
                         r.zeradaPelaRegra ||
@@ -314,9 +319,7 @@ export default function ListaAuditorias({
                 );
               })}
 
-              {/* Fecha a fila: quando há mais casas, ele abre a lista
-                  inteira ali mesmo, sem tirar ninguém da tela. */}
-              {(sobram > 0 || aberta) && !busca.trim() && (
+              {(sobram > 0 || aberta) && !busca.trim() && obra === TODAS_OBRAS && (
                 <button
                   className="aud-casa aud-casa-mais"
                   onClick={() => {
@@ -363,7 +366,6 @@ export default function ListaAuditorias({
   );
 }
 
-/** As três linhas do "ver todas". */
 function IconeLista() {
   return (
     <svg
