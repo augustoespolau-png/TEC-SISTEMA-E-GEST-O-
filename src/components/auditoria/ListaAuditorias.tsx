@@ -1,8 +1,15 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ordemNaturalCasa } from "@/lib/dashboard";
 import { META } from "@/lib/painel2";
+import { createClient } from "@/lib/supabase/client";
+import {
+  carregarRegras,
+  casaZeraOFpy,
+  fpyDaCasa,
+  regraDoProjeto,
+} from "@/lib/regras";
 import type { Auditoria } from "@/lib/auditoria";
 import type { ConfigItem } from "@/lib/types";
 
@@ -18,6 +25,10 @@ export interface ResumoDaCasa {
   fpy: number | null;
   /** a casa tinha parede limpa, mas a regra zerou o FPY dela */
   zeradaPelaRegra: boolean;
+}
+
+function chaveDaAuditoria(projeto: string, casa: string) {
+  return `${projeto.trim().toLocaleLowerCase("pt-BR")}|${casa.trim()}`;
 }
 
 /**
@@ -48,6 +59,124 @@ export default function ListaAuditorias({
      está a um clique — e a busca abre tudo sozinha, porque esconder
      resultado de quem acabou de procurar seria o contrário de ajudar. */
   const [todas, setTodas] = useState(false);
+
+  /*
+   * O resumo recebido do pai é útil para a primeira pintura, mas não pode
+   * ser a fonte definitiva do card. A auditoria aberta atualiza o banco em
+   * tempo real e, ao voltar para a lista, o snapshot inicial pode estar
+   * velho. Isso foi visível nas casas 148/149/150: a tela interna mostrava
+   * 12/12 e o card ainda mostrava 6 ou "sem paredes".
+   *
+   * Por isso a própria lista refaz a MESMA leitura oficial usada pelo
+   * restante do módulo: fpy_paredes + ocorrencias + regras de FPY. Assim
+   * casa importada, criada manualmente ou completada por esqueleto entra no
+   * mesmo caminho de cálculo.
+   */
+  const [resumosAtuais, setResumosAtuais] = useState<
+    Record<string, ResumoDaCasa>
+  >(resumos);
+
+  useEffect(() => {
+    setResumosAtuais(resumos);
+  }, [resumos]);
+
+  useEffect(() => {
+    let ativo = true;
+
+    async function atualizarResumos() {
+      const supabase = createClient();
+      const projetoNormalizado = projeto.trim().toLocaleLowerCase("pt-BR");
+      const auditoriasDoProjeto = auditorias.filter(
+        (a) =>
+          a.projeto.trim().toLocaleLowerCase("pt-BR") === projetoNormalizado
+      );
+
+      if (auditoriasDoProjeto.length === 0) return;
+
+      const auditoriaPorChave = new Map(
+        auditoriasDoProjeto.map((a) => [
+          chaveDaAuditoria(a.projeto, a.casa),
+          a.id,
+        ])
+      );
+      const projetoPorId = new Map(
+        auditoriasDoProjeto.map((a) => [a.id, a.projeto])
+      );
+
+      const [fp, oc, regras] = await Promise.all([
+        supabase
+          .from("fpy_paredes")
+          .select("projeto, casa, erros, passou_de_primeira")
+          .eq("projeto", projeto)
+          .limit(50000),
+        supabase
+          .from("ocorrencias")
+          .select("auditoria_id, status")
+          .not("auditoria_id", "is", null)
+          .limit(50000),
+        carregarRegras(),
+      ]);
+
+      if (!ativo || fp.error || oc.error) return;
+
+      const proximos: Record<string, ResumoDaCasa> = {};
+
+      /* Toda casa ganha uma estrutura real de resumo, mesmo com zero
+         conferidas. Dessa forma um esqueleto pendente aparece como
+         "0 conferidas", nunca como o texto enganoso "sem paredes". */
+      for (const a of auditoriasDoProjeto) {
+        proximos[a.id] = {
+          conferidas: 0,
+          ok: 0,
+          erros: 0,
+          naoConformidades: 0,
+          fpy: null,
+          zeradaPelaRegra: false,
+        };
+      }
+
+      for (const linha of fp.data ?? []) {
+        const id = auditoriaPorChave.get(
+          chaveDaAuditoria(
+            String(linha.projeto ?? ""),
+            String(linha.casa ?? "")
+          )
+        );
+        if (!id) continue;
+        const atual = proximos[id];
+        atual.conferidas += 1;
+        if (linha.passou_de_primeira) atual.ok += 1;
+        atual.erros += Number(linha.erros ?? 0);
+      }
+
+      for (const linha of oc.data ?? []) {
+        const id = String(linha.auditoria_id ?? "");
+        const atual = proximos[id];
+        if (atual && linha.status === "NAO_CONFORMIDADE") {
+          atual.naoConformidades += 1;
+        }
+      }
+
+      for (const [id, atual] of Object.entries(proximos)) {
+        const afetadas = atual.conferidas - atual.ok;
+        const regra = regraDoProjeto(regras, projetoPorId.get(id));
+        atual.fpy = fpyDaCasa(atual.conferidas, afetadas, regra);
+        atual.zeradaPelaRegra =
+          atual.ok > 0 && casaZeraOFpy(afetadas, regra);
+      }
+
+      if (!ativo) return;
+      setResumosAtuais((anteriores) => ({ ...anteriores, ...proximos }));
+    }
+
+    void atualizarResumos();
+    window.addEventListener("focus", atualizarResumos);
+
+    return () => {
+      ativo = false;
+      window.removeEventListener("focus", atualizarResumos);
+    };
+  }, [auditorias, projeto]);
 
   const filtradas = useMemo(() => {
     const termo = busca.trim().toLowerCase();
@@ -124,7 +253,7 @@ export default function ListaAuditorias({
           <>
             <div className="aud-casas">
               {visiveis.map((a) => {
-                const r = resumos[a.id];
+                const r = resumosAtuais[a.id];
                 const fpy = r?.fpy ?? null;
                 const cor =
                   fpy === null
@@ -139,7 +268,7 @@ export default function ListaAuditorias({
                     key={a.id}
                     onClick={() => aoAbrir(a)}
                     className="aud-casa"
-                    title={`Casa ${a.casa}: ${r ? `${r.conferidas} paredes conferidas, ${r.ok} sem erro` : "ainda sem parede conferida"}. Abrir.`}
+                    title={`Casa ${a.casa}: ${r ? `${r.conferidas} paredes conferidas, ${r.ok} sem erro` : "0 paredes conferidas"}. Abrir.`}
                   >
                     <span className="aud-casa-topo">
                       <b className="num">{a.casa}</b>
@@ -148,39 +277,42 @@ export default function ListaAuditorias({
                       </em>
                     </span>
                     <span className="aud-casa-pe">
-                      {r ? `${r.conferidas} conferidas` : "sem paredes"}
+                      {`${r?.conferidas ?? 0} conferidas`}
                     </span>
                     {/* Os marcadores só aparecem quando existem: uma
                         ficha limpa não deve ter espaço reservado para
                         problema nenhum. */}
-                    {r && (r.erros > 0 || r.zeradaPelaRegra || r.naoConformidades > 0) && (
-                      <span className="aud-casa-marcas">
-                        {r.erros > 0 && (
-                          <i style={{ color: "var(--color-media)" }}>
-                            <b />
-                            {r.erros} {r.erros === 1 ? "erro" : "erros"}
-                          </i>
-                        )}
-                        {r.zeradaPelaRegra && (
-                          <i
-                            style={{ color: "var(--color-alta)" }}
-                            title={`FPY zerado pela regra: o erro se espalhou por ${r.conferidas - r.ok} paredes, então as ${r.ok} paredes limpas não contam`}
-                          >
-                            <b />
-                            zerada
-                          </i>
-                        )}
-                        {r.naoConformidades > 0 && (
-                          <i
-                            style={{ color: "var(--color-alta)" }}
-                            title="Passaram de 48 h sem devolutiva e seguiram ao cliente sem correção"
-                          >
-                            <b />
-                            {r.naoConformidades} s/ devolutiva
-                          </i>
-                        )}
-                      </span>
-                    )}
+                    {r &&
+                      (r.erros > 0 ||
+                        r.zeradaPelaRegra ||
+                        r.naoConformidades > 0) && (
+                        <span className="aud-casa-marcas">
+                          {r.erros > 0 && (
+                            <i style={{ color: "var(--color-media)" }}>
+                              <b />
+                              {r.erros} {r.erros === 1 ? "erro" : "erros"}
+                            </i>
+                          )}
+                          {r.zeradaPelaRegra && (
+                            <i
+                              style={{ color: "var(--color-alta)" }}
+                              title={`FPY zerado pela regra: o erro se espalhou por ${r.conferidas - r.ok} paredes, então as ${r.ok} paredes limpas não contam`}
+                            >
+                              <b />
+                              zerada
+                            </i>
+                          )}
+                          {r.naoConformidades > 0 && (
+                            <i
+                              style={{ color: "var(--color-alta)" }}
+                              title="Passaram de 48 h sem devolutiva e seguiram ao cliente sem correção"
+                            >
+                              <b />
+                              {r.naoConformidades} s/ devolutiva
+                            </i>
+                          )}
+                        </span>
+                      )}
                   </button>
                 );
               })}
