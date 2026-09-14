@@ -143,59 +143,37 @@ async function carregarDadosIniciaisAuditoria(): Promise<DadosIniciaisAuditoria>
   }
 
   const auditoriasCarregadas = (r.data ?? []) as Auditoria[];
-  const auditoriaPorChave = new Map(
-    auditoriasCarregadas.map((a) => [chaveDaAuditoria(a.projeto, a.casa), a.id])
-  );
 
-  // resumo de cada casa (FPY, erros, NC) para a lista de auditorias
-  const [fp, oc] = await Promise.all([
-    supabase
-      .from("fpy_paredes")
-      .select("projeto, casa, erros, passou_de_primeira")
-      .limit(50000),
-    supabase
-      .from("ocorrencias")
-      .select("auditoria_id, status")
-      .not("auditoria_id", "is", null)
-      .limit(50000),
+  // O banco devolve uma linha agregada por casa. Antes esta tela baixava
+  // até 50 mil linhas de FPY + 50 mil ocorrências para somar tudo no celular.
+  const [resumo, regras] = await Promise.all([
+    supabase.rpc("qualidade_resumo_auditorias"),
+    carregarRegras(),
   ]);
-  const falhaResumo = fp.error || oc.error;
-  if (falhaResumo) {
+  if (resumo.error) {
     throw new Error(
-      "Falha ao calcular o resumo das casas: " + falhaResumo.message
+      "Falha ao calcular o resumo das casas: " + resumo.error.message
     );
   }
-  const regras = await carregarRegras();
 
   const acc: Record<string, ResumoDaCasa> = {};
-  // a regra do zeramento é por projeto, então a lista precisa saber
-  // de que projeto é cada casa (migration 022)
   const projetoDaCasa = new Map<string, string>();
-  for (const l of fp.data ?? []) {
-    const id = auditoriaPorChave.get(
-      chaveDaAuditoria(String(l.projeto ?? ""), String(l.casa ?? ""))
-    );
+  for (const linha of resumo.data ?? []) {
+    const id = String(linha.auditoria_id ?? "");
     if (!id) continue;
-    projetoDaCasa.set(id, String(l.projeto ?? ""));
-    const a = (acc[id] ??= {
-      conferidas: 0,
-      ok: 0,
-      erros: 0,
-      naoConformidades: 0,
+    projetoDaCasa.set(id, String(linha.projeto ?? ""));
+    acc[id] = {
+      conferidas: Number(linha.conferidas ?? 0),
+      ok: Number(linha.ok ?? 0),
+      erros: Number(linha.erros ?? 0),
+      naoConformidades: Number(linha.nao_conformidades ?? 0),
       fpy: null,
       zeradaPelaRegra: false,
-    });
-    a.conferidas++;
-    if (l.passou_de_primeira) a.ok++;
-    a.erros += l.erros as number;
+    };
   }
-  for (const o of oc.data ?? []) {
-    const a = acc[String(o.auditoria_id)];
-    if (a && o.status === "NAO_CONFORMIDADE") a.naoConformidades++;
-  }
-  /* Mesma função do painel. Antes esta lista calculava o FPY por
-     conta própria e ignorava a regra da casa — a casa 142 aparecia
-     zerada no painel e com 50% aqui, ao mesmo tempo. */
+
+  /* Mesma função do painel. A regra de zeramento continua sendo aplicada
+     no cliente, mas agora sobre dezenas de resumos, não milhares de linhas. */
   for (const [id, a] of Object.entries(acc)) {
     const afetadas = a.conferidas - a.ok;
     const regra = regraDoProjeto(regras, projetoDaCasa.get(id));
