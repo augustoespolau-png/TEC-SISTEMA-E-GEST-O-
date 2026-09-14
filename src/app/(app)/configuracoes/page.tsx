@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getAuthContext } from "@/lib/supabase/auth";
 import ConfigManager from "@/components/ConfigManager";
+import ObrasEmpreendimentosCard from "@/components/config/ObrasEmpreendimentosCard";
 
 export default async function ConfiguracoesPage() {
   const contexto = await getAuthContext();
@@ -8,5 +9,12 @@ export default async function ConfiguracoesPage() {
 
   if (contexto.profile?.role !== "gestao") redirect("/");
 
-  return <ConfigManager />;
+  return (
+    <>
+      <main className="tela" style={{ paddingBottom: 0 }}>
+        <ObrasEmpreendimentosCard />
+      </main>
+      <ConfigManager />
+    </>
+  );
 }
