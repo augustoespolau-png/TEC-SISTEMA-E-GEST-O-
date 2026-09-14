@@ -399,8 +399,12 @@ export async function baixarExcel(
   contexto: ContextoRelatorioExcel = {}
 ): Promise<void> {
   const bytes = await montarExcel(itens, contexto);
+  const arquivo = bytes.buffer.slice(
+    bytes.byteOffset,
+    bytes.byteOffset + bytes.byteLength
+  ) as ArrayBuffer;
   const url = URL.createObjectURL(
-    new Blob([bytes], {
+    new Blob([arquivo], {
       type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     })
   );
@@ -419,22 +423,31 @@ function celulaCsv(v: string): string {
   return /[";]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
 }
 
+const PACOTE_XLSX = "__TECVERDE_XLSX__";
+
 export function montarCsv(itens: LinhaExportada[]): string {
-  const linhas = [
-    COLUNAS.map((c) => celulaCsv(c.titulo)).join(";"),
-    ...itens.map((l) => COLUNAS.map((c) => celulaCsv(textoSeguro(c.de(l)))).join(";")),
-  ];
-  return "\ufeff" + linhas.join("\r\n") + "\r\n";
+  return PACOTE_XLSX + JSON.stringify(itens);
 }
 
 export function nomeDoArquivo(partes: string[], hoje: string): string {
-  return nomeDoArquivoExcel(partes, hoje).replace(/\.xlsx$/i, ".csv");
+  return nomeDoArquivoExcel(partes, hoje);
 }
 
 export function baixar(nome: string, conteudo: string) {
-  const url = URL.createObjectURL(
-    new Blob([conteudo], { type: "text/csv;charset=utf-8;" })
-  );
+  if (conteudo.startsWith(PACOTE_XLSX)) {
+    const itens = JSON.parse(conteudo.slice(PACOTE_XLSX.length)) as LinhaExportada[];
+    const projetos = [...new Set(itens.map((item) => campo(item, "projeto")).filter(Boolean))];
+    const casas = [...new Set(itens.map((item) => campo(item, "casa")).filter(Boolean))];
+    const situacoes = [...new Set(itens.map((item) => item.especie === "erro" ? (ROTULO_STATUS[item.erro.status] ?? item.erro.status) : "PAREDE OK"))];
+    void baixarExcel(nome.replace(/\.csv$/i, ".xlsx"), itens, {
+      projeto: projetos.length === 1 ? projetos[0] : "Todos os projetos",
+      casa: casas.length === 1 ? casas[0] : null,
+      situacao: situacoes.length === 1 ? situacoes[0] : "Múltiplas situações",
+      total: itens.length,
+    }).catch((erro) => console.error("Erro ao gerar Excel", erro));
+    return;
+  }
+  const url = URL.createObjectURL(new Blob([conteudo], { type: "text/csv;charset=utf-8;" }));
   const a = document.createElement("a");
   a.href = url;
   a.download = nome;
