@@ -2044,7 +2044,7 @@ table.mapa td {
 }
 @media (min-width: 768px) {
   .aud-abrir {
-    grid-template-columns: 1fr 1fr minmax(200px, 0.9fr);
+    grid-template-columns: minmax(150px, 0.8fr) minmax(190px, 1fr) minmax(190px, 1fr) minmax(220px, 0.9fr);
   }
 }
 /* 12px de recuo, e não 11: com 11 o botão saía 46px contra os 48 dos

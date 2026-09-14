@@ -40,11 +40,18 @@ import {
   type Regras,
 } from "@/lib/regras";
 
+interface ObraItem {
+  id: string;
+  codigo: string;
+  nome: string;
+}
+
 interface Config {
   projetos: ConfigItem[];
   paredes: Parede[];
   setores: ConfigItem[];
   tipos: ConfigItem[];
+  obras: ObraItem[];
 }
 
 interface AnexoRow {
@@ -94,6 +101,17 @@ function chaveDaAuditoria(projeto: string, casa: string) {
   return `${projeto.trim().toLocaleLowerCase("pt-BR")}|${casa.trim()}`;
 }
 
+function obraPadrao(projeto: string, casa: string) {
+  const p = projeto.trim().toLocaleUpperCase("pt-BR");
+  const numero = Number(casa.trim().match(/^\d+/)?.[0] ?? NaN);
+  if (p === "C4A")
+    return Number.isFinite(numero) && numero <= 149 ? "Morro Verde" : "";
+  if (p.includes("SÃO BERN") && p.includes("DO CAMPO - SP"))
+    return "São Bernardo";
+  if (p === "ESCOLA ZACARIAS PR") return "Zacarias";
+  return "";
+}
+
 interface DadosIniciaisAuditoria {
   cfg: Config;
   todas: Auditoria[];
@@ -104,21 +122,22 @@ interface DadosIniciaisAuditoria {
 
 async function carregarDadosIniciaisAuditoria(): Promise<DadosIniciaisAuditoria> {
   const supabase = createClient();
-  const [p, w, s, t, r] = await Promise.all([
+  const [p, w, s, t, o, r] = await Promise.all([
     supabase.from("projetos").select("*").eq("ativo", true).order("ordem"),
     supabase.from("paredes").select("*").eq("ativo", true).order("ordem"),
     supabase.from("setores").select("*").eq("ativo", true).order("ordem"),
     supabase.from("tipos_erro").select("*").eq("ativo", true).order("ordem"),
+    supabase.from("qualidade_obras").select("id, codigo, nome").order("nome"),
     // The production database keeps the original quality data in the
     // produto_* tables. This compatibility view groups its wall rows
     // into the same house-level records used by this screen.
     supabase
       .from("qualidade_auditorias")
-      .select("id, projeto, casa, created_at, observacao")
+      .select("id, projeto, casa, obra, created_at, observacao")
       .order("created_at", { ascending: false })
       .limit(5000),
   ]);
-  const falha = p.error || w.error || s.error || t.error || r.error;
+  const falha = p.error || w.error || s.error || t.error || o.error || r.error;
   if (falha) {
     throw new Error("Falha ao carregar os dados da auditoria: " + falha.message);
   }
@@ -190,6 +209,7 @@ async function carregarDadosIniciaisAuditoria(): Promise<DadosIniciaisAuditoria>
       paredes: (w.data ?? []) as Parede[],
       setores: s.data ?? [],
       tipos: t.data ?? [],
+      obras: (o.data ?? []) as ObraItem[],
     },
     todas: auditoriasCarregadas,
     resumos: acc,
@@ -217,6 +237,7 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
 
   const [projeto, setProjeto] = useState("");
   const [casa, setCasa] = useState("");
+  const [obra, setObra] = useState("");
 
   const [auditoria, setAuditoria] = useState<Auditoria | null>(null);
   /* parede -> dia em que ela foi conferida. Era um Set só com os nomes;
@@ -235,6 +256,7 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
   const dialogo = useRef<HTMLDialogElement>(null);
   const [abrindo, setAbrindo] = useState(false);
   const [salvando, setSalvando] = useState(false);
+  const [salvandoObra, setSalvandoObra] = useState(false);
   const [todas, setTodas] = useState<Auditoria[]>([]);
   const [resumos, setResumos] = useState<Record<string, ResumoDaCasa>>({});
   const [anexosProjetoParede, setAnexosProjetoParede] = useState<
@@ -323,6 +345,43 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
       ? anexosProjetoParede[String(paredeAtual.origem_id)] ?? null
       : null;
   }, [anexosProjetoParede, auditoria?.projeto, cfg, paredeAberta, projeto]);
+
+  async function persistirObra(a: Auditoria, novaObra: string) {
+  const valor = novaObra.trim() || null;
+  const { error } = await createClient()
+    .from("qualidade_casas")
+    .upsert(
+      {
+        auditoria_id: a.id,
+        projeto: a.projeto,
+        casa: a.casa,
+        obra: valor,
+        updated_by: "app:auditoria",
+      },
+      { onConflict: "auditoria_id" }
+    );
+  if (error) return error;
+  const atualizada: Auditoria = { ...a, obra: valor };
+  setTodas((lista) =>
+    lista.map((item) => (item.id === a.id ? atualizada : item))
+  );
+  return null;
+}
+
+  async function alterarObra(novaObra: string) {
+    if (!auditoria || salvandoObra || somenteLeitura) return;
+    setSalvandoObra(true);
+    const error = await persistirObra(auditoria, novaObra);
+    setSalvandoObra(false);
+    if (error) {
+      toast.error("Não foi possível alterar a obra: " + error.message);
+      return;
+    }
+    const valor = novaObra.trim() || null;
+    setAuditoria((atual) => (atual ? { ...atual, obra: valor } : atual));
+    setObra(novaObra);
+    toast.success(valor ? `Obra alterada para ${valor}.` : "Casa marcada como Sem Obra.");
+  }
 
   /* ---------- abrir ou retomar a auditoria da casa ---------- */
   const carregarConteudo = useCallback(async (a: Auditoria) => {
@@ -458,12 +517,19 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
         return;
       }
       a = leitura.data as Auditoria;
-      setTodas((lista) => [a as Auditoria, ...lista]);
-      toast.success(`Auditoria da casa ${numero} aberta.`);
+    const erroObra = await persistirObra(a, obra);
+    if (erroObra) {
+      toast.error("A auditoria foi criada, mas a obra não pôde ser salva: " + erroObra.message);
     } else {
-      toast.success(`Auditoria da casa ${numero} retomada.`);
+      a = { ...a, obra: obra.trim() || null };
     }
-    setAuditoria(a);
+    setTodas((lista) => [a as Auditoria, ...lista.filter((item) => item.id !== a?.id)]);
+    toast.success(`Auditoria da casa ${numero} aberta.`);
+  } else {
+    setObra(a.obra ?? "");
+    toast.success(`Auditoria da casa ${numero} retomada.`);
+  }
+  setAuditoria(a);
     await carregarConteudo(a);
     setParedeAberta(null);
     setAbrindo(false);
@@ -880,7 +946,11 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
                 <input
                   type="text"
                   value={casa}
-                  onChange={(e) => setCasa(e.target.value)}
+                  onChange={(e) => {
+                    const numero = e.target.value;
+                    setCasa(numero);
+                    setObra(obraPadrao(projeto, numero));
+                  }}
                   onKeyDown={(e) => e.key === "Enter" && abrirCasa()}
                   placeholder="Número da casa"
                   className="campo"
@@ -890,13 +960,26 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
                 <label className="rotulo">Projeto</label>
                 <select
                   value={projeto}
-                  onChange={(e) => setProjeto(e.target.value)}
+                  onChange={(e) => {
+                    const novoProjeto = e.target.value;
+                    setProjeto(novoProjeto);
+                    setObra(obraPadrao(novoProjeto, casa));
+                  }}
                   className="campo"
                 >
                   {cfg.projetos.map((p) => (
                     <option key={p.id} value={p.nome}>
                       {p.nome}
                     </option>
+                  ))}
+                </select>
+              </div>
+              <div className="min-w-0">
+                <label className="rotulo">Obra / Empreendimento</label>
+                <select value={obra} onChange={(e) => setObra(e.target.value)} className="campo">
+                  <option value="">Sem Obra / A definir</option>
+                  {cfg.obras.map((item) => (
+                    <option key={item.id} value={item.nome}>{item.nome}</option>
                   ))}
                 </select>
               </div>
@@ -957,6 +1040,21 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
                 )}
               </div>
             </div>
+
+            <div className="mt-3 max-w-[420px]">
+            <label className="rotulo">Obra / Empreendimento</label>
+            <select
+              className="campo"
+              value={auditoria.obra ?? ""}
+              disabled={somenteLeitura || salvandoObra}
+              onChange={(e) => void alterarObra(e.target.value)}
+            >
+              <option value="">Sem Obra / A definir</option>
+              {cfg.obras.map((item) => (
+                <option key={item.id} value={item.nome}>{item.nome}</option>
+              ))}
+            </select>
+          </div>
 
             {/* progresso e FPY da casa */}
             <div className="mt-3.5 grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -1169,6 +1267,7 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
           aoAbrir={async (a) => {
             setProjeto(a.projeto);
             setCasa(a.casa);
+            setObra(a.obra ?? "");
             setAuditoria(a);
             setParedeAberta(null);
             await carregarConteudo(a);
