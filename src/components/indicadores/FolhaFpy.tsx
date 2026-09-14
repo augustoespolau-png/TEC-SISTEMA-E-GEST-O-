@@ -10,6 +10,7 @@ import {
   pct,
   resumir,
 } from "@/lib/indicadores";
+import type { RegraPorProjeto } from "@/lib/indicadores";
 import { Cartao, dBR, FaixaNumeros, nBR } from "./Pecas";
 import { ColunasFpy, LinhaFpyTempo } from "./Graficos";
 import type { Clicavel } from "./clique";
@@ -40,7 +41,10 @@ export default function FolhaFpy({
   mesSelecionado,
   ano,
   periodoRotulo,
+  escopoRotulo,
+  consolidado,
   regra,
+  regraPorProjeto,
   meta,
   limiteRegra,
   aoRecortar,
@@ -58,11 +62,15 @@ export default function FolhaFpy({
   ano: string;
   /** como o filtro de cima está recortando: "jul/26", "toda a base" */
   periodoRotulo: string;
+  /** projeto único ou o rótulo da visão consolidada */
+  escopoRotulo: string;
+  consolidado: boolean;
   regra: RegraFpy;
+  regraPorProjeto: RegraPorProjeto;
   meta: number;
   limiteRegra: number;
 } & Clicavel) {
-  const r = resumir(paredes, erros, regra);
+  const r = resumir(paredes, erros, regra, regraPorProjeto);
   /* O MES ANTERIOR AO FILTRO, sempre pelo calendario: filtro em
      setembro mostra agosto, filtro em agosto mostra julho. O mes do
      filtro ja esta no cartao ao lado ("FPY do periodo"); repetir ele
@@ -153,8 +161,8 @@ export default function FolhaFpy({
             dica: temOsDois
               ? `${mesCurto(mes.anterior.mes)}: ${mes.anterior.fpy}% (${nBR(mes.anterior.limpas)} de ${nBR(mes.anterior.conferidas)}). ${mesCurto(mes.atual.mes)}: ${mes.atual.fpy}% (${nBR(mes.atual.limpas)} de ${nBR(mes.atual.conferidas)}). A diferença é de ${Math.abs(mes.pontos)} PONTOS percentuais${mes.percentual === null ? "" : `, o que equivale a ${Math.abs(mes.percentual)}% sobre o mês anterior`} — as duas leituras juntas porque respondem coisas diferentes e vivem sendo confundidas. Este cartão é sempre o MÊS ANTERIOR ao que o filtro está mostrando, pelo calendário, comparado com o mês anterior a ele.`
               : mes.atual.conferidas
-                ? `${mesCurto(mes.atual.mes)}: ${mes.atual.fpy}% (${nBR(mes.atual.limpas)} de ${nBR(mes.atual.conferidas)}). Não há comparação porque ${mesCurto(mes.anterior.mes)} não teve nenhuma parede conferida neste projeto.`
-                : `Nenhuma parede foi conferida neste projeto em ${mesCurto(mes.atual.mes)}. O cartão é sempre o mês anterior ao que o filtro está mostrando, e mês sem auditoria aparece vazio de propósito — mostrar outro mês no lugar faria a pessoa ler um número do mês errado.`,
+                ? `${mesCurto(mes.atual.mes)}: ${mes.atual.fpy}% (${nBR(mes.atual.limpas)} de ${nBR(mes.atual.conferidas)}). Não há comparação porque ${mesCurto(mes.anterior.mes)} não teve nenhuma parede conferida no escopo ${escopoRotulo}.`
+                : `Nenhuma parede foi conferida no escopo ${escopoRotulo} em ${mesCurto(mes.atual.mes)}. O cartão é sempre o mês anterior ao que o filtro está mostrando, e mês sem auditoria aparece vazio de propósito — mostrar outro mês no lugar faria a pessoa ler um número do mês errado.`,
           },
           {
             /* A META vem ANTES do YTD, e não no fim da régua.
@@ -186,7 +194,7 @@ export default function FolhaFpy({
             barra: { valor: paredesDoAno.length ? fpyAno : null, meta },
             /* A sigla fica no rótulo, que é estreito; o nome por extenso
                fica aqui, para quem passar o ponteiro e não conhecer. */
-            dica: `YTD (year to date) é o acumulado do ano: de 1º de janeiro de ${ano} até hoje, ${nBR(limpasNoAno)} de ${nBR(paredesDoAno.length)} paredes passaram de primeira. Este é o único número da régua que IGNORA o filtro de período, de propósito — ele é a régua do ano. O filtro de projeto ele respeita.`,
+            dica: `YTD (year to date) é o acumulado do ano: de 1º de janeiro de ${ano} até hoje, ${nBR(limpasNoAno)} de ${nBR(paredesDoAno.length)} paredes passaram de primeira. Este é o único número da régua que IGNORA o filtro de período, de propósito — ele é a régua do ano. O escopo ${escopoRotulo} é respeitado.`,
           },
         ]}
       />
@@ -213,7 +221,9 @@ export default function FolhaFpy({
       <Cartao
         titulo="FPY por casa"
         nota={
-          regra.ativa
+          consolidado
+            ? `Coluna dentro da faixa verde bateu a meta. Cada casa aplica a regra de FPY configurada para o respectivo projeto; a tracejada é a média das casas.`
+            : regra.ativa
             ? `Coluna dentro da faixa verde bateu a meta. Coluna vermelha = FPY zerado, seja porque nenhuma parede passou ou porque a casa bateu ${limiteRegra} paredes afetadas. A tracejada é a média das casas.`
             : "Coluna dentro da faixa verde bateu a meta. Coluna vermelha = nenhuma parede passou de primeira; este projeto está fora da regra de zeramento. A tracejada é a média das casas."
         }
@@ -222,6 +232,7 @@ export default function FolhaFpy({
           casas={r.casas}
           meta={meta}
           media={r.mediaFpy}
+          mostrarProjeto={consolidado}
           aoRecortar={aoRecortar}
           aceso={aceso}
         />

@@ -44,6 +44,20 @@ export interface PainelIndiceQualidade {
   naoAplicaveis?: number;
 }
 
+/** Resolve regras por projeto quando a visão agrega mais de um projeto. */
+export type RegraPorProjeto = (projeto: string) => RegraFpy;
+
+/* As views trazem projeto, casa e parede como textos. Incluir o projeto
+   nas chaves evita misturar Casa 12/PT 3 de obras diferentes na visão
+   consolidada, sem mudar o resultado quando só um projeto é selecionado. */
+function chaveCasa(projeto: string, casa: string): string {
+  return `${projeto.trim()}|${casa.trim()}`;
+}
+
+function chaveParede(projeto: string, casa: string, parede: string): string {
+  return `${chaveCasa(projeto, casa)}|${parede.trim()}`;
+}
+
 const inteiroNaoNegativo = (valor: number) =>
   Number.isFinite(valor) ? Math.max(0, Math.trunc(valor)) : 0;
 
@@ -144,6 +158,9 @@ export function calcularIndiceQualidadePorPaineis(
 /* ------------------------------------------------------------------ */
 
 export interface CasaFpy {
+  /** chave única entre projetos, usada pelos gráficos e pelo React */
+  chave: string;
+  projeto: string;
   casa: string;
   conferidas: number;
   limpas: number;
@@ -162,23 +179,42 @@ export function ordemCasa(a: string, b: string) {
 
 export function fpyPorCasa(
   paredes: ParedeConferida[],
-  regra: RegraFpy
+  regra: RegraFpy,
+  regraPorProjeto?: RegraPorProjeto
 ): CasaFpy[] {
-  const m = new Map<string, { conferidas: number; limpas: number }>();
+  const m = new Map<
+    string,
+    { projeto: string; casa: string; conferidas: number; limpas: number }
+  >();
   for (const p of paredes) {
-    const a = m.get(p.casa) ?? { conferidas: 0, limpas: 0 };
+    const projeto = p.projeto.trim();
+    const casa = p.casa.trim();
+    const chave = chaveCasa(projeto, casa);
+    const a = m.get(chave) ?? { projeto, casa, conferidas: 0, limpas: 0 };
     a.conferidas++;
     if (p.passou_de_primeira) a.limpas++;
-    m.set(p.casa, a);
+    m.set(chave, a);
   }
   return [...m.entries()]
-    .map(([casa, a]) => {
+    .map(([chave, a]) => {
       const afetadas = a.conferidas - a.limpas;
       const fpyPuro = Math.round((a.limpas / a.conferidas) * 100);
-      const zerada = casaZeraOFpy(afetadas, regra);
-      return { casa, ...a, afetadas, fpyPuro, fpy: zerada ? 0 : fpyPuro, zerada };
+      const regraDaCasa = regraPorProjeto?.(a.projeto) ?? regra;
+      const zerada = casaZeraOFpy(afetadas, regraDaCasa);
+      return {
+        chave,
+        ...a,
+        afetadas,
+        fpyPuro,
+        fpy: zerada ? 0 : fpyPuro,
+        zerada,
+      };
     })
-    .sort((x, y) => ordemCasa(x.casa, y.casa));
+    .sort(
+      (x, y) =>
+        ordemCasa(x.casa, y.casa) ||
+        x.projeto.localeCompare(y.projeto, "pt-BR")
+    );
 }
 
 /* ------------------------------------------------------------------ */
@@ -223,9 +259,10 @@ export interface Resumo {
 export function resumir(
   paredes: ParedeConferida[],
   erros: LinhaDash[],
-  regra: RegraFpy
+  regra: RegraFpy,
+  regraPorProjeto?: RegraPorProjeto
 ): Resumo {
-  const casas = fpyPorCasa(paredes, regra);
+  const casas = fpyPorCasa(paredes, regra, regraPorProjeto);
   const afetadas = paredes.filter((p) => !p.passou_de_primeira).length;
   const zeradas = casas.filter((c) => c.fpy === 0);
   const conta = (c: string) => erros.filter((e) => e.criticidade === c).length;
@@ -284,7 +321,7 @@ export interface Fluxo {
 export function fluxoDe(paredes: ParedeConferida[], erros: LinhaDash[]): Fluxo {
   const porParede = new Map<string, { aberto: number; pendente: number }>();
   for (const e of erros) {
-    const k = `${e.casa}|${e.parede}`;
+    const k = chaveParede(e.projeto, e.casa, e.parede);
     const a = porParede.get(k) ?? { aberto: 0, pendente: 0 };
     if (e.status === "RETRABALHO_PENDENTE") a.pendente++;
     else if (e.status !== "RETRABALHO") a.aberto++;
@@ -295,7 +332,7 @@ export function fluxoDe(paredes: ParedeConferida[], erros: LinhaDash[]): Fluxo {
     retrabalhadas: 0, aguardaAprovacao: 0, emAberto: 0,
   };
   for (const p of paredes) {
-    const c = porParede.get(`${p.casa}|${p.parede}`);
+    const c = porParede.get(chaveParede(p.projeto, p.casa, p.parede));
     if (!c) {
       f.aceitas++;
       continue;
@@ -357,13 +394,15 @@ export function percursoDasParedes(
 
   const porParede = new Map<string, LinhaDash[]>();
   for (const e of doSetor) {
-    const k = `${e.casa}|${e.parede}`;
+    const k = chaveParede(e.projeto, e.casa, e.parede);
     porParede.set(k, [...(porParede.get(k) ?? []), e]);
   }
   const consideradas =
     setor === "todos"
       ? paredes
-      : paredes.filter((p) => porParede.has(`${p.casa}|${p.parede}`));
+      : paredes.filter((p) =>
+          porParede.has(chaveParede(p.projeto, p.casa, p.parede))
+        );
 
   const r: Percurso = {
     raiz: consideradas.length, okPrimeira: 0, reprovadas: 0,
@@ -371,7 +410,7 @@ export function percursoDasParedes(
     semOkPrimeira: setor !== "todos",
   };
   for (const p of consideradas) {
-    const meus = porParede.get(`${p.casa}|${p.parede}`);
+    const meus = porParede.get(chaveParede(p.projeto, p.casa, p.parede));
     if (!meus?.length) { r.okPrimeira++; continue; }
     r.reprovadas++;
     const tem = (st: string) => meus.some((e) => e.status === st);
@@ -414,14 +453,14 @@ export function tempoDasParedes(
 
   const porParede = new Map<string, LinhaDash[]>();
   for (const e of erros) {
-    const k = `${e.casa}|${e.parede}`;
+    const k = chaveParede(e.projeto, e.casa, e.parede);
     porParede.set(k, [...(porParede.get(k) ?? []), e]);
   }
 
   const fechamentos: number[] = [];
   const idades: number[] = [];
   for (const p of paredes) {
-    const meus = porParede.get(`${p.casa}|${p.parede}`);
+    const meus = porParede.get(chaveParede(p.projeto, p.casa, p.parede));
     if (!meus?.length) continue; // passou de primeira: nunca esperou nada
     const todosResolvidos = meus.every((e) => e.resolved_at);
     if (todosResolvidos) {
@@ -661,6 +700,8 @@ export function topPor<T>(lista: T[], campo: keyof T, n = 5): ItemRanking[] {
 }
 
 export interface CasaCritica {
+  chave: string;
+  projeto: string;
   casa: string;
   criticos: number;
   paredesAfetadas: number;
@@ -668,15 +709,31 @@ export interface CasaCritica {
 
 export function casasMaisCriticas(erros: LinhaDash[], n = 5): CasaCritica[] {
   const criticos = erros.filter((e) => e.criticidade === "CRITICO");
-  return [...new Set(criticos.map((e) => e.casa))]
-    .map((casa) => ({
-      casa,
-      criticos: criticos.filter((e) => e.casa === casa).length,
+  const casas = new Map<string, { projeto: string; casa: string }>();
+  for (const e of criticos) {
+    const projeto = e.projeto.trim();
+    const casa = e.casa.trim();
+    casas.set(chaveCasa(projeto, casa), { projeto, casa });
+  }
+  return [...casas.entries()]
+    .map(([chave, identificacao]) => ({
+      chave,
+      ...identificacao,
+      criticos: criticos.filter(
+        (e) => chaveCasa(e.projeto, e.casa) === chave
+      ).length,
       paredesAfetadas: new Set(
-        erros.filter((e) => e.casa === casa).map((e) => e.parede)
+        erros
+          .filter((e) => chaveCasa(e.projeto, e.casa) === chave)
+          .map((e) => chaveParede(e.projeto, e.casa, e.parede))
       ).size,
     }))
-    .sort((a, b) => b.criticos - a.criticos)
+    .sort(
+      (a, b) =>
+        b.criticos - a.criticos ||
+        ordemCasa(a.casa, b.casa) ||
+        a.projeto.localeCompare(b.projeto, "pt-BR")
+    )
     .slice(0, n);
 }
 
@@ -744,11 +801,12 @@ export function resumoDoMes(
   paredes: ParedeConferida[],
   erros: LinhaDash[],
   mes: string,
-  regra: RegraFpy
+  regra: RegraFpy,
+  regraPorProjeto?: RegraPorProjeto
 ): ResumoMes {
   const par = paredes.filter((p) => p.data.startsWith(mes));
   const er = erros.filter((e) => e.data.startsWith(mes));
-  const casas = fpyPorCasa(par, regra);
+  const casas = fpyPorCasa(par, regra, regraPorProjeto);
   const conta = (c: string) => er.filter((e) => e.criticidade === c).length;
   // divisor mínimo 1: mês sem casa auditada não pode virar divisão por zero
   const nc = casas.length || 1;
@@ -800,7 +858,11 @@ export function tiposPorMes(
   for (const m of meses)
     casasDoMes.set(
       m,
-      new Set(paredes.filter((p) => p.data.startsWith(m)).map((p) => p.casa)).size || 1
+      new Set(
+        paredes
+          .filter((p) => p.data.startsWith(m))
+          .map((p) => chaveCasa(p.projeto, p.casa))
+      ).size || 1
     );
 
   const tipos = new Map<string, Map<string, { qtd: number; critico: number }>>();

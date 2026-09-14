@@ -11,6 +11,7 @@ import {
   VOLUME_MINIMO,
   type SerieTipo,
 } from "@/lib/indicadores";
+import type { RegraPorProjeto } from "@/lib/indicadores";
 import { Cartao, COR, dBR, nBR, Variacao, Vazio } from "./Pecas";
 import { Tendencia } from "./Graficos";
 import type { Clicavel } from "./clique";
@@ -119,6 +120,7 @@ export default function FolhaComparativos({
   paredes,
   erros,
   regra,
+  regraPorProjeto,
   hoje,
   aoRecortar,
   aceso,
@@ -126,6 +128,7 @@ export default function FolhaComparativos({
   paredes: ParedeConferida[];
   erros: LinhaDash[];
   regra: RegraFpy;
+  regraPorProjeto?: RegraPorProjeto;
   hoje: string;
 } & Clicavel) {
   const meses = mesesDe(paredes, erros);
@@ -152,7 +155,9 @@ export default function FolhaComparativos({
   const iA = meses.indexOf(A);
   const iB = meses.indexOf(B);
 
-  const resumos = meses.map((m) => resumoDoMes(paredes, erros, m, regra));
+  const resumos = meses.map((m) =>
+    resumoDoMes(paredes, erros, m, regra, regraPorProjeto)
+  );
   const rA = resumos[iA];
   const rB = resumos[iB];
   const emAndamento = (m: string) => m === hoje.slice(0, 7);

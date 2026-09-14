@@ -178,6 +178,7 @@ export function ColunasFpy({
   casas,
   meta,
   media,
+  mostrarProjeto = false,
   aoRecortar,
   aceso,
 }: {
@@ -185,6 +186,8 @@ export function ColunasFpy({
   meta: number;
   /** média dos FPYs das casas; a linha de referência do desenho */
   media: number;
+  /** identifica a obra no tooltip quando casas iguais vêm de obras distintas */
+  mostrarProjeto?: boolean;
 } & Clicavel) {
   if (!casas.length) return <Vazio>Nenhuma casa auditada no período.</Vazio>;
 
@@ -281,13 +284,16 @@ export function ColunasFpy({
                       : c.fpy >= meta
                         ? "var(--color-brand)"
                         : "var(--color-media)";
+                  const identificacao = mostrarProjeto
+                    ? `${c.projeto} · casa ${c.casa}`
+                    : `Casa ${c.casa}`;
                   const dica =
-                    `Casa ${c.casa}: FPY ${c.fpy}% — ${c.limpas} de ${c.conferidas} paredes passaram de primeira` +
+                    `${identificacao}: FPY ${c.fpy}% — ${c.limpas} de ${c.conferidas} paredes passaram de primeira` +
                     (c.zerada ? " (zerada pela regra)" : "");
                   const estaAceso = !!aceso && aceso("casa", c.casa);
                   return (
                     <g
-                      key={c.casa}
+                      key={c.chave}
                       className={`ind-alvo${aoRecortar ? " ind-clicavel" : ""}`}
                       opacity={opacidadeDaMarca(algumAceso, estaAceso)}
                     >
@@ -338,7 +344,7 @@ export function ColunasFpy({
 
                 {casas.map((c, i) => (
                   <text
-                    key={`r${c.casa}`}
+                    key={`r${c.chave}`}
                     className="ind-eixo"
                     x={x(i)}
                     y={A - 7}

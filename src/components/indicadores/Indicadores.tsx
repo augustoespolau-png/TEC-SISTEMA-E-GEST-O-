@@ -49,15 +49,22 @@ import EscolhaDeDatas from "@/components/EscolhaDeDatas";
  * pergunta é de qualidade ao longo do tempo: quanto se erra, de que
  * gravidade, e a fábrica está melhorando ou piorando.
  *
- * O projeto é sempre um só. Projetos têm quantidade de paredes por casa
- * muito diferente — 12 no C4A, 101 na escola —, e uma média entre eles
- * não descreveria nenhuma fábrica.
+ * O seletor pode apontar para um projeto ou para a visão consolidada. Na
+ * segunda opção, as linhas continuam sendo recortadas na memória — a base
+ * já é carregada sem filtro de projeto e fica protegida pelo cache curto.
+ * Projetos têm quantidade de paredes por casa muito diferente — 12 no C4A,
+ * 101 na escola —, por isso a conta consolidada soma as linhas reais em vez
+ * de fazer uma média entre projetos.
  */
 
 /* A folha EXECUÇÃO saiu: era o Painel 2.0 inteiro embutido aqui, e
    deixou de ser usado. O componente continua no repositório e a rota
    /painel continua de pé para quem tiver o endereço salvo. */
 type Folha = "fpy" | "desvios" | "fluxo" | "comparativos";
+
+/** Valor interno do seletor; não é o nome de nenhum projeto no banco. */
+export const PROJETO_CONSOLIDADO = "all";
+export const ROTULO_PROJETO_CONSOLIDADO = "Todos os Projetos (Consolidado)";
 
 /* A lista das folhas mora no TabBar (FOLHAS_INDICADORES), junto com a
    regra de quem alcança quais. Duas listas em dois arquivos sempre
@@ -90,7 +97,13 @@ async function carregarDadosIndicadores(): Promise<DadosIndicadores> {
     const falha = re.error ?? rp.error ?? rj.error ?? rt.error;
     if (falha) throw new Error("Erro ao carregar: " + falha.message);
 
-    const projetos = (rj.data ?? []).map((p) => (p.nome as string).trim());
+    const projetos = [
+      ...new Set(
+        (rj.data ?? [])
+          .map((p) => (p.nome as string).trim())
+          .filter(Boolean)
+      ),
+    ];
     return {
       paredes: (rp.data ?? []) as ParedeConferida[],
       erros: (re.data ?? []) as LinhaDash[],
@@ -111,7 +124,7 @@ export default function Indicadores({ role }: { role: Role }) {
     [role]
   );
   const [projetos, setProjetos] = useState<string[]>([]);
-  const [projeto, setProjeto] = useState<string | null>(null);
+  const [projeto, setProjeto] = useState(PROJETO_CONSOLIDADO);
   const [periodo, setPeriodo] = useState<Periodo>("tudo");
   const [datas, setDatas] = useState<DatasEscolhidas>({ de: "", ate: "" });
   /* A folha vem da URL, escolhida na barra lateral. Estado interno
@@ -158,6 +171,17 @@ export default function Indicadores({ role }: { role: Role }) {
   const [regras, setRegras] = useState<Regras>(REGRAS_PADRAO);
   const [erro, setErro] = useState("");
 
+  const projetosAtivos = useMemo(() => new Set(projetos), [projetos]);
+  const pertenceAoEscopo = useCallback(
+    (nome: string | null | undefined) => {
+      const normalizado = nome?.trim() ?? "";
+      return projeto === PROJETO_CONSOLIDADO
+        ? projetosAtivos.has(normalizado)
+        : normalizado === projeto;
+    },
+    [projeto, projetosAtivos]
+  );
+
   const hoje = useMemo(() => hojeSaoPaulo(), []);
   const intervalo = useMemo(
     () => intervaloDe(periodo, hoje, datas),
@@ -175,7 +199,11 @@ export default function Indicadores({ role }: { role: Role }) {
       setErros(dados.erros);
       setItensPorPainel(dados.itensPorPainel);
       setProjetos(dados.projetos);
-      setProjeto((p) => p ?? dados.projetos[0] ?? null);
+      setProjeto((p) =>
+        p === PROJETO_CONSOLIDADO || dados.projetos.includes(p)
+          ? p
+          : PROJETO_CONSOLIDADO
+      );
       setRegras(dados.regras);
     } catch (caught) {
       setErro(
@@ -190,7 +218,7 @@ export default function Indicadores({ role }: { role: Role }) {
   }, [carregar]);
 
   const recorte = useMemo(() => {
-    if (!paredes || !projeto) return null;
+    if (!paredes) return null;
     const { inicio, fim } = intervalo;
     const dentro = (d: string) =>
       (!inicio || d >= inicio) && (!fim || d <= fim);
@@ -202,47 +230,57 @@ export default function Indicadores({ role }: { role: Role }) {
        sozinho. */
     return {
       paredes: aplicarRecortesEmParedes(
-        paredes.filter((p) => p.projeto?.trim() === projeto && dentro(p.data)),
+        paredes.filter((p) => pertenceAoEscopo(p.projeto) && dentro(p.data)),
         recortes
       ),
       erros: aplicarRecortes(
-        erros.filter((e) => e.projeto?.trim() === projeto && dentro(e.data)),
+        erros.filter((e) => pertenceAoEscopo(e.projeto) && dentro(e.data)),
         recortes
       ),
     };
-  }, [paredes, erros, projeto, intervalo, recortes]);
+  }, [paredes, erros, intervalo, recortes, pertenceAoEscopo]);
 
   /* O ANO CORRENTE, do dia 1º de janeiro até hoje.
      Ele ignora o filtro de período de propósito — é o número que a
      fábrica olha para saber onde o ano está, e mudaria de significado se
-     acompanhasse o recorte. O filtro de PROJETO ele respeita: misturar
-     C4A e escola num só FPY não diria nada sobre nenhum dos dois. */
+     acompanhasse o recorte. O filtro de projeto ele respeita; no modo
+     consolidado, reúne os projetos ativos no mesmo acumulado. */
   const anoCorrente = useMemo(() => {
-    if (!paredes || !projeto) return null;
+    if (!paredes) return null;
     const primeiroDeJaneiro = `${hoje.slice(0, 4)}-01-01`;
     const noAno = (d: string) => d >= primeiroDeJaneiro && d <= hoje;
     return {
       paredes: paredes.filter(
-        (p) => p.projeto?.trim() === projeto && noAno(p.data)
+        (p) => pertenceAoEscopo(p.projeto) && noAno(p.data)
       ),
       erros: erros.filter(
-        (e) => e.projeto?.trim() === projeto && noAno(e.data)
+        (e) => pertenceAoEscopo(e.projeto) && noAno(e.data)
       ),
     };
-  }, [paredes, erros, projeto, hoje]);
+  }, [paredes, erros, hoje, pertenceAoEscopo]);
 
-  /* TODAS as paredes do projeto, sem corte de data: o cartão do mês
+  /* TODAS as paredes do escopo, sem corte de data: o cartão do mês
      anterior precisa alcançar dezembro quando o filtro está em janeiro,
      e o ano corrente pararia em 1º de janeiro. */
   const doProjeto = useMemo(
-    () => (paredes ?? []).filter((p) => p.projeto?.trim() === projeto),
-    [paredes, projeto]
+    () => (paredes ?? []).filter((p) => pertenceAoEscopo(p.projeto)),
+    [paredes, pertenceAoEscopo]
   );
 
   const regra = useMemo(
-    () => regraDoProjeto(regras, projeto),
+    () =>
+      regraDoProjeto(
+        regras,
+        projeto === PROJETO_CONSOLIDADO ? null : projeto
+      ),
     [regras, projeto]
   );
+  const regraPorProjeto = useCallback(
+    (nome: string) => regraDoProjeto(regras, nome),
+    [regras]
+  );
+  const escopoRotulo =
+    projeto === PROJETO_CONSOLIDADO ? "todos os projetos" : projeto;
 
   if (erro)
     return (
@@ -250,7 +288,7 @@ export default function Indicadores({ role }: { role: Role }) {
         <p className="ind-erro">{erro}</p>
       </div>
     );
-  if (!recorte || !projeto)
+  if (!recorte)
     return (
       <div className="tela">
         <p className="text-sm text-ink-3">Carregando…</p>
@@ -280,6 +318,9 @@ export default function Indicadores({ role }: { role: Role }) {
             onChange={(e) => setProjeto(e.target.value)}
             aria-label="Projeto"
           >
+            <option value={PROJETO_CONSOLIDADO}>
+              {ROTULO_PROJETO_CONSOLIDADO}
+            </option>
             {projetos.map((p) => (
               <option key={p} value={p}>
                 {p}
@@ -372,7 +413,10 @@ export default function Indicadores({ role }: { role: Role }) {
           mesSelecionado={(intervalo.fim ?? hoje).slice(0, 7)}
           ano={hoje.slice(0, 4)}
           periodoRotulo={descrever(periodo, intervalo)}
+          escopoRotulo={escopoRotulo}
+          consolidado={projeto === PROJETO_CONSOLIDADO}
           regra={regra}
+          regraPorProjeto={regraPorProjeto}
           meta={regras.meta}
           limiteRegra={regra.minParedesAfetadas}
           aoRecortar={aoRecortar}
@@ -384,6 +428,8 @@ export default function Indicadores({ role }: { role: Role }) {
           paredes={recorte.paredes}
           erros={recorte.erros}
           regra={regra}
+          regraPorProjeto={regraPorProjeto}
+          mostrarProjeto={projeto === PROJETO_CONSOLIDADO}
           itensPorPainel={itensPorPainel}
           aoRecortar={aoRecortar}
           aceso={aceso}
@@ -397,6 +443,7 @@ export default function Indicadores({ role }: { role: Role }) {
           paredes={recorte.paredes}
           erros={recorte.erros}
           regra={regra}
+          regraPorProjeto={regraPorProjeto}
           hoje={hoje}
           aoRecortar={aoRecortar}
           aceso={aceso}

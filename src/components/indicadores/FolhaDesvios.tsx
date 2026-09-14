@@ -2,6 +2,7 @@
 
 import type { LinhaDash, ParedeConferida } from "@/lib/dashboard";
 import type { RegraFpy } from "@/lib/regras";
+import type { RegraPorProjeto } from "@/lib/indicadores";
 import {
   casasMaisCriticas,
   calcularIndiceQualidade,
@@ -33,6 +34,8 @@ export default function FolhaDesvios({
   paredes,
   erros,
   regra,
+  regraPorProjeto,
+  mostrarProjeto = false,
   itensPorPainel,
   aoRecortar,
   aceso,
@@ -40,10 +43,13 @@ export default function FolhaDesvios({
   paredes: ParedeConferida[];
   erros: LinhaDash[];
   regra: RegraFpy;
+  regraPorProjeto?: RegraPorProjeto;
+  /** diferencia casas homônimas no ranking consolidado */
+  mostrarProjeto?: boolean;
   /** Quantidade de tipos de erro ativos, o checklist efetivo do produto. */
   itensPorPainel: number;
 } & Clicavel) {
-  const r = resumir(paredes, erros, regra);
+  const r = resumir(paredes, erros, regra, regraPorProjeto);
   const indiceQualidade = calcularIndiceQualidade({
     paineisAuditados: paredes.length,
     itensPorPainel,
@@ -137,7 +143,7 @@ export default function FolhaDesvios({
               <thead>
                 <tr>
                   <th />
-                  <th>Casa</th>
+                  <th>{mostrarProjeto ? "Projeto / casa" : "Casa"}</th>
                   <th>Críticos</th>
                   <th>Paredes afetadas</th>
                 </tr>
@@ -145,19 +151,19 @@ export default function FolhaDesvios({
               <tbody>
                 {casas.map((c, i) => (
                   <tr
-                    key={c.casa}
+                    key={c.chave}
                     className={aoRecortar ? "ind-clicavel" : undefined}
                     aria-selected={
                       aceso ? aceso("casa", c.casa) : undefined
                     }
                     onClick={aoRecortar && (() => aoRecortar("casa", c.casa))}
                     title={
-                      `Casa ${c.casa}: ${nBR(c.criticos)} desvios críticos espalhados por ${nBR(c.paredesAfetadas)} paredes. ${i + 1}ª no período.` +
+                      `${mostrarProjeto ? `${c.projeto} · ` : ""}Casa ${c.casa}: ${nBR(c.criticos)} desvios críticos espalhados por ${nBR(c.paredesAfetadas)} paredes. ${i + 1}ª no período.` +
                       (aoRecortar ? " Clique para recortar o painel nesta casa." : "")
                     }
                   >
                     <td className="ind-pos">{i + 1}</td>
-                    <td>{c.casa}</td>
+                    <td>{mostrarProjeto ? `${c.projeto} · ${c.casa}` : c.casa}</td>
                     <td style={{ color: COR.CRITICO, fontWeight: 700 }}>
                       {nBR(c.criticos)}
                     </td>
