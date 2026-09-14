@@ -20,6 +20,8 @@ export interface Auditoria {
   id: string;
   projeto: string;
   casa: string;
+  /** Empreendimento associado à casa. Null = Sem Obra / A definir. */
+  obra: string | null;
   observacao: string | null;
   created_at: string;
 }
