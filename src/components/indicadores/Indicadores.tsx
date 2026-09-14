@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { cachedClientRequest } from "@/lib/clientCache";
 import {
   alternarRecorte,
   aplicarRecortes,
@@ -68,6 +69,37 @@ const ROTULO_FOLHA: Record<Folha, string> = {
   fluxo: "Fluxo",
   comparativos: "Comparativos",
 };
+
+interface DadosIndicadores {
+  paredes: ParedeConferida[];
+  erros: LinhaDash[];
+  projetos: string[];
+  itensPorPainel: number;
+  regras: Regras;
+}
+
+async function carregarDadosIndicadores(): Promise<DadosIndicadores> {
+  return cachedClientRequest("indicadores:base", async () => {
+    const supabase = createClient();
+    const [rp, re, rj, rt] = await Promise.all([
+      supabase.from("fpy_paredes").select("*").limit(30000),
+      supabase.from("ocorrencias").select(COLUNAS_DASH).limit(30000),
+      supabase.from("projetos").select("nome").eq("ativo", true).order("ordem"),
+      supabase.from("tipos_erro").select("id").eq("ativo", true).order("ordem"),
+    ]);
+    const falha = re.error ?? rp.error ?? rj.error ?? rt.error;
+    if (falha) throw new Error("Erro ao carregar: " + falha.message);
+
+    const projetos = (rj.data ?? []).map((p) => (p.nome as string).trim());
+    return {
+      paredes: (rp.data ?? []) as ParedeConferida[],
+      erros: (re.data ?? []) as LinhaDash[],
+      projetos,
+      itensPorPainel: (rt.data ?? []).length,
+      regras: await carregarRegras(),
+    };
+  });
+}
 
 export default function Indicadores({ role }: { role: Role }) {
   /* AS FOLHAS QUE ESTE PAPEL ALCANÇA. O operador só tem a de FPY: ele
@@ -136,28 +168,20 @@ export default function Indicadores({ role }: { role: Role }) {
      linhas, não milhares: ir ao servidor a cada clique de período
      deixaria a tela lenta sem necessidade. */
   const carregar = useCallback(async () => {
-    const supabase = createClient();
-    const [rp, re, rj, rt] = await Promise.all([
-      supabase.from("fpy_paredes").select("*").limit(30000),
-      supabase.from("ocorrencias").select(COLUNAS_DASH).limit(30000),
-      supabase.from("projetos").select("nome").eq("ativo", true).order("ordem"),
-      supabase.from("tipos_erro").select("id").eq("ativo", true).order("ordem"),
-    ]);
-    if (re.error || rp.error || rt.error) {
+    try {
+      const dados = await carregarDadosIndicadores();
+      setErro("");
+      setParedes(dados.paredes);
+      setErros(dados.erros);
+      setItensPorPainel(dados.itensPorPainel);
+      setProjetos(dados.projetos);
+      setProjeto((p) => p ?? dados.projetos[0] ?? null);
+      setRegras(dados.regras);
+    } catch (caught) {
       setErro(
-        "Erro ao carregar: " +
-          (re.error?.message ?? rp.error?.message ?? rt.error?.message)
+        caught instanceof Error ? caught.message : "Erro ao carregar os indicadores."
       );
-      return;
     }
-    setErro("");
-    setParedes((rp.data ?? []) as ParedeConferida[]);
-    setErros((re.data ?? []) as LinhaDash[]);
-    setItensPorPainel((rt.data ?? []).length);
-    const nomes = (rj.data ?? []).map((p) => (p.nome as string).trim());
-    setProjetos(nomes);
-    setProjeto((p) => p ?? nomes[0] ?? null);
-    setRegras(await carregarRegras());
   }, []);
 
   useEffect(() => {

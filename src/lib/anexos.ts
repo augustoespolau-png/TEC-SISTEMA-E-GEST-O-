@@ -1,3 +1,5 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+
 /** O bucket já usado pela Auditoria de Produto. Ele é privado: a tela cria
  * URLs assinadas apenas para a visualização dos arquivos que o usuário pode
  * consultar. */
@@ -5,6 +7,7 @@ export const BUCKET_AUDITORIA = "auditoria-arquivos";
 
 /** Limite igual ao configurado no bucket do Supabase. */
 export const MAX_FOTO_BYTES = 20 * 1024 * 1024;
+export const DURACAO_URL_ANEXO = 60 * 60;
 
 export function tamanhoLegivel(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
@@ -148,4 +151,58 @@ export function caminhoProjetoParede({
     "projeto",
     `${timestamp}-${segmentoSeguro(anexoId)}.${segmentoSeguro(extensao)}`,
   ].join("/");
+}
+
+/**
+ * Assina vários arquivos com uma chamada por bucket, em vez de abrir uma
+ * requisição ao Storage para cada foto exibida na lista. O mapa é indexado
+ * pelo bucket e pelo caminho para continuar aceitando buckets distintos.
+ */
+export async function assinarAnexosEmLote(
+  supabase: SupabaseClient,
+  arquivos: Array<{ bucket: string; path: string }>,
+  expiresIn = DURACAO_URL_ANEXO
+) {
+  const porBucket = new Map<string, Set<string>>();
+  for (const arquivo of arquivos) {
+    if (!arquivo.bucket || !arquivo.path) continue;
+    const caminhos = porBucket.get(arquivo.bucket) ?? new Set<string>();
+    caminhos.add(arquivo.path);
+    porBucket.set(arquivo.bucket, caminhos);
+  }
+
+  const resultado = new Map<string, Map<string, string>>();
+  await Promise.all(
+    [...porBucket].map(async ([bucket, caminhos]) => {
+      const { data } = await supabase.storage
+        .from(bucket)
+        .createSignedUrls([...caminhos], expiresIn);
+      for (const arquivo of data ?? []) {
+        if (!arquivo.path || !arquivo.signedUrl) continue;
+        const urlsDoBucket = resultado.get(bucket) ?? new Map<string, string>();
+        urlsDoBucket.set(arquivo.path, arquivo.signedUrl);
+        resultado.set(bucket, urlsDoBucket);
+      }
+    })
+  );
+  return resultado;
+}
+
+/** Envia uma foto JPEG já otimizada para o Storage privado da auditoria. */
+export async function enviarFotoAuditoria(
+  supabase: SupabaseClient,
+  dados: CaminhoAnexoAuditoria & { arquivo: File }
+) {
+  const caminho = caminhoAnexoAuditoria(dados);
+  const { error } = await supabase.storage
+    .from(BUCKET_AUDITORIA)
+    .upload(caminho, dados.arquivo, {
+      cacheControl: "3600",
+      contentType: "image/jpeg",
+      upsert: false,
+    });
+  if (error) {
+    throw new Error("Não foi possível enviar a foto: " + error.message);
+  }
+  return caminho;
 }

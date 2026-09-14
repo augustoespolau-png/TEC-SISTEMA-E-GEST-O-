@@ -1,22 +1,13 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { getAuthContext } from "@/lib/supabase/auth";
 import Painel2 from "@/components/painel2/Painel2";
 import type { Role } from "@/lib/types";
 
 export default async function PainelPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  const contexto = await getAuthContext();
+  if (!contexto) redirect("/login");
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
-
-  const papel = (profile?.role ?? "consultor") as Role;
+  const papel = (contexto.profile?.role ?? "consultor") as Role;
   /* O painel é só da gestão. A checagem tem de ser AQUI, no servidor:
      tirar a aba do menu esconde o caminho, mas quem digitar /painel na
      barra de endereço entraria assim mesmo. */

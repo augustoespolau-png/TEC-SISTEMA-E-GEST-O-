@@ -4,9 +4,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import {
+  assinarAnexosEmLote,
   BUCKET_AUDITORIA,
-  caminhoAnexoAuditoria,
+  enviarFotoAuditoria,
 } from "@/lib/anexos";
+import { cachedClientRequest } from "@/lib/clientCache";
 import { carregarAnexosProjetoParede } from "@/lib/anexosProjetoParede";
 import { mutarQualidade } from "@/lib/qualidadeCompat";
 import PainelParede from "./PainelParede";
@@ -92,6 +94,110 @@ function chaveDaAuditoria(projeto: string, casa: string) {
   return `${projeto.trim().toLocaleLowerCase("pt-BR")}|${casa.trim()}`;
 }
 
+interface DadosIniciaisAuditoria {
+  cfg: Config;
+  todas: Auditoria[];
+  resumos: Record<string, ResumoDaCasa>;
+  regras: Regras;
+  projetoInicial: string | null;
+}
+
+async function carregarDadosIniciaisAuditoria(): Promise<DadosIniciaisAuditoria> {
+  const supabase = createClient();
+  const [p, w, s, t, r] = await Promise.all([
+    supabase.from("projetos").select("*").eq("ativo", true).order("ordem"),
+    supabase.from("paredes").select("*").eq("ativo", true).order("ordem"),
+    supabase.from("setores").select("*").eq("ativo", true).order("ordem"),
+    supabase.from("tipos_erro").select("*").eq("ativo", true).order("ordem"),
+    // The production database keeps the original quality data in the
+    // produto_* tables. This compatibility view groups its wall rows
+    // into the same house-level records used by this screen.
+    supabase
+      .from("qualidade_auditorias")
+      .select("id, projeto, casa, created_at, observacao")
+      .order("created_at", { ascending: false })
+      .limit(5000),
+  ]);
+  const falha = p.error || w.error || s.error || t.error || r.error;
+  if (falha) {
+    throw new Error("Falha ao carregar os dados da auditoria: " + falha.message);
+  }
+
+  const auditoriasCarregadas = (r.data ?? []) as Auditoria[];
+  const auditoriaPorChave = new Map(
+    auditoriasCarregadas.map((a) => [chaveDaAuditoria(a.projeto, a.casa), a.id])
+  );
+
+  // resumo de cada casa (FPY, erros, NC) para a lista de auditorias
+  const [fp, oc] = await Promise.all([
+    supabase
+      .from("fpy_paredes")
+      .select("projeto, casa, erros, passou_de_primeira")
+      .limit(50000),
+    supabase
+      .from("ocorrencias")
+      .select("auditoria_id, status")
+      .not("auditoria_id", "is", null)
+      .limit(50000),
+  ]);
+  const falhaResumo = fp.error || oc.error;
+  if (falhaResumo) {
+    throw new Error(
+      "Falha ao calcular o resumo das casas: " + falhaResumo.message
+    );
+  }
+  const regras = await carregarRegras();
+
+  const acc: Record<string, ResumoDaCasa> = {};
+  // a regra do zeramento é por projeto, então a lista precisa saber
+  // de que projeto é cada casa (migration 022)
+  const projetoDaCasa = new Map<string, string>();
+  for (const l of fp.data ?? []) {
+    const id = auditoriaPorChave.get(
+      chaveDaAuditoria(String(l.projeto ?? ""), String(l.casa ?? ""))
+    );
+    if (!id) continue;
+    projetoDaCasa.set(id, String(l.projeto ?? ""));
+    const a = (acc[id] ??= {
+      conferidas: 0,
+      ok: 0,
+      erros: 0,
+      naoConformidades: 0,
+      fpy: null,
+      zeradaPelaRegra: false,
+    });
+    a.conferidas++;
+    if (l.passou_de_primeira) a.ok++;
+    a.erros += l.erros as number;
+  }
+  for (const o of oc.data ?? []) {
+    const a = acc[String(o.auditoria_id)];
+    if (a && o.status === "NAO_CONFORMIDADE") a.naoConformidades++;
+  }
+  /* Mesma função do painel. Antes esta lista calculava o FPY por
+     conta própria e ignorava a regra da casa — a casa 142 aparecia
+     zerada no painel e com 50% aqui, ao mesmo tempo. */
+  for (const [id, a] of Object.entries(acc)) {
+    const afetadas = a.conferidas - a.ok;
+    const regra = regraDoProjeto(regras, projetoDaCasa.get(id));
+    a.fpy = fpyDaCasa(a.conferidas, afetadas, regra);
+    a.zeradaPelaRegra = a.ok > 0 && casaZeraOFpy(afetadas, regra);
+  }
+
+  return {
+    cfg: {
+      projetos: p.data ?? [],
+      paredes: (w.data ?? []) as Parede[],
+      setores: s.data ?? [],
+      tipos: t.data ?? [],
+    },
+    todas: auditoriasCarregadas,
+    resumos: acc,
+    regras,
+    projetoInicial: p.data?.[0]?.nome ?? null,
+  };
+}
+
 /* A tinta de dentro do chip preenchido é decisão do tema (classes
    .preenche-*), não deste componente: o vermelho pede branco e o verde
    pede tinta escura no modo escuro. */
@@ -140,98 +246,32 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
 
   /* ---------- listas de configuração ---------- */
   useEffect(() => {
-    (async () => {
-      const supabase = createClient();
-      const [p, w, s, t, r] = await Promise.all([
-        supabase.from("projetos").select("*").eq("ativo", true).order("ordem"),
-        supabase.from("paredes").select("*").eq("ativo", true).order("ordem"),
-        supabase.from("setores").select("*").eq("ativo", true).order("ordem"),
-        supabase.from("tipos_erro").select("*").eq("ativo", true).order("ordem"),
-        // The production database keeps the original quality data in the
-        // produto_* tables. This compatibility view groups its wall rows
-        // into the same house-level records used by this screen.
-        supabase
-          .from("qualidade_auditorias")
-          .select("id, projeto, casa, created_at, observacao")
-          .order("created_at", { ascending: false })
-          .limit(5000),
-      ]);
-      const falha = p.error || w.error || s.error || t.error || r.error;
-      if (falha) {
-        setErroCarga("Falha ao carregar os dados da auditoria: " + falha.message);
-        return;
-      }
-      setCfg({
-        projetos: p.data ?? [],
-        paredes: (w.data ?? []) as Parede[],
-        setores: s.data ?? [],
-        tipos: t.data ?? [],
-      });
-      const auditoriasCarregadas = (r.data ?? []) as Auditoria[];
-      setTodas(auditoriasCarregadas);
-      if (p.data?.[0]) setProjeto(p.data[0].nome);
-
-      const auditoriaPorChave = new Map(
-        auditoriasCarregadas.map((a) => [chaveDaAuditoria(a.projeto, a.casa), a.id])
-      );
-
-      // resumo de cada casa (FPY, erros, NC) para a lista de auditorias
-      const [fp, oc] = await Promise.all([
-        supabase
-          .from("fpy_paredes")
-          .select("projeto, casa, erros, passou_de_primeira")
-          .limit(50000),
-        supabase
-          .from("ocorrencias")
-          .select("auditoria_id, status")
-          .not("auditoria_id", "is", null)
-          .limit(50000),
-      ]);
-      const falhaResumo = fp.error || oc.error;
-      if (falhaResumo) {
-        setErroCarga("Falha ao calcular o resumo das casas: " + falhaResumo.message);
-        return;
-      }
-      const regras = await carregarRegras();
-      setRegras(regras);
-
-      const acc: Record<string, ResumoDaCasa> = {};
-      // a regra do zeramento é por projeto, então a lista precisa saber
-      // de que projeto é cada casa (migration 022)
-      const projetoDaCasa = new Map<string, string>();
-      for (const l of fp.data ?? []) {
-        const id = auditoriaPorChave.get(
-          chaveDaAuditoria(String(l.projeto ?? ""), String(l.casa ?? ""))
+    let ativo = true;
+    void cachedClientRequest(
+      "auditoria:base",
+      carregarDadosIniciaisAuditoria
+    )
+      .then(({ cfg, todas, resumos, regras, projetoInicial }) => {
+        if (!ativo) return;
+        setErroCarga("");
+        setCfg(cfg);
+        setTodas(todas);
+        setResumos(resumos);
+        setRegras(regras);
+        if (projetoInicial) setProjeto(projetoInicial);
+      })
+      .catch((caught) => {
+        if (!ativo) return;
+        setErroCarga(
+          caught instanceof Error
+            ? caught.message
+            : "Falha ao carregar os dados da auditoria."
         );
-        if (!id) continue;
-        projetoDaCasa.set(id, String(l.projeto ?? ""));
-        const a = (acc[id] ??= {
-          conferidas: 0,
-          ok: 0,
-          erros: 0,
-          naoConformidades: 0,
-          fpy: null,
-          zeradaPelaRegra: false,
-        });
-        a.conferidas++;
-        if (l.passou_de_primeira) a.ok++;
-        a.erros += l.erros as number;
-      }
-      for (const o of oc.data ?? []) {
-        const a = acc[String(o.auditoria_id)];
-        if (a && o.status === "NAO_CONFORMIDADE") a.naoConformidades++;
-      }
-      /* Mesma função do painel. Antes esta lista calculava o FPY por
-         conta própria e ignorava a regra da casa — a casa 142 aparecia
-         zerada no painel e com 50% aqui, ao mesmo tempo. */
-      for (const [id, a] of Object.entries(acc)) {
-        const afetadas = a.conferidas - a.ok;
-        const r = regraDoProjeto(regras, projetoDaCasa.get(id));
-        a.fpy = fpyDaCasa(a.conferidas, afetadas, r);
-        a.zeradaPelaRegra = a.ok > 0 && casaZeraOFpy(afetadas, r);
-      }
-      setResumos(acc);
-    })();
+      });
+
+    return () => {
+      ativo = false;
+    };
   }, []);
 
   const paredesDoProjeto = useMemo(() => {
@@ -323,31 +363,38 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
         .limit(1000);
 
       if (!anexosConsulta.error) {
-        await Promise.all(
-          ((anexosConsulta.data ?? []) as AnexoRow[]).map(async (row) => {
-            let url: string | null = null;
-
-            if (row.storage_path) {
-              const assinado = await supabase.storage
-                .from(row.storage_bucket || BUCKET_AUDITORIA)
-                .createSignedUrl(row.storage_path, 60 * 60);
-              url = assinado.data?.signedUrl ?? null;
-            }
-
-            if (!row.desvio_id) return;
-            const lista = anexosPorDesvio.get(row.desvio_id) ?? [];
-            lista.push({
-              id: String(row.id),
-              nome_arquivo: row.nome_arquivo,
-              mime_type: row.mime_type,
-              tamanho_bytes: row.tamanho_bytes,
-              storage_bucket: row.storage_bucket || BUCKET_AUDITORIA,
-              storage_path: row.storage_path,
-              url,
-            });
-            anexosPorDesvio.set(row.desvio_id, lista);
-          })
+        const linhas = (anexosConsulta.data ?? []) as AnexoRow[];
+        const urls = await assinarAnexosEmLote(
+          supabase,
+          linhas.flatMap((row) =>
+            row.storage_path
+              ? [
+                  {
+                    bucket: row.storage_bucket || BUCKET_AUDITORIA,
+                    path: row.storage_path,
+                  },
+                ]
+              : []
+          )
         );
+
+        for (const row of linhas) {
+          if (!row.desvio_id) continue;
+          const bucket = row.storage_bucket || BUCKET_AUDITORIA;
+          const lista = anexosPorDesvio.get(row.desvio_id) ?? [];
+          lista.push({
+            id: String(row.id),
+            nome_arquivo: row.nome_arquivo,
+            mime_type: row.mime_type,
+            tamanho_bytes: row.tamanho_bytes,
+            storage_bucket: bucket,
+            storage_path: row.storage_path,
+            url: row.storage_path
+              ? urls.get(bucket)?.get(row.storage_path) ?? null
+              : null,
+          });
+          anexosPorDesvio.set(row.desvio_id, lista);
+        }
       }
     }
 
@@ -498,25 +545,23 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
       (auditoria.id.split("|", 1)[0] || auditoria.projeto);
     const paredeId =
       cfg?.paredes.find((item) => item.nome === parede)?.id?.toString() ?? parede;
-    const caminho = caminhoAnexoAuditoria({
-      usuarioId: usuario.user.id,
-      projetoId,
-      casaId: auditoria.casa,
-      paredeId,
-      anexoId: anexoUid,
-      extensao: "jpg",
-    });
-
-    const envio = await supabase.storage
-      .from(BUCKET_AUDITORIA)
-      .upload(caminho, arquivo, {
-        cacheControl: "3600",
-        contentType: "image/jpeg",
-        upsert: false,
+    let caminho: string;
+    try {
+      caminho = await enviarFotoAuditoria(supabase, {
+        usuarioId: usuario.user.id,
+        projetoId,
+        casaId: auditoria.casa,
+        paredeId,
+        anexoId: anexoUid,
+        extensao: "jpg",
+        arquivo,
       });
-    if (envio.error) {
+    } catch (caught) {
       return {
-        error: new Error("Não foi possível enviar a foto: " + envio.error.message),
+        error:
+          caught instanceof Error
+            ? caught
+            : new Error("Não foi possível enviar a foto."),
       };
     }
 

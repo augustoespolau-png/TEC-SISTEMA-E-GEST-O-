@@ -11,7 +11,7 @@ import ChipGroup from "@/components/ChipGroup";
 import HistoricoRegistro from "@/components/HistoricoRegistro";
 import { SeloCriticidade, SeloStatus } from "@/components/Selo";
 import SeletorFoto from "@/components/auditoria/SeletorFoto";
-import { BUCKET_AUDITORIA, caminhoAnexoAuditoria } from "@/lib/anexos";
+import { BUCKET_AUDITORIA, enviarFotoAuditoria } from "@/lib/anexos";
 import type { AnexoOcorrencia, Ocorrencia, Role, Status } from "@/lib/types";
 import { ROTULO_STATUS } from "@/lib/types";
 
@@ -49,23 +49,15 @@ async function prepararFotoPosRetrabalho(
   const projetoId =
     item.projeto_id || item.auditoria_id?.split("|")[0] || item.projeto;
   const paredeId = item.parede_id || item.parede;
-  const path = caminhoAnexoAuditoria({
+  const path = await enviarFotoAuditoria(supabase, {
     usuarioId: data.user.id,
     projetoId,
     casaId: item.casa,
     paredeId,
     anexoId: anexoUid,
     extensao: "jpg",
+    arquivo,
   });
-
-  const { error } = await supabase.storage
-    .from(BUCKET_AUDITORIA)
-    .upload(path, arquivo, {
-      cacheControl: "3600",
-      contentType: "image/jpeg",
-      upsert: false,
-    });
-  if (error) throw new Error(`Não foi possível enviar a foto: ${error.message}`);
 
   return {
     id: anexoId,

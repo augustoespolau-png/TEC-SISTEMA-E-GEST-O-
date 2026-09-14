@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { getAuthContext } from "@/lib/supabase/auth";
 import TabBar from "@/components/TabBar";
 import NavInferior from "@/components/NavInferior";
 import type { Role } from "@/lib/types";
@@ -7,20 +7,11 @@ import type { Role } from "@/lib/types";
 export default async function AppLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  const contexto = await getAuthContext();
+  if (!contexto) redirect("/login");
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("nome, role")
-    .eq("id", user.id)
-    .single();
-
-  const role = (profile?.role ?? "consultor") as Role;
-  const nome = profile?.nome || user.email || "";
+  const role = (contexto.profile?.role ?? "consultor") as Role;
+  const nome = contexto.profile?.nome || contexto.user.email || "";
 
   // largura livre: o Painel ocupa a tela inteira; as demais telas se
   // centralizam sozinhas (classe .tela). No celular a navegação fica

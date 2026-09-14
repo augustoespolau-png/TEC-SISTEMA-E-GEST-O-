@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { getAuthContext } from "@/lib/supabase/auth";
 
 /*
  * A aba Registrar saiu do ar. Esta rota virou a porta de entrada: manda
@@ -24,17 +24,8 @@ import { createClient } from "@/lib/supabase/server";
  * NavInferior.tsx. O componente está inteiro e continua compilando.
  */
 export default async function Entrada() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
+  const contexto = await getAuthContext();
+  if (!contexto) redirect("/login");
 
   /* Só a gestão cai na auditoria. Consultor e operador vão para a
      consulta — o consultor porque não audita, o operador porque a
@@ -45,9 +36,9 @@ export default async function Entrada() {
      consultor no indicador (é a única tela dele) e o operador na
      consulta. */
   redirect(
-    profile?.role === "gestao"
+    contexto.profile?.role === "gestao"
       ? "/auditoria"
-      : profile?.role === "consultor"
+      : contexto.profile?.role === "consultor"
         ? "/indicadores"
         : "/consultar"
   );

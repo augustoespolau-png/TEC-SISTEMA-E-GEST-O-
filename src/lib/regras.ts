@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/client";
+import { cachedClientRequest } from "@/lib/clientCache";
 
 /*
  * As regras de negócio da qualidade, num lugar só.
@@ -87,35 +88,37 @@ export function fpyDaCasa(
 }
 
 /** Lê os parâmetros do banco. Toda tela que mostra FPY chama isto. */
-export async function carregarRegras(): Promise<Regras> {
-  const supabase = createClient();
-  const [par, proj] = await Promise.all([
-    supabase.from("parametros").select("chave, valor, ativo"),
-    supabase.from("projetos").select("nome, fpy_regra_ativa"),
-  ]);
-  const r: Regras = {
-    fpy: { ...REGRA_FPY_PADRAO },
-    meta: REGRAS_PADRAO.meta,
-    porProjeto: {},
-  };
-  for (const p of (par.data ?? []) as {
-    chave: string;
-    valor: number;
-    ativo: boolean;
-  }[]) {
-    if (p.chave === "fpy_min_paredes_afetadas")
-      r.fpy = { ativa: p.ativo, minParedesAfetadas: Number(p.valor) };
-    if (p.chave === "fpy_meta" && p.ativo) r.meta = Number(p.valor);
-  }
-  /* O projeto só consegue DESLIGAR o zeramento para si; o limite continua
-     sendo um número só, definido em Configurações. */
-  for (const p of (proj.data ?? []) as {
-    nome: string;
-    fpy_regra_ativa: boolean;
-  }[])
-    r.porProjeto[p.nome.trim()] = {
-      ...r.fpy,
-      ativa: r.fpy.ativa && p.fpy_regra_ativa,
+export function carregarRegras(): Promise<Regras> {
+  return cachedClientRequest("qualidade:regras", async () => {
+    const supabase = createClient();
+    const [par, proj] = await Promise.all([
+      supabase.from("parametros").select("chave, valor, ativo"),
+      supabase.from("projetos").select("nome, fpy_regra_ativa"),
+    ]);
+    const r: Regras = {
+      fpy: { ...REGRA_FPY_PADRAO },
+      meta: REGRAS_PADRAO.meta,
+      porProjeto: {},
     };
-  return r;
+    for (const p of (par.data ?? []) as {
+      chave: string;
+      valor: number;
+      ativo: boolean;
+    }[]) {
+      if (p.chave === "fpy_min_paredes_afetadas")
+        r.fpy = { ativa: p.ativo, minParedesAfetadas: Number(p.valor) };
+      if (p.chave === "fpy_meta" && p.ativo) r.meta = Number(p.valor);
+    }
+    /* O projeto só consegue DESLIGAR o zeramento para si; o limite continua
+       sendo um número só, definido em Configurações. */
+    for (const p of (proj.data ?? []) as {
+      nome: string;
+      fpy_regra_ativa: boolean;
+    }[])
+      r.porProjeto[p.nome.trim()] = {
+        ...r.fpy,
+        ativa: r.fpy.ativa && p.fpy_regra_ativa,
+      };
+    return r;
+  });
 }

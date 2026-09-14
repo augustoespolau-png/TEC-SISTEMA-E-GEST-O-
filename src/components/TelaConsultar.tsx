@@ -25,7 +25,12 @@ import {
 } from "@/lib/types";
 import { baixar, montarCsv, nomeDoArquivo } from "@/lib/exportar";
 import { hojeSaoPaulo } from "@/lib/dashboard";
-import { BUCKET_AUDITORIA } from "@/lib/anexos";
+import {
+  assinarAnexosEmLote,
+  BUCKET_AUDITORIA,
+  DURACAO_URL_ANEXO,
+} from "@/lib/anexos";
+import { cachedClientRequest } from "@/lib/clientCache";
 
 const PAGINA = 50;
 /* Teto da exportação. A base tem centenas de linhas hoje; o teto existe
@@ -198,8 +203,6 @@ type ReferenciaAuditoriaRow = {
   parede_id: string | null;
 };
 
-const DURACAO_URL_ANEXO = 60 * 60;
-
 /**
  * A view de Consulta continua simples e compatível. Os anexos são buscados
  * pela tabela genérica, e só os caminhos estáveis atravessam a fronteira do
@@ -231,37 +234,46 @@ async function carregarAnexosDaConsulta(
     return { data: ocorrencias, error: anexosConsulta.error.message };
   }
 
-  const anexosPorDesvio = new Map<string, AnexoOcorrencia[]>();
-  await Promise.all(
-    ((anexosConsulta.data ?? []) as AnexoConsultaRow[]).map(async (row) => {
-      // Consulta é uma tela de fotos: documentos ou metadados incompletos não
-      // entram na galeria, mas continuam preservados no Storage e no banco.
-      if (!row.registro_id) return;
-      if (row.mime_type && !row.mime_type.startsWith("image/")) return;
-
-      const anexo: AnexoOcorrencia = {
-        id: row.id,
-        tipo: row.tipo,
-        nome_arquivo: row.nome_arquivo,
-        mime_type: row.mime_type,
-        tamanho_bytes: row.tamanho_bytes,
-        storage_bucket: row.storage_bucket || BUCKET_AUDITORIA,
-        storage_path: row.storage_path,
-        url: null,
-      };
-
-      if (anexo.storage_path) {
-        const assinado = await supabase.storage
-          .from(anexo.storage_bucket)
-          .createSignedUrl(anexo.storage_path, DURACAO_URL_ANEXO);
-        anexo.url = assinado.data?.signedUrl ?? null;
-      }
-
-      const lista = anexosPorDesvio.get(row.registro_id) ?? [];
-      lista.push(anexo);
-      anexosPorDesvio.set(row.registro_id, lista);
-    })
+  const linhas = ((anexosConsulta.data ?? []) as AnexoConsultaRow[]).filter(
+    (row) =>
+      row.registro_id && (!row.mime_type || row.mime_type.startsWith("image/"))
   );
+  const urls = await assinarAnexosEmLote(
+    supabase,
+    linhas.flatMap((row) =>
+      row.storage_path
+        ? [
+            {
+              bucket: row.storage_bucket || BUCKET_AUDITORIA,
+              path: row.storage_path,
+            },
+          ]
+        : []
+    ),
+    DURACAO_URL_ANEXO
+  );
+  const anexosPorDesvio = new Map<string, AnexoOcorrencia[]>();
+  for (const row of linhas) {
+    // Consulta é uma tela de fotos: documentos ou metadados incompletos não
+    // entram na galeria, mas continuam preservados no Storage e no banco.
+    if (!row.registro_id) continue;
+    const bucket = row.storage_bucket || BUCKET_AUDITORIA;
+    const anexo: AnexoOcorrencia = {
+      id: row.id,
+      tipo: row.tipo,
+      nome_arquivo: row.nome_arquivo,
+      mime_type: row.mime_type,
+      tamanho_bytes: row.tamanho_bytes,
+      storage_bucket: bucket,
+      storage_path: row.storage_path,
+      url: row.storage_path
+        ? urls.get(bucket)?.get(row.storage_path) ?? null
+        : null,
+    };
+    const lista = anexosPorDesvio.get(row.registro_id) ?? [];
+    lista.push(anexo);
+    anexosPorDesvio.set(row.registro_id, lista);
+  }
 
   /* A view legada não expõe os IDs canônicos do projeto e da parede. Eles
      são carregados somente para o caminho de um eventual novo anexo; se uma
@@ -306,6 +318,115 @@ async function carregarAnexosDaConsulta(
   };
 }
 
+interface ResultadoBusca {
+  itens: ItemLista[];
+  total: number;
+  aguardandoAprovacao: number;
+}
+
+function chaveDaBusca(filtros: Filtros, limite: number) {
+  return `consultar:lista:${limite}:${JSON.stringify(filtros)}`;
+}
+
+async function executarBusca(
+  filtros: Filtros,
+  limite: number
+): Promise<ResultadoBusca> {
+  const supabase = createClient();
+  let q = filtrar(
+    supabase
+      .from("ocorrencias")
+      // The legacy compatibility view intentionally has no synthetic
+      // foreign key. Author names remain optional in the card.
+      .select("*", { count: "exact" }),
+    filtros
+  );
+
+  switch (filtros.ordem) {
+    case "antigos":
+      q = q.order("created_at", { ascending: true });
+      break;
+    case "data_nova":
+      q = q
+        .order("data", { ascending: false })
+        .order("created_at", { ascending: false });
+      break;
+    case "data_antiga":
+      q = q.order("data", { ascending: true });
+      break;
+    // o enum no banco está declarado como CRITICO, MEDIO, BAIXO —
+    // ordenar por ele já traz os mais graves primeiro
+    case "criticidade":
+      q = q
+        .order("criticidade", { ascending: true })
+        .order("data", { ascending: false });
+      break;
+    case "casa":
+      q = q
+        .order("casa", { ascending: true })
+        .order("data", { ascending: false });
+      break;
+    case "setor":
+      q = q
+        .order("setor", { ascending: true })
+        .order("data", { ascending: false });
+      break;
+    default:
+      q = q.order("created_at", { ascending: false });
+  }
+
+  /* As PAREDES OK vêm de outra tabela — a auditoria —, e só quando
+     pedidas. As duas listas se juntam na memória e são cortadas no
+     mesmo limite: pedir "as 50 primeiras" ao banco duas vezes e
+     mostrar as 100 daria uma página que cresce sozinha. */
+  const buscaParedes = querParedesOk(filtros)
+    ? filtrarParedes(
+        supabase.from("fpy_paredes").select("*", { count: "exact" }),
+        filtros
+      )
+        .order("data", { ascending: filtros.ordem === "data_antiga" })
+        .limit(limite)
+    : null;
+
+  // fila de aprovação: contada sem filtro nenhum, porque é uma
+  // pendência da gestão e não pode depender do recorte da tela
+  const temStatus = statusDeErro(filtros).length > 0;
+  const [erros, paredesOk, fila] = await Promise.all([
+    /* Sem nenhum status de erro marcado não há o que perguntar ao
+       banco: `in("status", [])` devolveria zero de qualquer forma, mas
+       gastando uma ida à rede. */
+    temStatus
+      ? q.limit(limite)
+      : Promise.resolve({ data: [], error: null, count: 0 }),
+    buscaParedes ?? Promise.resolve({ data: [], error: null, count: 0 }),
+    supabase
+      .from("ocorrencias")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "RETRABALHO_PENDENTE"),
+  ]);
+
+  const falha = erros.error ?? paredesOk.error;
+  if (falha) throw new Error("Erro ao buscar: " + falha.message);
+
+  const resultado = await carregarAnexosDaConsulta(
+    supabase,
+    (erros.data ?? []) as Ocorrencia[]
+  );
+  if (resultado.error) {
+    throw new Error("Erro ao buscar fotos: " + resultado.error);
+  }
+
+  return {
+    itens: juntar(
+      resultado.data,
+      (paredesOk.data ?? []) as ParedeConferida[],
+      filtros.ordem
+    ).slice(0, limite),
+    total: (erros.count ?? 0) + (paredesOk.count ?? 0),
+    aguardandoAprovacao: fila.count ?? 0,
+  };
+}
+
 export default function TelaConsultar({ role }: { role: Role }) {
   const [filtros, setFiltros] = useState<Filtros>(FILTROS_PADRAO);
   const [gaveta, setGaveta] = useState(false);
@@ -320,10 +441,12 @@ export default function TelaConsultar({ role }: { role: Role }) {
   const [erro, setErro] = useState("");
 
   const primeiraCarga = useRef(true);
+  const sequenciaBusca = useRef(0);
 
   // listas para os seletores da gaveta
   useEffect(() => {
-    (async () => {
+    let ativo = true;
+    void cachedClientRequest("consultar:listas", async () => {
       const supabase = createClient();
       const [s, t, p, j] = await Promise.all([
         supabase.from("setores").select("*").eq("ativo", true).order("ordem"),
@@ -335,129 +458,43 @@ export default function TelaConsultar({ role }: { role: Role }) {
         supabase.from("paredes").select("*").eq("ativo", true).order("ordem"),
         supabase.from("projetos").select("*").eq("ativo", true).order("ordem"),
       ]);
-      setListas({
+      return {
         setores: s.data ?? [],
         tipos: t.data ?? [],
         paredes: p.data ?? [],
         projetos: j.data ?? [],
-      });
-    })();
+      } as ListasConfig;
+    }).then((dados) => {
+      if (ativo) setListas(dados);
+    });
+
+    return () => {
+      ativo = false;
+    };
   }, []);
 
   const buscar = useCallback(async (f: Filtros, lim: number) => {
+    const idBusca = ++sequenciaBusca.current;
     setBuscando(true);
     setErro("");
-    const supabase = createClient();
-
-    let q = filtrar(
-      supabase
-        .from("ocorrencias")
-        // The legacy compatibility view intentionally has no synthetic
-        // foreign key. Author names remain optional in the card.
-        .select("*", { count: "exact" }),
-      f
-    );
-
-    switch (f.ordem) {
-      case "antigos":
-        q = q.order("created_at", { ascending: true });
-        break;
-      case "data_nova":
-        q = q
-          .order("data", { ascending: false })
-          .order("created_at", { ascending: false });
-        break;
-      case "data_antiga":
-        q = q.order("data", { ascending: true });
-        break;
-      // o enum no banco está declarado como CRITICO, MEDIO, BAIXO —
-      // ordenar por ele já traz os mais graves primeiro
-      case "criticidade":
-        q = q
-          .order("criticidade", { ascending: true })
-          .order("data", { ascending: false });
-        break;
-      case "casa":
-        q = q
-          .order("casa", { ascending: true })
-          .order("data", { ascending: false });
-        break;
-      case "setor":
-        q = q
-          .order("setor", { ascending: true })
-          .order("data", { ascending: false });
-        break;
-      default:
-        q = q.order("created_at", { ascending: false });
-    }
-
-    /* As PAREDES OK vêm de outra tabela — a auditoria —, e só quando
-       pedidas. As duas listas se juntam na memória e são cortadas no
-       mesmo limite: pedir "as 50 primeiras" ao banco duas vezes e
-       mostrar as 100 daria uma página que cresce sozinha. */
-    const buscaParedes = querParedesOk(f)
-      ? filtrarParedes(
-          supabase.from("fpy_paredes").select("*", { count: "exact" }),
-          f
-        )
-          .order("data", { ascending: f.ordem === "data_antiga" })
-          .limit(lim)
-      : null;
-
-    // fila de aprovação: contada sem filtro nenhum, porque é uma
-    // pendência da gestão e não pode depender do recorte da tela
-    const [erros, paredesOk, fila] = await Promise.all([
-      /* Sem nenhum status de erro marcado não há o que perguntar ao
-         banco: `in("status", [])` devolveria zero de qualquer forma, mas
-         gastando uma ida à rede. */
-      statusDeErro(f).length
-        ? q.limit(lim)
-        : Promise.resolve({ data: [], error: null, count: 0 }),
-      buscaParedes ?? Promise.resolve({ data: [], error: null, count: 0 }),
-      supabase
-        .from("ocorrencias")
-        .select("id", { count: "exact", head: true })
-        .eq("status", "RETRABALHO_PENDENTE"),
-    ]);
-
-    const falha = erros.error ?? paredesOk.error;
-    if (falha) {
-      setBuscando(false);
-      setErro("Erro ao buscar: " + falha.message);
-      return;
-    }
-
-    let errosComAnexos: Ocorrencia[];
     try {
-      const resultado = await carregarAnexosDaConsulta(
-        supabase,
-        (erros.data ?? []) as Ocorrencia[]
+      const resultado = await cachedClientRequest(
+        chaveDaBusca(f, lim),
+        () => executarBusca(f, lim),
+        15_000
       );
-      if (resultado.error) {
-        setBuscando(false);
-        setErro("Erro ao buscar fotos: " + resultado.error);
-        return;
-      }
-      errosComAnexos = resultado.data;
-    } catch (error) {
-      setBuscando(false);
+      if (idBusca !== sequenciaBusca.current) return;
+      setItens(resultado.itens);
+      setTotal(resultado.total);
+      setAguardandoAprovacao(resultado.aguardandoAprovacao);
+    } catch (caught) {
+      if (idBusca !== sequenciaBusca.current) return;
       setErro(
-        "Erro ao buscar fotos: " +
-          (error instanceof Error ? error.message : "tente novamente")
+        caught instanceof Error ? caught.message : "Erro ao buscar."
       );
-      return;
+    } finally {
+      if (idBusca === sequenciaBusca.current) setBuscando(false);
     }
-
-    setBuscando(false);
-    setItens(
-      juntar(
-        errosComAnexos,
-        (paredesOk.data ?? []) as ParedeConferida[],
-        f.ordem
-      ).slice(0, lim)
-    );
-    setTotal((erros.count ?? 0) + (paredesOk.count ?? 0));
-    setAguardandoAprovacao(fila.count ?? 0);
   }, []);
 
   // busca ao abrir e sempre que um filtro muda (com respiro para digitação)
