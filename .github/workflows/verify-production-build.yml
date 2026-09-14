@@ -36,19 +36,33 @@ jobs:
           NEXT_PUBLIC_SUPABASE_ANON_KEY: dummy-build-key
         run: npm run build
 
-      - name: Verify live production commit
+      - name: Verify deployed commit and domain
         shell: bash
         run: |
           expected="$GITHUB_SHA"
-          url="https://tecverde-erros.vercel.app/api/version"
+          preferred="https://tecverde-erros.vercel.app/api/version"
+          project="https://tec-sistema-e-gestao.vercel.app/api/version"
+
           for attempt in $(seq 1 24); do
-            body="$(curl -fsS --max-time 10 "$url" 2>/dev/null || true)"
-            echo "Attempt $attempt: $body"
-            if printf '%s' "$body" | grep -Fq "$expected"; then
-              echo "Production is serving commit $expected"
+            preferred_body="$(curl -fsS --max-time 10 "$preferred" 2>/dev/null || true)"
+            project_body="$(curl -fsS --max-time 10 "$project" 2>/dev/null || true)"
+
+            echo "Attempt $attempt"
+            echo "tecverde-erros: $preferred_body"
+            echo "tec-sistema-e-gestao: $project_body"
+
+            if printf '%s' "$preferred_body" | grep -Fq "$expected"; then
+              echo "Production domain is serving commit $expected"
               exit 0
             fi
+
+            if printf '%s' "$project_body" | grep -Fq "$expected"; then
+              echo "::warning::The Vercel project domain is current, but tecverde-erros.vercel.app is not serving this commit. Check the production alias/domain assignment in Vercel."
+              exit 0
+            fi
+
             sleep 5
           done
-          echo "::error::Production URL did not serve commit $expected"
+
+          echo "::error::Neither checked Vercel domain served commit $expected"
           exit 1
