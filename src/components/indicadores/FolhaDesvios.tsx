@@ -71,21 +71,13 @@ export default function FolhaDesvios({
       <FaixaNumeros
         itens={[
           {
-            /* PAREDES PRODUZIDAS. O sistema não captura produção — só
-               registra o que passou pela auditoria —, então este número é
-               o de paredes auditadas, por decisão de quem usa: enquanto a
-               fábrica audita tudo o que produz, um é o outro.
-               O pé e a dica dizem isso em voz alta. No dia em que a
-               auditoria deixar de cobrir a produção inteira, este número
-               passa a ser um piso, não um total — e é a dica que evita
-               que alguém descubra isso tarde demais. */
             rotulo: "Paredes produzidas",
             valor: nBR(r.paredesAuditadas),
             pe: "= paredes auditadas",
             dica: `${nBR(r.paredesAuditadas)} paredes no período. O sistema não tem um contador de produção: ele só conhece a parede que passou pela auditoria. Como hoje a fábrica audita o que produz, o total auditado está sendo usado como o total produzido. Se algum dia sair parede sem auditoria, este número vira o MÍNIMO produzido, não o produzido.`,
           },
           {
-            rotulo: "Paredes com desvio",
+            rotulo: "Paredes afetadas",
             valor: nBR(r.paredesAfetadas),
             pe: `${pct(r.paredesAfetadas, r.paredesAuditadas)}% das auditadas`,
             tom: "alta",
@@ -98,7 +90,20 @@ export default function FolhaDesvios({
             dica: `${nBR(r.erros)} desvios no período: ${nBR(r.critico)} críticos, ${nBR(r.medio)} médios e ${nBR(r.baixo)} baixos.`,
           },
           {
-            rotulo: "Índice de qualidade",
+            rotulo: "Sem devolutivas",
+            valor: nBR(r.naoConformidades),
+            pe: "sem devolutiva em 48 h",
+            tom: r.naoConformidades ? "alta" : undefined,
+            dica: `Desvios que passaram de 48 h sem devolutiva e seguiram para o cliente sem correção. Hoje são ${nBR(r.naoConformidades)}, ${pct(r.naoConformidades, r.erros)}% de tudo o que foi registrado.`,
+          },
+          {
+            rotulo: "Itens não aplicados",
+            valor: nBR(indiceQualidade.naoAplicaveis),
+            pe: "N/A fora da base do IQ",
+            dica: `${nBR(indiceQualidade.naoAplicaveis)} itens foram marcados como Não Aplicável (N/A) nas paredes auditadas do período. Eles são retirados da base válida antes do cálculo do Índice de Qualidade.`,
+          },
+          {
+            rotulo: "Índice de qualidade (IQ)",
             valor:
               indiceQualidade.percentual === null
                 ? "—"
@@ -108,19 +113,6 @@ export default function FolhaDesvios({
                 ? `${nBR(indiceQualidade.itensConformes)} de ${nBR(indiceQualidade.itensValidos)} conformes`
                 : "sem base válida",
             dica: `Cálculo do período: ${nBR(indiceQualidade.paineisAuditados)} paredes × ${nBR(indiceQualidade.itensPorPainel ?? itensPorPainel)} itens = ${nBR(indiceQualidade.totalBruto)} brutos; menos ${nBR(indiceQualidade.naoAplicaveis)} N/A = ${nBR(indiceQualidade.itensValidos)} válidos; menos ${nBR(indiceQualidade.desvios)} desvios = ${nBR(indiceQualidade.itensConformes)} conformes. Índice = conformes ÷ válidos × 100.`,
-          },
-          {
-            rotulo: "Sem devolutivas",
-            valor: nBR(r.naoConformidades),
-            pe: "sem devolutiva em 48 h",
-            tom: r.naoConformidades ? "alta" : undefined,
-            dica: `Desvios que passaram de 48 h sem devolutiva e seguiram para o cliente sem correção. Hoje são ${nBR(r.naoConformidades)}, ${pct(r.naoConformidades, r.erros)}% de tudo o que foi registrado.`,
-          },
-          {
-            rotulo: "Casas com FPY zerado",
-            valor: nBR(r.casasZeradas),
-            pe: `${r.pctCasasZeradas}% das auditadas`,
-            dica: `${nBR(r.casasZeradas)} de ${nBR(r.casasAuditadas)} casas terminaram com FPY 0 — nenhuma parede passou de primeira, ou a regra de paredes afetadas zerou a casa.`,
           },
         ]}
       />
