@@ -15,15 +15,67 @@ export function tamanhoLegivel(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-/** Converte a foto para JPEG leve, preservando a maior dimensão em 1200px. */
-export async function otimizarFoto(arquivo: File): Promise<File> {
-  if (!arquivo.type.startsWith("image/")) {
-    throw new Error("Escolha uma imagem para anexar.");
-  }
-  if (arquivo.size > MAX_FOTO_BYTES) {
-    throw new Error("A foto precisa ter no máximo 20 MB.");
+/**
+ * Faz decode, resize e encode fora da main thread em navegadores modernos.
+ * Tablets/celulares deixam de travar a interface enquanto uma foto grande é
+ * preparada. O fallback por canvas continua cobrindo browsers antigos.
+ */
+async function otimizarFotoEmWorker(arquivo: File): Promise<Blob | null> {
+  if (
+    typeof Worker === "undefined" ||
+    typeof OffscreenCanvas === "undefined" ||
+    typeof createImageBitmap === "undefined"
+  ) {
+    return null;
   }
 
+  const codigo = `
+self.onmessage = async (event) => {
+  try {
+    const arquivo = event.data;
+    const bitmap = await createImageBitmap(arquivo);
+    const maiorLado = Math.max(bitmap.width, bitmap.height);
+    const escala = maiorLado > 1200 ? 1200 / maiorLado : 1;
+    const largura = Math.max(1, Math.round(bitmap.width * escala));
+    const altura = Math.max(1, Math.round(bitmap.height * escala));
+    const canvas = new OffscreenCanvas(largura, altura);
+    const contexto = canvas.getContext("2d");
+    if (!contexto) throw new Error("Contexto 2D indisponível");
+    contexto.drawImage(bitmap, 0, 0, largura, altura);
+    if (typeof bitmap.close === "function") bitmap.close();
+    const blob = await canvas.convertToBlob({ type: "image/jpeg", quality: 0.8 });
+    self.postMessage({ blob });
+  } catch (error) {
+    self.postMessage({ erro: error instanceof Error ? error.message : "Falha ao compactar" });
+  }
+};`;
+
+  const workerUrl = URL.createObjectURL(
+    new Blob([codigo], { type: "text/javascript" })
+  );
+  const worker = new Worker(workerUrl);
+
+  try {
+    return await new Promise<Blob>((resolve, reject) => {
+      worker.onmessage = (event: MessageEvent<{ blob?: Blob; erro?: string }>) => {
+        if (event.data?.blob) {
+          resolve(event.data.blob);
+          return;
+        }
+        reject(new Error(event.data?.erro || "Não foi possível compactar a foto."));
+      };
+      worker.onerror = () => reject(new Error("Não foi possível compactar a foto."));
+      worker.postMessage(arquivo);
+    });
+  } catch {
+    return null;
+  } finally {
+    worker.terminate();
+    URL.revokeObjectURL(workerUrl);
+  }
+}
+
+async function otimizarFotoNoCanvas(arquivo: File): Promise<Blob> {
   const url = URL.createObjectURL(arquivo);
   try {
     const imagem = await new Promise<HTMLImageElement>((resolve, reject) => {
@@ -50,15 +102,29 @@ export async function otimizarFoto(arquivo: File): Promise<File> {
     if (!blob) {
       throw new Error("Não foi possível compactar a imagem.");
     }
-
-    const nome = arquivo.name.replace(/\.[^.]+$/, "") || "foto-desvio";
-    return new File([blob], `${nome}.jpg`, {
-      type: "image/jpeg",
-      lastModified: Date.now(),
-    });
+    return blob;
   } finally {
     URL.revokeObjectURL(url);
   }
+}
+
+/** Converte a foto para JPEG leve, preservando a maior dimensão em 1200px. */
+export async function otimizarFoto(arquivo: File): Promise<File> {
+  if (!arquivo.type.startsWith("image/")) {
+    throw new Error("Escolha uma imagem para anexar.");
+  }
+  if (arquivo.size > MAX_FOTO_BYTES) {
+    throw new Error("A foto precisa ter no máximo 20 MB.");
+  }
+
+  const blob =
+    (await otimizarFotoEmWorker(arquivo)) ??
+    (await otimizarFotoNoCanvas(arquivo));
+  const nome = arquivo.name.replace(/\.[^.]+$/, "") || "foto-desvio";
+  return new File([blob], `${nome}.jpg`, {
+    type: "image/jpeg",
+    lastModified: Date.now(),
+  });
 }
 
 export function segmentoSeguro(valor: string) {
@@ -168,7 +234,7 @@ export async function assinarAnexosEmLote(
     if (!arquivo.bucket || !arquivo.path) continue;
     const caminhos = porBucket.get(arquivo.bucket) ?? new Set<string>();
     caminhos.add(arquivo.path);
-    porBucket.set(arquivo.bucket, caminhos);
+    porBucket.set(bucket, caminhos);
   }
 
   const resultado = new Map<string, Map<string, string>>();
