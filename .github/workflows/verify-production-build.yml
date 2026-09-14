@@ -36,6 +36,13 @@ jobs:
           NEXT_PUBLIC_SUPABASE_ANON_KEY: dummy-build-key
         run: npm run build
 
+      - name: Verify audit UI in compiled bundle
+        shell: bash
+        run: |
+          grep -R -Fq "Itens que não se aplicam" .next
+          grep -R -Fq "Anexo / foto do desvio (opcional)" .next
+          echo "Compiled bundle contains multi-NA and photo attachment UI."
+
       - name: Verify deployed commit and domain
         shell: bash
         run: |
