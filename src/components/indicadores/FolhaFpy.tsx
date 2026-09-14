@@ -229,7 +229,7 @@ export default function FolhaFpy({
         }
       >
         <ColunasFpy
-          casas={[...r.casas].reverse()}
+          casas={r.casas}
           meta={meta}
           media={r.mediaFpy}
           mostrarProjeto={consolidado}
