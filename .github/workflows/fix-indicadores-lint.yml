@@ -35,3 +35,5 @@ jobs:
           git add src/components/indicadores/Indicadores.tsx
           git commit -m "Corrige lint da atualização dinâmica dos indicadores"
           git push origin HEAD:main
+
+# run-now
