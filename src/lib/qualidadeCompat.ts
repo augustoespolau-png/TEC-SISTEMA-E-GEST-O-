@@ -1,12 +1,22 @@
 import { createClient } from "@/lib/supabase/client";
 import { invalidateClientRequestCache } from "@/lib/clientCache";
 
+const MUTACOES_QUENTES = new Set([
+  "MARCAR_PAREDE_OK",
+  "ALTERAR_DATA_PAREDE",
+  "REGISTRAR_DESVIO",
+  "ADICIONAR_NAS",
+  "ADICIONAR_ANEXO",
+]);
+
 /**
  * Escritas da aplicação nova sobre a base de Auditoria de Produto legada.
  *
  * As views de compatibilidade são somente leitura por desenho. Toda
  * alteração passa por uma função RPC do banco, que valida o papel do
- * usuário e atualiza o estado legado de forma atômica.
+ * usuário e atualiza o estado legado de forma atômica. As ações mais comuns
+ * usam o fast-path incremental: apenas a parede alterada é reprojetada nas
+ * tabelas relacionais, evitando reconstruir toda a base a cada clique.
  */
 export async function mutarQualidade(
   operacao: string,
@@ -16,7 +26,9 @@ export async function mutarQualidade(
     ? "qualidade_compat_regra"
     : operacao.startsWith("CONFIG_")
       ? "qualidade_compat_configuracao"
-    : "qualidade_compat_mutacao";
+      : MUTACOES_QUENTES.has(operacao)
+        ? "qualidade_compat_mutacao_fast"
+        : "qualidade_compat_mutacao";
 
   const resposta = await createClient().rpc(funcao, {
     p_operacao: operacao,
