@@ -9,6 +9,39 @@ const MUTACOES_QUENTES = new Set([
   "ADICIONAR_ANEXO",
 ]);
 
+async function executarRpc(
+  funcao: string,
+  operacao: string,
+  dados: Record<string, unknown>
+) {
+  return await createClient().rpc(funcao, {
+    p_operacao: operacao,
+    p_dados: dados,
+  });
+}
+
+type RespostaRpc = Awaited<ReturnType<typeof executarRpc>>;
+
+/* Segunda barreira contra duplo clique/retry do navegador: se o mesmo RPC
+   ainda está em voo, todos os chamadores compartilham a mesma Promise. */
+const mutacoesEmAndamento = new Map<string, Promise<RespostaRpc>>();
+
+function chaveDaMutacao(
+  funcao: string,
+  operacao: string,
+  dados: Record<string, unknown>
+) {
+  return `${funcao}:${operacao}:${JSON.stringify(dados)}`;
+}
+
+function invalidarDepoisDaMutacao(operacao: string) {
+  const alteraCatalogos =
+    operacao.startsWith("ALTERAR_REGRA_") || operacao.startsWith("CONFIG_");
+  invalidateClientRequestCache(undefined, {
+    preservarEstaticos: !alteraCatalogos,
+  });
+}
+
 /**
  * Escritas da aplicação nova sobre a base de Auditoria de Produto legada.
  *
@@ -30,12 +63,21 @@ export async function mutarQualidade(
         ? "qualidade_compat_mutacao_fast"
         : "qualidade_compat_mutacao";
 
-  const resposta = await createClient().rpc(funcao, {
-    p_operacao: operacao,
-    p_dados: dados,
-  });
-  if (!resposta.error) invalidateClientRequestCache();
-  return resposta;
+  const chave = chaveDaMutacao(funcao, operacao, dados);
+  const existente = mutacoesEmAndamento.get(chave);
+  if (existente) return existente;
+
+  const promise = executarRpc(funcao, operacao, dados)
+    .then((resposta) => {
+      if (!resposta.error) invalidarDepoisDaMutacao(operacao);
+      return resposta;
+    })
+    .finally(() => {
+      mutacoesEmAndamento.delete(chave);
+    });
+
+  mutacoesEmAndamento.set(chave, promise);
+  return promise;
 }
 
 /** Foto de correção: o RPC dedicado grava no estado canônico e deixa os
@@ -46,7 +88,9 @@ export async function adicionarAnexoRetrabalho(
   const resposta = await createClient().rpc("qualidade_adicionar_anexo_retrabalho", {
     p_dados: dados,
   });
-  if (!resposta.error) invalidateClientRequestCache();
+  if (!resposta.error) {
+    invalidateClientRequestCache(undefined, { preservarEstaticos: true });
+  }
   return resposta;
 }
 
@@ -57,6 +101,8 @@ export async function salvarProjetoParedeAnexo(
   const resposta = await createClient().rpc("qualidade_salvar_projeto_parede_anexo", {
     p_dados: dados,
   });
-  if (!resposta.error) invalidateClientRequestCache();
+  if (!resposta.error) {
+    invalidateClientRequestCache(undefined, { preservarEstaticos: true });
+  }
   return resposta;
 }
