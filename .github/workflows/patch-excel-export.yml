@@ -1,0 +1,128 @@
+name: Patch Excel export
+
+on:
+  push:
+    paths:
+      - '.github/workflows/patch-excel-export.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Connect Consultar to XLSX exporter
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path('src/components/TelaConsultar.tsx')
+          text = path.read_text()
+
+          old_import = 'import { baixar, montarCsv, nomeDoArquivo } from "@/lib/exportar";'
+          new_import = 'import { baixarExcel, nomeDoArquivoExcel } from "@/lib/exportar";'
+          if old_import not in text:
+              raise SystemExit('Old export import not found')
+          text = text.replace(old_import, new_import, 1)
+
+          pattern = re.compile(
+              r'  async function exportar\(\) \{.*?\n  \}\n\n  const extras = contarFiltrosExtras\(filtros\);',
+              re.S,
+          )
+          replacement = '''  async function exportar() {
+    setExportando(true);
+    setErro("");
+    try {
+      const supabase = createClient();
+      /* O Excel traz as MESMAS duas espécies da lista, no mesmo recorte:
+         ocorrências e paredes que passaram de primeira. */
+      const [erros, paredesOk] = await Promise.all([
+        statusDeErro(filtros).length
+          ? filtrar(supabase.from("ocorrencias").select("*"), filtros)
+              .order("data", { ascending: false })
+              .order("id", { ascending: false })
+              .limit(TETO_EXPORTACAO)
+          : Promise.resolve({ data: [], error: null }),
+        querParedesOk(filtros)
+          ? filtrarParedes(supabase.from("fpy_paredes").select("*"), filtros)
+              .order("data", { ascending: false })
+              .limit(TETO_EXPORTACAO)
+          : Promise.resolve({ data: [], error: null }),
+      ]);
+
+      const falha = erros.error ?? paredesOk.error;
+      if (falha) {
+        setErro("Erro ao exportar: " + falha.message);
+        return;
+      }
+
+      const linhas = juntar(
+        (erros.data ?? []) as Ocorrencia[],
+        (paredesOk.data ?? []) as ParedeConferida[],
+        filtros.ordem
+      );
+      if (!linhas.length) {
+        setErro("Nada para exportar neste filtro.");
+        return;
+      }
+
+      const partesNome = [
+        filtros.projeto,
+        filtros.casa && `casa-${filtros.casa}`,
+        filtros.status.length === 1 && rotuloDoStatus(filtros.status[0]),
+        filtros.setor,
+      ].filter(Boolean) as string[];
+
+      await baixarExcel(
+        nomeDoArquivoExcel(partesNome, hojeSaoPaulo()),
+        linhas,
+        {
+          projeto: filtros.projeto || "Todos os projetos",
+          casa: filtros.casa || null,
+          situacao:
+            filtros.status.length === 1
+              ? rotuloDoStatus(filtros.status[0])
+              : filtros.status.length > 1
+                ? "Múltiplas situações"
+                : "Nenhuma situação selecionada",
+          setor: filtros.setor || null,
+          total: linhas.length,
+        }
+      );
+
+      if (linhas.length === TETO_EXPORTACAO)
+        setErro(
+          `A planilha saiu com as ${TETO_EXPORTACAO} primeiras linhas, que é o limite. Estreite o filtro para levar o resto.`
+        );
+    } catch (caught) {
+      setErro(
+        caught instanceof Error
+          ? "Erro ao gerar Excel: " + caught.message
+          : "Erro ao gerar Excel."
+      );
+    } finally {
+      setExportando(false);
+    }
+  }
+
+  const extras = contarFiltrosExtras(filtros);'''
+
+          updated, count = pattern.subn(replacement, text, count=1)
+          if count != 1:
+              raise SystemExit(f'Expected one exportar function, found {count}')
+          path.write_text(updated)
+          PY
+      - name: Commit patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/components/TelaConsultar.tsx
+          git diff --cached --quiet && exit 0
+          git commit -m "Conecta exportação da Consulta ao padrão XLSX"
+          git push
