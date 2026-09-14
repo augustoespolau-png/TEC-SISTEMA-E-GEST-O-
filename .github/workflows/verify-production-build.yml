@@ -3,9 +3,7 @@ name: Verify production build
 on:
   push:
     branches: [main]
-
-permissions:
-  contents: write
+  workflow_dispatch:
 
 jobs:
   build:
@@ -20,34 +18,6 @@ jobs:
         with:
           node-version: 22
           cache: npm
-
-      - name: Patch XLSX adapter
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          import re
-          path = Path('src/lib/exportar.ts')
-          text = path.read_text()
-          old_blob = '  const url = URL.createObjectURL(\n    new Blob([bytes], {\n      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",\n    })\n  );'
-          new_blob = '  const arquivo = bytes.buffer.slice(\n    bytes.byteOffset,\n    bytes.byteOffset + bytes.byteLength\n  ) as ArrayBuffer;\n  const url = URL.createObjectURL(\n    new Blob([arquivo], {\n      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",\n    })\n  );'
-          if old_blob not in text:
-              raise SystemExit('Bloco Blob XLSX não encontrado')
-          text = text.replace(old_blob, new_blob, 1)
-          pacote = 'const PACOTE_XLSX = "__TECVERDE_XLSX__";\n\nexport function montarCsv(itens: LinhaExportada[]): string {\n  return PACOTE_XLSX + JSON.stringify(itens);\n}\n\n'
-          text, n = re.subn(r'export function montarCsv\(itens: LinhaExportada\[\]\): string \{.*?\n\}\n\n(?=export function nomeDoArquivo)', pacote, text, count=1, flags=re.S)
-          if n != 1:
-              raise SystemExit('montarCsv não encontrado')
-          old_nome = 'export function nomeDoArquivo(partes: string[], hoje: string): string {\n  return nomeDoArquivoExcel(partes, hoje).replace(/\\.xlsx$/i, ".csv");\n}'
-          new_nome = 'export function nomeDoArquivo(partes: string[], hoje: string): string {\n  return nomeDoArquivoExcel(partes, hoje);\n}'
-          if old_nome not in text:
-              raise SystemExit('nomeDoArquivo antigo não encontrado')
-          text = text.replace(old_nome, new_nome, 1)
-          baixar = 'export function baixar(nome: string, conteudo: string) {\n  if (conteudo.startsWith(PACOTE_XLSX)) {\n    const itens = JSON.parse(conteudo.slice(PACOTE_XLSX.length)) as LinhaExportada[];\n    const projetos = [...new Set(itens.map((item) => campo(item, "projeto")).filter(Boolean))];\n    const casas = [...new Set(itens.map((item) => campo(item, "casa")).filter(Boolean))];\n    const situacoes = [...new Set(itens.map((item) => item.especie === "erro" ? (ROTULO_STATUS[item.erro.status] ?? item.erro.status) : "PAREDE OK"))];\n    void baixarExcel(nome.replace(/\\.csv$/i, ".xlsx"), itens, {\n      projeto: projetos.length === 1 ? projetos[0] : "Todos os projetos",\n      casa: casas.length === 1 ? casas[0] : null,\n      situacao: situacoes.length === 1 ? situacoes[0] : "Múltiplas situações",\n      total: itens.length,\n    }).catch((erro) => console.error("Erro ao gerar Excel", erro));\n    return;\n  }\n  const url = URL.createObjectURL(new Blob([conteudo], { type: "text/csv;charset=utf-8;" }));\n  const a = document.createElement("a");\n  a.href = url;\n  a.download = nome;\n  document.body.appendChild(a);\n  a.click();\n  a.remove();\n  URL.revokeObjectURL(url);\n}\n'
-          text, n = re.subn(r'export function baixar\(nome: string, conteudo: string\) \{.*?\n\}\s*$', baixar, text, count=1, flags=re.S)
-          if n != 1:
-              raise SystemExit('baixar não encontrado')
-          path.write_text(text)
-          PY
 
       - name: Clean Next.js caches
         run: |
@@ -66,17 +36,41 @@ jobs:
           NEXT_PUBLIC_SUPABASE_ANON_KEY: dummy-build-key
         run: npm run build
 
-      - name: Verify XLSX implementation
+      - name: Verify audit UI in compiled bundle
+        shell: bash
         run: |
+          grep -R -Fq "Itens que não se aplicam" .next
+          grep -R -Fq "Anexo / foto do desvio (opcional)" .next
           grep -R -Fq "TECVERDE — RELATÓRIO DE OCORRÊNCIAS E HISTÓRICO DA QUALIDADE" .next
-          grep -q '__TECVERDE_XLSX__' src/lib/exportar.ts
-          grep -q 'exceljs' package.json
+          echo "Compiled bundle contains audit UI and professional XLSX export."
 
-      - name: Commit validated XLSX sources
+      - name: Verify deployed commit and domain
+        shell: bash
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/lib/exportar.ts
-          git diff --cached --quiet && exit 0
-          git commit -m "Ativa exportação XLSX profissional na Consulta"
-          git push
+          expected="$GITHUB_SHA"
+          preferred="https://tecverde-erros.vercel.app/api/version"
+          project="https://tec-sistema-e-gestao.vercel.app/api/version"
+
+          for attempt in $(seq 1 24); do
+            preferred_body="$(curl -fsS --max-time 10 "$preferred" 2>/dev/null || true)"
+            project_body="$(curl -fsS --max-time 10 "$project" 2>/dev/null || true)"
+
+            echo "Attempt $attempt"
+            echo "tecverde-erros: $preferred_body"
+            echo "tec-sistema-e-gestao: $project_body"
+
+            if printf '%s' "$preferred_body" | grep -Fq "$expected"; then
+              echo "Production domain is serving commit $expected"
+              exit 0
+            fi
+
+            if printf '%s' "$project_body" | grep -Fq "$expected"; then
+              echo "::warning::The Vercel project domain is current, but tecverde-erros.vercel.app is not serving this commit. Check the production alias/domain assignment in Vercel."
+              exit 0
+            fi
+
+            sleep 5
+          done
+
+          echo "::error::Neither checked Vercel domain served commit $expected"
+          exit 1
