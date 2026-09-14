@@ -87,38 +87,46 @@ export function fpyDaCasa(
   return Math.round(((conferidas - afetadas) / conferidas) * 100);
 }
 
-/** Lê os parâmetros do banco. Toda tela que mostra FPY chama isto. */
+/**
+ * Lê os parâmetros do banco. Como essas regras só mudam pela tela de
+ * Configurações, elas ficam em cache por 10 minutos e são invalidadas
+ * imediatamente por qualquer mutação CONFIG_/ALTERAR_REGRA_.
+ */
 export function carregarRegras(): Promise<Regras> {
-  return cachedClientRequest("qualidade:regras", async () => {
-    const supabase = createClient();
-    const [par, proj] = await Promise.all([
-      supabase.from("parametros").select("chave, valor, ativo"),
-      supabase.from("projetos").select("nome, fpy_regra_ativa"),
-    ]);
-    const r: Regras = {
-      fpy: { ...REGRA_FPY_PADRAO },
-      meta: REGRAS_PADRAO.meta,
-      porProjeto: {},
-    };
-    for (const p of (par.data ?? []) as {
-      chave: string;
-      valor: number;
-      ativo: boolean;
-    }[]) {
-      if (p.chave === "fpy_min_paredes_afetadas")
-        r.fpy = { ativa: p.ativo, minParedesAfetadas: Number(p.valor) };
-      if (p.chave === "fpy_meta" && p.ativo) r.meta = Number(p.valor);
-    }
-    /* O projeto só consegue DESLIGAR o zeramento para si; o limite continua
-       sendo um número só, definido em Configurações. */
-    for (const p of (proj.data ?? []) as {
-      nome: string;
-      fpy_regra_ativa: boolean;
-    }[])
-      r.porProjeto[p.nome.trim()] = {
-        ...r.fpy,
-        ativa: r.fpy.ativa && p.fpy_regra_ativa,
+  return cachedClientRequest(
+    "static:qualidade:regras",
+    async () => {
+      const supabase = createClient();
+      const [par, proj] = await Promise.all([
+        supabase.from("parametros").select("chave, valor, ativo"),
+        supabase.from("projetos").select("nome, fpy_regra_ativa"),
+      ]);
+      const r: Regras = {
+        fpy: { ...REGRA_FPY_PADRAO },
+        meta: REGRAS_PADRAO.meta,
+        porProjeto: {},
       };
-    return r;
-  });
+      for (const p of (par.data ?? []) as {
+        chave: string;
+        valor: number;
+        ativo: boolean;
+      }[]) {
+        if (p.chave === "fpy_min_paredes_afetadas")
+          r.fpy = { ativa: p.ativo, minParedesAfetadas: Number(p.valor) };
+        if (p.chave === "fpy_meta" && p.ativo) r.meta = Number(p.valor);
+      }
+      /* O projeto só consegue DESLIGAR o zeramento para si; o limite continua
+         sendo um número só, definido em Configurações. */
+      for (const p of (proj.data ?? []) as {
+        nome: string;
+        fpy_regra_ativa: boolean;
+      }[])
+        r.porProjeto[p.nome.trim()] = {
+          ...r.fpy,
+          ativa: r.fpy.ativa && p.fpy_regra_ativa,
+        };
+      return r;
+    },
+    10 * 60_000
+  );
 }
