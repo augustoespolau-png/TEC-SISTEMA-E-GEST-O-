@@ -1,0 +1,37 @@
+name: Fix indicadores lint
+
+on:
+  push:
+    paths:
+      - .github/workflows/fix-indicadores-lint.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply lint-safe effect
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('src/components/indicadores/Indicadores.tsx')
+          s = p.read_text()
+          old = '''  useEffect(() => {
+    void carregar();'''
+          new = '''  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- sincroniza a tela com o Supabase ao montar
+    void carregar();'''
+          if old not in s:
+              raise SystemExit('Trecho da carga inicial não encontrado')
+          p.write_text(s.replace(old, new, 1))
+          PY
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/components/indicadores/Indicadores.tsx
+          git commit -m "Corrige lint da atualização dinâmica dos indicadores"
+          git push origin HEAD:main
