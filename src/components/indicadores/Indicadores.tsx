@@ -55,21 +55,72 @@ interface DadosIndicadores {
   regras: Regras;
 }
 
+const TAMANHO_PAGINA = 800;
+
+/**
+ * O PostgREST/Supabase limita a quantidade máxima de linhas por resposta.
+ * A base de FPY já ultrapassou 1.000 paredes, então um único select cortava
+ * justamente as auditorias mais recentes. Paginar até uma página incompleta
+ * torna a leitura independente desse limite e continua funcionando quando
+ * entrarem as casas 151, 152 e seguintes.
+ */
+async function carregarTodasAsParedes(): Promise<ParedeConferida[]> {
+  const supabase = createClient();
+  const todas: ParedeConferida[] = [];
+
+  for (let inicio = 0; ; inicio += TAMANHO_PAGINA) {
+    const { data, error } = await supabase
+      .from("fpy_paredes")
+      .select("*")
+      .order("data", { ascending: true })
+      .order("projeto", { ascending: true })
+      .order("casa", { ascending: true })
+      .order("parede", { ascending: true })
+      .range(inicio, inicio + TAMANHO_PAGINA - 1);
+
+    if (error) throw error;
+    const lote = (data ?? []) as ParedeConferida[];
+    todas.push(...lote);
+    if (lote.length < TAMANHO_PAGINA) break;
+  }
+
+  return todas;
+}
+
+async function carregarTodasAsOcorrencias(): Promise<LinhaDash[]> {
+  const supabase = createClient();
+  const todas: LinhaDash[] = [];
+
+  for (let inicio = 0; ; inicio += TAMANHO_PAGINA) {
+    const { data, error } = await supabase
+      .from("ocorrencias")
+      .select(COLUNAS_DASH)
+      .order("id", { ascending: true })
+      .range(inicio, inicio + TAMANHO_PAGINA - 1);
+
+    if (error) throw error;
+    const lote = (data ?? []) as LinhaDash[];
+    todas.push(...lote);
+    if (lote.length < TAMANHO_PAGINA) break;
+  }
+
+  return todas;
+}
+
 /*
  * Indicadores não usam o cache de 30 s da navegação. Esta base muda no chão
  * de fábrica enquanto a própria tela está aberta; um snapshot reaproveitado
- * fez as casas 149/150 existirem na Auditoria e ainda não aparecerem aqui.
- * A consulta é pequena para o volume atual e é refeita ao entrar/focar a aba.
+ * fez casas recém-auditadas existirem na Auditoria e ainda não aparecerem aqui.
  */
 async function carregarDadosIndicadores(): Promise<DadosIndicadores> {
   const supabase = createClient();
-  const [rp, re, rj, rt] = await Promise.all([
-    supabase.from("fpy_paredes").select("*").limit(50000),
-    supabase.from("ocorrencias").select(COLUNAS_DASH).limit(50000),
+  const [paredes, erros, rj, rt] = await Promise.all([
+    carregarTodasAsParedes(),
+    carregarTodasAsOcorrencias(),
     supabase.from("projetos").select("nome").eq("ativo", true).order("ordem"),
     supabase.from("tipos_erro").select("id").eq("ativo", true).order("ordem"),
   ]);
-  const falha = re.error ?? rp.error ?? rj.error ?? rt.error;
+  const falha = rj.error ?? rt.error;
   if (falha) throw new Error("Erro ao carregar: " + falha.message);
 
   const projetos = [
@@ -80,8 +131,8 @@ async function carregarDadosIndicadores(): Promise<DadosIndicadores> {
     ),
   ];
   return {
-    paredes: (rp.data ?? []) as ParedeConferida[],
-    erros: (re.data ?? []) as LinhaDash[],
+    paredes,
+    erros,
     projetos,
     itensPorPainel: (rt.data ?? []).length,
     regras: await carregarRegras(),
