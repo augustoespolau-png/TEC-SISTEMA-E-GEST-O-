@@ -234,7 +234,7 @@ export async function assinarAnexosEmLote(
     if (!arquivo.bucket || !arquivo.path) continue;
     const caminhos = porBucket.get(arquivo.bucket) ?? new Set<string>();
     caminhos.add(arquivo.path);
-    porBucket.set(bucket, caminhos);
+    porBucket.set(arquivo.bucket, caminhos);
   }
 
   const resultado = new Map<string, Map<string, string>>();
