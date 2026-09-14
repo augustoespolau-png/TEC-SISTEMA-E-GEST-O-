@@ -21,124 +21,32 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Patch XLSX export
+      - name: Patch XLSX adapter
         run: |
           python - <<'PY'
           from pathlib import Path
           import re
-
-          exportar = Path('src/lib/exportar.ts')
-          text = exportar.read_text()
-          old = '''  const url = URL.createObjectURL(
-    new Blob([bytes], {
-      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    })
-  );'''
-          new = '''  const arquivo = bytes.buffer.slice(
-    bytes.byteOffset,
-    bytes.byteOffset + bytes.byteLength
-  ) as ArrayBuffer;
-  const url = URL.createObjectURL(
-    new Blob([arquivo], {
-      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    })
-  );'''
-          if old not in text:
+          path = Path('src/lib/exportar.ts')
+          text = path.read_text()
+          old_blob = '  const url = URL.createObjectURL(\n    new Blob([bytes], {\n      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",\n    })\n  );'
+          new_blob = '  const arquivo = bytes.buffer.slice(\n    bytes.byteOffset,\n    bytes.byteOffset + bytes.byteLength\n  ) as ArrayBuffer;\n  const url = URL.createObjectURL(\n    new Blob([arquivo], {\n      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",\n    })\n  );'
+          if old_blob not in text:
               raise SystemExit('Bloco Blob XLSX não encontrado')
-          exportar.write_text(text.replace(old, new, 1))
-
-          tela = Path('src/components/TelaConsultar.tsx')
-          text = tela.read_text()
-          old_import = 'import { baixar, montarCsv, nomeDoArquivo } from "@/lib/exportar";'
-          new_import = 'import { baixarExcel, nomeDoArquivoExcel } from "@/lib/exportar";'
-          if old_import not in text:
-              raise SystemExit('Import CSV antigo não encontrado')
-          text = text.replace(old_import, new_import, 1)
-
-          pattern = re.compile(
-              r'  async function exportar\(\) \{.*?\n  \}\n\n  const extras = contarFiltrosExtras\(filtros\);',
-              re.S,
-          )
-          replacement = '''  async function exportar() {
-    setExportando(true);
-    setErro("");
-    try {
-      const supabase = createClient();
-      const [erros, paredesOk] = await Promise.all([
-        statusDeErro(filtros).length
-          ? filtrar(supabase.from("ocorrencias").select("*"), filtros)
-              .order("data", { ascending: false })
-              .order("id", { ascending: false })
-              .limit(TETO_EXPORTACAO)
-          : Promise.resolve({ data: [], error: null }),
-        querParedesOk(filtros)
-          ? filtrarParedes(supabase.from("fpy_paredes").select("*"), filtros)
-              .order("data", { ascending: false })
-              .limit(TETO_EXPORTACAO)
-          : Promise.resolve({ data: [], error: null }),
-      ]);
-
-      const falha = erros.error ?? paredesOk.error;
-      if (falha) {
-        setErro("Erro ao exportar: " + falha.message);
-        return;
-      }
-
-      const linhas = juntar(
-        (erros.data ?? []) as Ocorrencia[],
-        (paredesOk.data ?? []) as ParedeConferida[],
-        filtros.ordem
-      );
-      if (!linhas.length) {
-        setErro("Nada para exportar neste filtro.");
-        return;
-      }
-
-      const partesNome = [
-        filtros.projeto,
-        filtros.casa && `casa-${filtros.casa}`,
-        filtros.status.length === 1 && rotuloDoStatus(filtros.status[0]),
-        filtros.setor,
-      ].filter(Boolean) as string[];
-
-      await baixarExcel(
-        nomeDoArquivoExcel(partesNome, hojeSaoPaulo()),
-        linhas,
-        {
-          projeto: filtros.projeto || "Todos os projetos",
-          casa: filtros.casa || null,
-          situacao:
-            filtros.status.length === 1
-              ? rotuloDoStatus(filtros.status[0])
-              : filtros.status.length > 1
-                ? "Múltiplas situações"
-                : "Todas as situações",
-          setor: filtros.setor || null,
-          total: linhas.length,
-        }
-      );
-
-      if (linhas.length === TETO_EXPORTACAO) {
-        setErro(
-          `A planilha saiu com as ${TETO_EXPORTACAO} primeiras linhas, que é o limite. Estreite o filtro para levar o resto.`
-        );
-      }
-    } catch (caught) {
-      setErro(
-        caught instanceof Error
-          ? "Erro ao gerar Excel: " + caught.message
-          : "Erro ao gerar Excel."
-      );
-    } finally {
-      setExportando(false);
-    }
-  }
-
-  const extras = contarFiltrosExtras(filtros);'''
-          text, count = pattern.subn(replacement, text, count=1)
-          if count != 1:
-              raise SystemExit(f'Função exportar: esperado 1 bloco, encontrado {count}')
-          tela.write_text(text)
+          text = text.replace(old_blob, new_blob, 1)
+          pacote = 'const PACOTE_XLSX = "__TECVERDE_XLSX__";\n\nexport function montarCsv(itens: LinhaExportada[]): string {\n  return PACOTE_XLSX + JSON.stringify(itens);\n}\n\n'
+          text, n = re.subn(r'export function montarCsv\(itens: LinhaExportada\[\]\): string \{.*?\n\}\n\n(?=export function nomeDoArquivo)', pacote, text, count=1, flags=re.S)
+          if n != 1:
+              raise SystemExit('montarCsv não encontrado')
+          old_nome = 'export function nomeDoArquivo(partes: string[], hoje: string): string {\n  return nomeDoArquivoExcel(partes, hoje).replace(/\\.xlsx$/i, ".csv");\n}'
+          new_nome = 'export function nomeDoArquivo(partes: string[], hoje: string): string {\n  return nomeDoArquivoExcel(partes, hoje);\n}'
+          if old_nome not in text:
+              raise SystemExit('nomeDoArquivo antigo não encontrado')
+          text = text.replace(old_nome, new_nome, 1)
+          baixar = 'export function baixar(nome: string, conteudo: string) {\n  if (conteudo.startsWith(PACOTE_XLSX)) {\n    const itens = JSON.parse(conteudo.slice(PACOTE_XLSX.length)) as LinhaExportada[];\n    const projetos = [...new Set(itens.map((item) => campo(item, "projeto")).filter(Boolean))];\n    const casas = [...new Set(itens.map((item) => campo(item, "casa")).filter(Boolean))];\n    const situacoes = [...new Set(itens.map((item) => item.especie === "erro" ? (ROTULO_STATUS[item.erro.status] ?? item.erro.status) : "PAREDE OK"))];\n    void baixarExcel(nome.replace(/\\.csv$/i, ".xlsx"), itens, {\n      projeto: projetos.length === 1 ? projetos[0] : "Todos os projetos",\n      casa: casas.length === 1 ? casas[0] : null,\n      situacao: situacoes.length === 1 ? situacoes[0] : "Múltiplas situações",\n      total: itens.length,\n    }).catch((erro) => console.error("Erro ao gerar Excel", erro));\n    return;\n  }\n  const url = URL.createObjectURL(new Blob([conteudo], { type: "text/csv;charset=utf-8;" }));\n  const a = document.createElement("a");\n  a.href = url;\n  a.download = nome;\n  document.body.appendChild(a);\n  a.click();\n  a.remove();\n  URL.revokeObjectURL(url);\n}\n'
+          text, n = re.subn(r'export function baixar\(nome: string, conteudo: string\) \{.*?\n\}\s*$', baixar, text, count=1, flags=re.S)
+          if n != 1:
+              raise SystemExit('baixar não encontrado')
+          path.write_text(text)
           PY
 
       - name: Clean Next.js caches
@@ -158,17 +66,17 @@ jobs:
           NEXT_PUBLIC_SUPABASE_ANON_KEY: dummy-build-key
         run: npm run build
 
-      - name: Verify XLSX implementation in bundle
+      - name: Verify XLSX implementation
         run: |
           grep -R -Fq "TECVERDE — RELATÓRIO DE OCORRÊNCIAS E HISTÓRICO DA QUALIDADE" .next
-          grep -q 'baixarExcel' src/components/TelaConsultar.tsx
+          grep -q '__TECVERDE_XLSX__' src/lib/exportar.ts
           grep -q 'exceljs' package.json
 
       - name: Commit validated XLSX sources
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/lib/exportar.ts src/components/TelaConsultar.tsx
+          git add src/lib/exportar.ts
           git diff --cached --quiet && exit 0
           git commit -m "Ativa exportação XLSX profissional na Consulta"
           git push
