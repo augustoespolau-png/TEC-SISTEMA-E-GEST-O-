@@ -1,5 +1,6 @@
 name: Finalize XLSX export
 
+# execução registrada na main
 on:
   push:
     paths:
@@ -27,7 +28,6 @@ jobs:
           from pathlib import Path
           import re
 
-          # 1) Corrige BlobPart no exportador XLSX.
           exportar = Path('src/lib/exportar.ts')
           text = exportar.read_text()
           old = '''  const url = URL.createObjectURL(
@@ -48,7 +48,6 @@ jobs:
               raise SystemExit('Bloco Blob XLSX não encontrado')
           exportar.write_text(text.replace(old, new, 1))
 
-          # 2) Conecta TelaConsultar ao exportador XLSX.
           tela = Path('src/components/TelaConsultar.tsx')
           text = tela.read_text()
           old_import = 'import { baixar, montarCsv, nomeDoArquivo } from "@/lib/exportar";'
