@@ -1,15 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { ordemNaturalCasa } from "@/lib/dashboard";
 import { META } from "@/lib/painel2";
-import { createClient } from "@/lib/supabase/client";
-import {
-  carregarRegras,
-  casaZeraOFpy,
-  fpyDaCasa,
-  regraDoProjeto,
-} from "@/lib/regras";
 import type { Auditoria } from "@/lib/auditoria";
 import type { ConfigItem } from "@/lib/types";
 
@@ -25,10 +18,6 @@ export interface ResumoDaCasa {
   naoConformidades: number;
   fpy: number | null;
   zeradaPelaRegra: boolean;
-}
-
-function chaveDaAuditoria(projeto: string, casa: string) {
-  return `${projeto.trim().toLocaleLowerCase("pt-BR")}|${casa.trim()}`;
 }
 
 export default function ListaAuditorias({
@@ -50,104 +39,6 @@ export default function ListaAuditorias({
   const [busca, setBusca] = useState("");
   const [obra, setObra] = useState(TODAS_OBRAS);
   const [todas, setTodas] = useState(false);
-  const [resumosAtuais, setResumosAtuais] = useState<
-    Record<string, ResumoDaCasa>
-  >({});
-
-  useEffect(() => {
-    let ativo = true;
-
-    async function atualizarResumos() {
-      const supabase = createClient();
-      const projetoNormalizado = projeto.trim().toLocaleLowerCase("pt-BR");
-      const auditoriasDoProjeto = auditorias.filter(
-        (a) =>
-          a.projeto.trim().toLocaleLowerCase("pt-BR") === projetoNormalizado
-      );
-
-      if (auditoriasDoProjeto.length === 0) return;
-
-      const auditoriaPorChave = new Map(
-        auditoriasDoProjeto.map((a) => [
-          chaveDaAuditoria(a.projeto, a.casa),
-          a.id,
-        ])
-      );
-      const projetoPorId = new Map(
-        auditoriasDoProjeto.map((a) => [a.id, a.projeto])
-      );
-
-      const [fp, oc, regras] = await Promise.all([
-        supabase
-          .from("fpy_paredes")
-          .select("projeto, casa, erros, passou_de_primeira")
-          .eq("projeto", projeto)
-          .limit(50000),
-        supabase
-          .from("ocorrencias")
-          .select("auditoria_id, status")
-          .not("auditoria_id", "is", null)
-          .limit(50000),
-        carregarRegras(),
-      ]);
-
-      if (!ativo || fp.error || oc.error) return;
-
-      const proximos: Record<string, ResumoDaCasa> = {};
-      for (const a of auditoriasDoProjeto) {
-        proximos[a.id] = {
-          conferidas: 0,
-          ok: 0,
-          erros: 0,
-          naoConformidades: 0,
-          fpy: null,
-          zeradaPelaRegra: false,
-        };
-      }
-
-      for (const linha of fp.data ?? []) {
-        const id = auditoriaPorChave.get(
-          chaveDaAuditoria(
-            String(linha.projeto ?? ""),
-            String(linha.casa ?? "")
-          )
-        );
-        if (!id) continue;
-        const atual = proximos[id];
-        atual.conferidas += 1;
-        if (linha.passou_de_primeira) atual.ok += 1;
-        atual.erros += Number(linha.erros ?? 0);
-      }
-
-      for (const linha of oc.data ?? []) {
-        const id = String(linha.auditoria_id ?? "");
-        const atual = proximos[id];
-        if (atual && linha.status === "NAO_CONFORMIDADE") {
-          atual.naoConformidades += 1;
-        }
-      }
-
-      for (const [id, atual] of Object.entries(proximos)) {
-        const afetadas = atual.conferidas - atual.ok;
-        const regra = regraDoProjeto(regras, projetoPorId.get(id));
-        atual.fpy = fpyDaCasa(atual.conferidas, afetadas, regra);
-        atual.zeradaPelaRegra =
-          atual.ok > 0 && casaZeraOFpy(afetadas, regra);
-      }
-
-      if (!ativo) return;
-      setResumosAtuais((anteriores) => ({ ...anteriores, ...proximos }));
-    }
-
-    void atualizarResumos();
-    window.addEventListener("focus", atualizarResumos);
-
-    return () => {
-      ativo = false;
-      window.removeEventListener("focus", atualizarResumos);
-    };
-  }, [auditorias, projeto]);
-
   const obrasDisponiveis = useMemo(() => {
     const projetoNormalizado = projeto.trim().toLocaleLowerCase("pt-BR");
     const nomes = auditorias
@@ -258,7 +149,7 @@ export default function ListaAuditorias({
           <>
             <div className="aud-casas">
               {visiveis.map((a) => {
-                const r = resumosAtuais[a.id] ?? resumos[a.id];
+                const r = resumos[a.id];
                 const fpy = r?.fpy ?? null;
                 const cor =
                   fpy === null

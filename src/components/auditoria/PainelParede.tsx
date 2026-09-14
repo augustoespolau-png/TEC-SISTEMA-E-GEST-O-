@@ -256,8 +256,9 @@ export default function PainelParede({
           salvando={salvando}
           aoCancelar={() => setAdicionando(false)}
           aoAdicionar={async (e) => {
-            await aoAdicionarErro(e, dia);
+            const envio = aoAdicionarErro(e, dia);
             setAdicionando(false);
+            await envio;
           }}
         />
       ) : adicionandoNa ? (
@@ -267,8 +268,9 @@ export default function PainelParede({
           salvando={salvando}
           aoCancelar={() => setAdicionandoNa(false)}
           aoAdicionar={async (n) => {
-            await aoAdicionarNa(n);
+            const envio = aoAdicionarNa(n);
             setAdicionandoNa(false);
+            await envio;
           }}
         />
       ) : (

@@ -120,45 +120,69 @@ interface DadosIniciaisAuditoria {
   projetoInicial: string | null;
 }
 
-async function carregarDadosIniciaisAuditoria(): Promise<DadosIniciaisAuditoria> {
+async function carregarConfigEstaticaAuditoria() {
   const supabase = createClient();
-  const [p, w, s, t, o, r] = await Promise.all([
+  const [p, w, s, t, o, regras] = await Promise.all([
     supabase.from("projetos").select("*").eq("ativo", true).order("ordem"),
     supabase.from("paredes").select("*").eq("ativo", true).order("ordem"),
     supabase.from("setores").select("*").eq("ativo", true).order("ordem"),
     supabase.from("tipos_erro").select("*").eq("ativo", true).order("ordem"),
     supabase.from("qualidade_obras").select("id, codigo, nome").order("nome"),
-    // The production database keeps the original quality data in the
-    // produto_* tables. This compatibility view groups its wall rows
-    // into the same house-level records used by this screen.
+    carregarRegras(),
+  ]);
+  const falha = p.error || w.error || s.error || t.error || o.error;
+  if (falha) {
+    throw new Error("Falha ao carregar as listas da auditoria: " + falha.message);
+  }
+
+  return {
+    cfg: {
+      projetos: p.data ?? [],
+      paredes: (w.data ?? []) as Parede[],
+      setores: s.data ?? [],
+      tipos: t.data ?? [],
+      obras: (o.data ?? []) as ObraItem[],
+    } satisfies Config,
+    regras,
+    projetoInicial: p.data?.[0]?.nome ?? null,
+  };
+}
+
+async function carregarEstadoAuditoria() {
+  const supabase = createClient();
+  const [auditorias, resumo] = await Promise.all([
     supabase
       .from("qualidade_auditorias")
       .select("id, projeto, casa, obra, created_at, observacao")
       .order("created_at", { ascending: false })
       .limit(5000),
-  ]);
-  const falha = p.error || w.error || s.error || t.error || o.error || r.error;
-  if (falha) {
-    throw new Error("Falha ao carregar os dados da auditoria: " + falha.message);
-  }
-
-  const auditoriasCarregadas = (r.data ?? []) as Auditoria[];
-
-  // O banco devolve uma linha agregada por casa. Antes esta tela baixava
-  // até 50 mil linhas de FPY + 50 mil ocorrências para somar tudo no celular.
-  const [resumo, regras] = await Promise.all([
     supabase.rpc("qualidade_resumo_auditorias"),
-    carregarRegras(),
   ]);
-  if (resumo.error) {
-    throw new Error(
-      "Falha ao calcular o resumo das casas: " + resumo.error.message
-    );
+  const falha = auditorias.error || resumo.error;
+  if (falha) {
+    throw new Error("Falha ao carregar o estado da auditoria: " + falha.message);
   }
+  return {
+    todas: (auditorias.data ?? []) as Auditoria[],
+    resumo: resumo.data ?? [],
+  };
+}
+
+async function carregarDadosIniciaisAuditoria(): Promise<DadosIniciaisAuditoria> {
+  /* Catálogos mudam raramente e sobrevivem às mutações operacionais. O
+     estado das casas continua com TTL curto e é invalidado a cada escrita. */
+  const [estatico, estado] = await Promise.all([
+    cachedClientRequest(
+      "static:auditoria:config",
+      carregarConfigEstaticaAuditoria,
+      10 * 60_000
+    ),
+    cachedClientRequest("auditoria:estado", carregarEstadoAuditoria, 15_000),
+  ]);
 
   const acc: Record<string, ResumoDaCasa> = {};
   const projetoDaCasa = new Map<string, string>();
-  for (const linha of resumo.data ?? []) {
+  for (const linha of estado.resumo) {
     const id = String(linha.auditoria_id ?? "");
     if (!id) continue;
     projetoDaCasa.set(id, String(linha.projeto ?? ""));
@@ -172,27 +196,19 @@ async function carregarDadosIniciaisAuditoria(): Promise<DadosIniciaisAuditoria>
     };
   }
 
-  /* Mesma função do painel. A regra de zeramento continua sendo aplicada
-     no cliente, mas agora sobre dezenas de resumos, não milhares de linhas. */
   for (const [id, a] of Object.entries(acc)) {
     const afetadas = a.conferidas - a.ok;
-    const regra = regraDoProjeto(regras, projetoDaCasa.get(id));
+    const regra = regraDoProjeto(estatico.regras, projetoDaCasa.get(id));
     a.fpy = fpyDaCasa(a.conferidas, afetadas, regra);
     a.zeradaPelaRegra = a.ok > 0 && casaZeraOFpy(afetadas, regra);
   }
 
   return {
-    cfg: {
-      projetos: p.data ?? [],
-      paredes: (w.data ?? []) as Parede[],
-      setores: s.data ?? [],
-      tipos: t.data ?? [],
-      obras: (o.data ?? []) as ObraItem[],
-    },
-    todas: auditoriasCarregadas,
+    cfg: estatico.cfg,
+    todas: estado.todas,
     resumos: acc,
-    regras,
-    projetoInicial: p.data?.[0]?.nome ?? null,
+    regras: estatico.regras,
+    projetoInicial: estatico.projetoInicial,
   };
 }
 
@@ -234,6 +250,7 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
   const dialogo = useRef<HTMLDialogElement>(null);
   const [abrindo, setAbrindo] = useState(false);
   const [salvando, setSalvando] = useState(false);
+  const salvandoRef = useRef(false);
   const [salvandoObra, setSalvandoObra] = useState(false);
   const [todas, setTodas] = useState<Auditoria[]>([]);
   const [resumos, setResumos] = useState<Record<string, ResumoDaCasa>>({});
@@ -247,10 +264,7 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
   /* ---------- listas de configuração ---------- */
   useEffect(() => {
     let ativo = true;
-    void cachedClientRequest(
-      "auditoria:base",
-      carregarDadosIniciaisAuditoria
-    )
+    void carregarDadosIniciaisAuditoria()
       .then(({ cfg, todas, resumos, regras, projetoInicial }) => {
         if (!ativo) return;
         setErroCarga("");
@@ -282,6 +296,47 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
       .filter((p) => p.projeto_id === proj.id)
       .map((p) => p.nome);
   }, [cfg, projeto]);
+
+  const atualizarResumoLocal = useCallback(
+    (
+      a: Auditoria,
+      datasAtuais: Record<string, string>,
+      errosAtuais: ErroDaAuditoria[]
+    ) => {
+      const local = resumoAuditoria(
+        paredesDoProjeto,
+        new Set(Object.keys(datasAtuais)),
+        errosAtuais,
+        regraDoProjeto(regras, a.projeto)
+      );
+      setResumos((anteriores) => ({
+        ...anteriores,
+        [a.id]: {
+          conferidas: local.inspecionadas,
+          ok: local.ok,
+          erros: local.erros,
+          naoConformidades: errosAtuais.filter(
+            (erro) => erro.status === "NAO_CONFORMIDADE"
+          ).length,
+          fpy: local.fpy,
+          zeradaPelaRegra: local.zeradaPelaRegra,
+        },
+      }));
+    },
+    [paredesDoProjeto, regras]
+  );
+
+  function iniciarSalvamento() {
+    if (salvandoRef.current) return false;
+    salvandoRef.current = true;
+    setSalvando(true);
+    return true;
+  }
+
+  function encerrarSalvamento() {
+    salvandoRef.current = false;
+    setSalvando(false);
+  }
 
   /* Os desenhos pertencem à posição da parede, não à casa auditada. Eles
      são lidos uma vez para as paredes visíveis e assinados só na sessão. */
@@ -525,46 +580,76 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
 
   /* ---------- ações por parede ---------- */
   async function marcarOk(parede: string, dia: string) {
-    if (!auditoria || salvando) return;
-    setSalvando(true);
-    const { error } = await mutarQualidade("MARCAR_PAREDE_OK", {
-      auditoria_id: auditoria.id,
-      parede,
-      data: dia,
-    });
-    setSalvando(false);
-    if (error && error.code !== "23505") {
-      toast.error("Não foi possível salvar: " + error.message);
-      return;
-    }
-    setDatas((d) => ({ ...d, [parede]: dia }));
-    // avança sozinho para a próxima parede não conferida
+    if (!auditoria || !iniciarSalvamento()) return;
+
+    const datasAnteriores = datas;
+    const paredeAnterior = paredeAberta;
+    const novasDatas = { ...datas, [parede]: dia };
+    setDatas(novasDatas);
+    atualizarResumoLocal(auditoria, novasDatas, erros);
+
     const proxima = paredesDoProjeto.find(
       (p) =>
         p !== parede &&
-        !(p in datas) &&
+        !(p in novasDatas) &&
         !erros.some((e) => e.parede === p)
     );
     setParedeAberta(proxima ?? null);
+
+    try {
+      const { error } = await mutarQualidade("MARCAR_PAREDE_OK", {
+        auditoria_id: auditoria.id,
+        parede,
+        data: dia,
+      });
+      if (error && error.code !== "23505") {
+        setDatas(datasAnteriores);
+        setParedeAberta(paredeAnterior ?? parede);
+        atualizarResumoLocal(auditoria, datasAnteriores, erros);
+        toast.error("Não foi possível salvar: " + error.message);
+      }
+    } catch (caught) {
+      setDatas(datasAnteriores);
+      setParedeAberta(paredeAnterior ?? parede);
+      atualizarResumoLocal(auditoria, datasAnteriores, erros);
+      toast.error(
+        "Não foi possível salvar: " +
+          (caught instanceof Error ? caught.message : "falha de conexão")
+      );
+    } finally {
+      encerrarSalvamento();
+    }
   }
 
   /* Trocar a data de uma parede já conferida. O erro registrado nela
      acompanha: para a fábrica, os dois são o mesmo acontecimento. */
   async function mudarDataDaParede(parede: string, dia: string) {
-    if (!auditoria || salvando) return;
-    setSalvando(true);
-    const { error } = await mutarQualidade("ALTERAR_DATA_PAREDE", {
-      auditoria_id: auditoria.id,
-      parede,
-      data: dia,
-    });
-    setSalvando(false);
-    if (error) {
-      toast.error("Não foi possível mudar a data: " + error.message);
-      return;
+    if (!auditoria || !iniciarSalvamento()) return;
+    const datasAnteriores = datas;
+    const novasDatas = { ...datas, [parede]: dia };
+    setDatas(novasDatas);
+
+    try {
+      const { error } = await mutarQualidade("ALTERAR_DATA_PAREDE", {
+        auditoria_id: auditoria.id,
+        parede,
+        data: dia,
+      });
+      if (error) {
+        setDatas(datasAnteriores);
+        toast.error("Não foi possível mudar a data: " + error.message);
+        return;
+      }
+      toast.success(`Parede ${parede}: data atualizada.`);
+    } catch (caught) {
+      setDatas(datasAnteriores);
+      toast.error(
+        "Não foi possível mudar a data: " +
+          (caught instanceof Error ? caught.message : "falha de conexão")
+      );
+    } finally {
+      encerrarSalvamento();
     }
-    setDatas((d) => ({ ...d, [parede]: dia }));
-    toast.success(`Parede ${parede}: data atualizada.`);
   }
 
   async function salvarFotoDoDesvio(
@@ -632,10 +717,28 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
   }
 
   async function adicionarErro(parede: string, novo: NovoErro, dia: string) {
-    if (!auditoria || salvando) return;
-    setSalvando(true);
+    if (!auditoria || !iniciarSalvamento()) return;
     const supabase = createClient();
     const { anexo, ...dadosErro } = novo;
+    const idOtimista = `optimistic-error-${crypto.randomUUID()}`;
+    const datasAnteriores = datas;
+    const errosAnteriores = erros;
+    const novasDatas = { ...datas, [parede]: dia };
+    const erroOtimista: ErroDaAuditoria = {
+      id: idOtimista,
+      parede,
+      setor: dadosErro.setor,
+      tipo_erro: dadosErro.tipo_erro,
+      ocorrencia: dadosErro.ocorrencia,
+      criticidade: dadosErro.criticidade,
+      status: "AGUARDANDO",
+      anexos: [],
+    };
+    const novosErros = [...erros, erroOtimista];
+
+    setDatas(novasDatas);
+    setErros(novosErros);
+    atualizarResumoLocal(auditoria, novasDatas, novosErros);
 
     try {
       const { data: criacao, error } = await mutarQualidade("REGISTRAR_DESVIO", {
@@ -649,7 +752,9 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
 
       const id = (criacao as { id?: string } | null)?.id;
       if (error || !id) {
-        setSalvando(false);
+        setDatas(datasAnteriores);
+        setErros(errosAnteriores);
+        atualizarResumoLocal(auditoria, datasAnteriores, errosAnteriores);
         toast.error(
           "Não foi possível salvar o erro: " +
             (error?.message ?? "a operação não retornou um identificador")
@@ -657,51 +762,67 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
         return;
       }
 
-      if (anexo) {
-        const anexoSalvo = await salvarFotoDoDesvio(supabase, parede, id, anexo);
-        if (anexoSalvo.error) {
-          await carregarConteudo(auditoria);
-          setDatas((d) => ({ ...d, [parede]: dia }));
-          setSalvando(false);
-          toast.error(
-            "O erro foi salvo, mas a foto não pôde ser vinculada: " +
-              anexoSalvo.error.message
-          );
-          return;
-        }
-      }
+      setErros((lista) =>
+        lista.map((item) =>
+          item.id === idOtimista ? { ...item, id } : item
+        )
+      );
 
-      const leitura = await supabase
-        .from("ocorrencias")
-        .select("id, parede, setor, tipo_erro, ocorrencia, criticidade, status")
-        .eq("id", id)
-        .single();
-
-      if (leitura.error || !leitura.data) {
-        await carregarConteudo(auditoria);
-        setDatas((d) => ({ ...d, [parede]: dia }));
-        setSalvando(false);
-        toast.error(
-          "O erro foi salvo, mas não pôde ser recarregado: " +
-            (leitura.error?.message ?? "registro não encontrado")
-        );
-        return;
-      }
-
-      await carregarConteudo(auditoria);
-      setDatas((d) => ({ ...d, [parede]: dia }));
-      setSalvando(false);
       toast.success(
         anexo
-          ? "Erro e foto registrados. Já aparecem na tela Consultar."
+          ? "Erro registrado. A foto está sendo enviada em segundo plano."
           : "Erro registrado. Já aparece na tela Consultar."
       );
+
+      /* Reconciliamos só o desvio criado, sem recarregar a casa inteira. */
+      void (async () => {
+        const leitura = await supabase
+          .from("ocorrencias")
+          .select("id, parede, setor, tipo_erro, ocorrencia, criticidade, status")
+          .eq("id", id)
+          .single();
+        if (!leitura.error && leitura.data) {
+          setErros((lista) =>
+            lista.map((item) =>
+              item.id === id
+                ? {
+                    ...(leitura.data as ErroDaAuditoria),
+                    anexos: item.anexos ?? [],
+                  }
+                : item
+            )
+          );
+        }
+      })();
+
+      if (anexo) {
+        void (async () => {
+          const anexoSalvo = await salvarFotoDoDesvio(
+            supabase,
+            parede,
+            id,
+            anexo
+          );
+          if (anexoSalvo.error) {
+            toast.error(
+              "O erro foi salvo, mas a foto não pôde ser vinculada: " +
+                anexoSalvo.error.message
+            );
+            return;
+          }
+          toast.success("Foto anexada ao desvio.");
+        })();
+      }
     } catch (caught) {
-      setSalvando(false);
+      setDatas(datasAnteriores);
+      setErros(errosAnteriores);
+      atualizarResumoLocal(auditoria, datasAnteriores, errosAnteriores);
       toast.error(
         "Não foi possível salvar o erro: " +
-          (caught instanceof Error ? caught.message : "erro inesperado")
+          (caught instanceof Error ? caught.message : "falha de conexão")
       );
+    } finally {
+      encerrarSalvamento();
     }
   }
 
@@ -711,12 +832,23 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
      denominador do FPY uma parede que talvez nem tenha sido olhada
      inteira. */
   async function adicionarNa(parede: string, novo: NovoNa) {
-    if (!auditoria || salvando) return;
-    setSalvando(true);
+    if (!auditoria || !iniciarSalvamento()) return;
+    const supabase = createClient();
     const itens = novo.tipos_erro.map((tipo_erro) => ({
       tipo_erro,
       observacao: novo.observacao || null,
     }));
+    const idsOtimistas = itens.map(
+      () => `optimistic-na-${crypto.randomUUID()}`
+    );
+    const nasAnteriores = nas;
+    const nasOtimistas: NaDaAuditoria[] = itens.map((item, indice) => ({
+      id: idsOtimistas[indice],
+      parede,
+      tipo_erro: item.tipo_erro,
+      observacao: item.observacao,
+    }));
+    setNas([...nas, ...nasOtimistas]);
 
     try {
       const { data, error } = await mutarQualidade("ADICIONAR_NAS", {
@@ -725,39 +857,65 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
         itens,
       });
       if (error) {
-        setSalvando(false);
+        setNas(nasAnteriores);
         toast.error("Não foi possível salvar os NAs: " + error.message);
         return;
       }
 
-      await carregarConteudo(auditoria);
-      setSalvando(false);
       const adicionados = Number(
         (data as { adicionados?: number } | null)?.adicionados ?? itens.length
       );
       toast.success(
         `${adicionados} ${adicionados === 1 ? "NA registrado" : "NAs registrados"}. Eles não contam como erro.`
       );
+
+      /* Busca somente a parede alterada para trocar IDs temporários pelos
+         IDs reais usados pelo botão Remover. */
+      void (async () => {
+        const leitura = await supabase
+          .from("qualidade_auditoria_nas")
+          .select("id, parede, tipo_erro, observacao")
+          .eq("auditoria_id", auditoria.id)
+          .eq("parede", parede)
+          .order("id");
+        if (leitura.error) return;
+        setNas((lista) => [
+          ...lista.filter((item) => item.parede !== parede),
+          ...((leitura.data ?? []) as NaDaAuditoria[]),
+        ]);
+      })();
     } catch (caught) {
-      setSalvando(false);
+      setNas(nasAnteriores);
       toast.error(
         "Não foi possível salvar os NAs: " +
-          (caught instanceof Error ? caught.message : "erro inesperado")
+          (caught instanceof Error ? caught.message : "falha de conexão")
       );
+    } finally {
+      encerrarSalvamento();
     }
   }
 
   async function removerNa(id: string) {
-    if (salvando) return;
-    setSalvando(true);
-    const { error } = await mutarQualidade("REMOVER_NA", { id });
-    setSalvando(false);
-    if (error) {
-      toast.error("Não foi possível remover o NA: " + error.message);
-      return;
-    }
+    if (!iniciarSalvamento()) return;
+    const nasAnteriores = nas;
     setNas((lista) => lista.filter((n) => n.id !== id));
-    toast.success("NA removido.");
+    try {
+      const { error } = await mutarQualidade("REMOVER_NA", { id });
+      if (error) {
+        setNas(nasAnteriores);
+        toast.error("Não foi possível remover o NA: " + error.message);
+        return;
+      }
+      toast.success("NA removido.");
+    } catch (caught) {
+      setNas(nasAnteriores);
+      toast.error(
+        "Não foi possível remover o NA: " +
+          (caught instanceof Error ? caught.message : "falha de conexão")
+      );
+    } finally {
+      encerrarSalvamento();
+    }
   }
 
   /* Exclusão da casa inteira. A conta corre no banco, numa função só,
@@ -820,44 +978,62 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
   }
 
   async function removerErro(id: string) {
-    if (!auditoria || salvando) return;
-    setSalvando(true);
+    if (!auditoria || !iniciarSalvamento()) return;
     const supabase = createClient();
-    const anexosConsulta = await supabase
-      .from("produto_anexos")
-      .select("storage_bucket, storage_path")
-      .eq("desvio_id", id)
-      .not("storage_path", "is", null);
+    const errosAnteriores = erros;
+    const proximosErros = erros.filter((e) => e.id !== id);
+    setErros(proximosErros);
+    atualizarResumoLocal(auditoria, datas, proximosErros);
 
-    if (anexosConsulta.error) {
-      setSalvando(false);
-      toast.error(
-        "Não foi possível preparar a remoção das fotos: " +
-          anexosConsulta.error.message
-      );
-      return;
-    }
+    try {
+      const anexosConsulta = await supabase
+        .from("produto_anexos")
+        .select("storage_bucket, storage_path")
+        .eq("desvio_id", id)
+        .not("storage_path", "is", null);
 
-    const { error } = await mutarQualidade("REMOVER_DESVIO", { id });
-    setSalvando(false);
-    if (error) {
+      if (anexosConsulta.error) {
+        setErros(errosAnteriores);
+        atualizarResumoLocal(auditoria, datas, errosAnteriores);
+        toast.error(
+          "Não foi possível preparar a remoção das fotos: " +
+            anexosConsulta.error.message
+        );
+        return;
+      }
+
+      const { error } = await mutarQualidade("REMOVER_DESVIO", { id });
+      if (error) {
+        setErros(errosAnteriores);
+        atualizarResumoLocal(auditoria, datas, errosAnteriores);
+        toast.error(
+          "Não foi possível remover: " +
+            error.message +
+            " (apenas a gestão pode excluir registros)"
+        );
+        return;
+      }
+
+      void removerArquivosDoStorage(
+        supabase,
+        (anexosConsulta.data ?? []) as AnexoStorageRow[]
+      ).then((falhasStorage) => {
+        toast.success(
+          falhasStorage.length
+            ? "Erro removido. Algumas fotos não puderam ser removidas do Storage."
+            : "Erro removido."
+        );
+      });
+    } catch (caught) {
+      setErros(errosAnteriores);
+      atualizarResumoLocal(auditoria, datas, errosAnteriores);
       toast.error(
         "Não foi possível remover: " +
-          error.message +
-          " (apenas a gestão pode excluir registros)"
+          (caught instanceof Error ? caught.message : "falha de conexão")
       );
-      return;
+    } finally {
+      encerrarSalvamento();
     }
-    const falhasStorage = await removerArquivosDoStorage(
-      supabase,
-      (anexosConsulta.data ?? []) as AnexoStorageRow[]
-    );
-    setErros((lista) => lista.filter((e) => e.id !== id));
-    toast.success(
-      falhasStorage.length
-        ? "Erro removido. Algumas fotos não puderam ser removidas do Storage."
-        : "Erro removido."
-    );
   }
 
   /* ---------- render ---------- */
