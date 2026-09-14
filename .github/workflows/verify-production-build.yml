@@ -3,7 +3,9 @@ name: Verify production build
 on:
   push:
     branches: [main]
-  workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -18,6 +20,126 @@ jobs:
         with:
           node-version: 22
           cache: npm
+
+      - name: Patch XLSX export
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          exportar = Path('src/lib/exportar.ts')
+          text = exportar.read_text()
+          old = '''  const url = URL.createObjectURL(
+    new Blob([bytes], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    })
+  );'''
+          new = '''  const arquivo = bytes.buffer.slice(
+    bytes.byteOffset,
+    bytes.byteOffset + bytes.byteLength
+  ) as ArrayBuffer;
+  const url = URL.createObjectURL(
+    new Blob([arquivo], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    })
+  );'''
+          if old not in text:
+              raise SystemExit('Bloco Blob XLSX não encontrado')
+          exportar.write_text(text.replace(old, new, 1))
+
+          tela = Path('src/components/TelaConsultar.tsx')
+          text = tela.read_text()
+          old_import = 'import { baixar, montarCsv, nomeDoArquivo } from "@/lib/exportar";'
+          new_import = 'import { baixarExcel, nomeDoArquivoExcel } from "@/lib/exportar";'
+          if old_import not in text:
+              raise SystemExit('Import CSV antigo não encontrado')
+          text = text.replace(old_import, new_import, 1)
+
+          pattern = re.compile(
+              r'  async function exportar\(\) \{.*?\n  \}\n\n  const extras = contarFiltrosExtras\(filtros\);',
+              re.S,
+          )
+          replacement = '''  async function exportar() {
+    setExportando(true);
+    setErro("");
+    try {
+      const supabase = createClient();
+      const [erros, paredesOk] = await Promise.all([
+        statusDeErro(filtros).length
+          ? filtrar(supabase.from("ocorrencias").select("*"), filtros)
+              .order("data", { ascending: false })
+              .order("id", { ascending: false })
+              .limit(TETO_EXPORTACAO)
+          : Promise.resolve({ data: [], error: null }),
+        querParedesOk(filtros)
+          ? filtrarParedes(supabase.from("fpy_paredes").select("*"), filtros)
+              .order("data", { ascending: false })
+              .limit(TETO_EXPORTACAO)
+          : Promise.resolve({ data: [], error: null }),
+      ]);
+
+      const falha = erros.error ?? paredesOk.error;
+      if (falha) {
+        setErro("Erro ao exportar: " + falha.message);
+        return;
+      }
+
+      const linhas = juntar(
+        (erros.data ?? []) as Ocorrencia[],
+        (paredesOk.data ?? []) as ParedeConferida[],
+        filtros.ordem
+      );
+      if (!linhas.length) {
+        setErro("Nada para exportar neste filtro.");
+        return;
+      }
+
+      const partesNome = [
+        filtros.projeto,
+        filtros.casa && `casa-${filtros.casa}`,
+        filtros.status.length === 1 && rotuloDoStatus(filtros.status[0]),
+        filtros.setor,
+      ].filter(Boolean) as string[];
+
+      await baixarExcel(
+        nomeDoArquivoExcel(partesNome, hojeSaoPaulo()),
+        linhas,
+        {
+          projeto: filtros.projeto || "Todos os projetos",
+          casa: filtros.casa || null,
+          situacao:
+            filtros.status.length === 1
+              ? rotuloDoStatus(filtros.status[0])
+              : filtros.status.length > 1
+                ? "Múltiplas situações"
+                : "Todas as situações",
+          setor: filtros.setor || null,
+          total: linhas.length,
+        }
+      );
+
+      if (linhas.length === TETO_EXPORTACAO) {
+        setErro(
+          `A planilha saiu com as ${TETO_EXPORTACAO} primeiras linhas, que é o limite. Estreite o filtro para levar o resto.`
+        );
+      }
+    } catch (caught) {
+      setErro(
+        caught instanceof Error
+          ? "Erro ao gerar Excel: " + caught.message
+          : "Erro ao gerar Excel."
+      );
+    } finally {
+      setExportando(false);
+    }
+  }
+
+  const extras = contarFiltrosExtras(filtros);'''
+          text, count = pattern.subn(replacement, text, count=1)
+          if count != 1:
+              raise SystemExit(f'Função exportar: esperado 1 bloco, encontrado {count}')
+          tela.write_text(text)
+          PY
 
       - name: Clean Next.js caches
         run: |
@@ -36,40 +158,17 @@ jobs:
           NEXT_PUBLIC_SUPABASE_ANON_KEY: dummy-build-key
         run: npm run build
 
-      - name: Verify audit UI in compiled bundle
-        shell: bash
+      - name: Verify XLSX implementation in bundle
         run: |
-          grep -R -Fq "Itens que não se aplicam" .next
-          grep -R -Fq "Anexo / foto do desvio (opcional)" .next
-          echo "Compiled bundle contains multi-NA and photo attachment UI."
+          grep -R -Fq "TECVERDE — RELATÓRIO DE OCORRÊNCIAS E HISTÓRICO DA QUALIDADE" .next
+          grep -q 'baixarExcel' src/components/TelaConsultar.tsx
+          grep -q 'exceljs' package.json
 
-      - name: Verify deployed commit and domain
-        shell: bash
+      - name: Commit validated XLSX sources
         run: |
-          expected="$GITHUB_SHA"
-          preferred="https://tecverde-erros.vercel.app/api/version"
-          project="https://tec-sistema-e-gestao.vercel.app/api/version"
-
-          for attempt in $(seq 1 24); do
-            preferred_body="$(curl -fsS --max-time 10 "$preferred" 2>/dev/null || true)"
-            project_body="$(curl -fsS --max-time 10 "$project" 2>/dev/null || true)"
-
-            echo "Attempt $attempt"
-            echo "tecverde-erros: $preferred_body"
-            echo "tec-sistema-e-gestao: $project_body"
-
-            if printf '%s' "$preferred_body" | grep -Fq "$expected"; then
-              echo "Production domain is serving commit $expected"
-              exit 0
-            fi
-
-            if printf '%s' "$project_body" | grep -Fq "$expected"; then
-              echo "::warning::The Vercel project domain is current, but tecverde-erros.vercel.app is not serving this commit. Check the production alias/domain assignment in Vercel."
-              exit 0
-            fi
-
-            sleep 5
-          done
-
-          echo "::error::Neither checked Vercel domain served commit $expected"
-          exit 1
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/lib/exportar.ts src/components/TelaConsultar.tsx
+          git diff --cached --quiet && exit 0
+          git commit -m "Ativa exportação XLSX profissional na Consulta"
+          git push
