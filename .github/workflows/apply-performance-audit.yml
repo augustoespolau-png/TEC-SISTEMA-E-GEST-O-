@@ -21,6 +21,7 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
+          from textwrap import dedent
 
           path = Path('src/components/auditoria/AuditoriaCasa.tsx')
           text = path.read_text()
@@ -29,46 +30,49 @@ jobs:
           start = text.index(start_marker)
           end = text.index(end_marker, start)
 
-          replacement = '''  const auditoriasCarregadas = (r.data ?? []) as Auditoria[];
+          replacement = dedent("""\
+            const auditoriasCarregadas = (r.data ?? []) as Auditoria[];
 
-  // O banco devolve uma linha agregada por casa. Antes esta tela baixava
-  // até 50 mil linhas de FPY + 50 mil ocorrências para somar tudo no celular.
-  const [resumo, regras] = await Promise.all([
-    supabase.rpc("qualidade_resumo_auditorias"),
-    carregarRegras(),
-  ]);
-  if (resumo.error) {
-    throw new Error(
-      "Falha ao calcular o resumo das casas: " + resumo.error.message
-    );
-  }
+            // O banco devolve uma linha agregada por casa. Antes esta tela baixava
+            // até 50 mil linhas de FPY + 50 mil ocorrências para somar tudo no celular.
+            const [resumo, regras] = await Promise.all([
+              supabase.rpc("qualidade_resumo_auditorias"),
+              carregarRegras(),
+            ]);
+            if (resumo.error) {
+              throw new Error(
+                "Falha ao calcular o resumo das casas: " + resumo.error.message
+              );
+            }
 
-  const acc: Record<string, ResumoDaCasa> = {};
-  const projetoDaCasa = new Map<string, string>();
-  for (const linha of resumo.data ?? []) {
-    const id = String(linha.auditoria_id ?? "");
-    if (!id) continue;
-    projetoDaCasa.set(id, String(linha.projeto ?? ""));
-    acc[id] = {
-      conferidas: Number(linha.conferidas ?? 0),
-      ok: Number(linha.ok ?? 0),
-      erros: Number(linha.erros ?? 0),
-      naoConformidades: Number(linha.nao_conformidades ?? 0),
-      fpy: null,
-      zeradaPelaRegra: false,
-    };
-  }
+            const acc: Record<string, ResumoDaCasa> = {};
+            const projetoDaCasa = new Map<string, string>();
+            for (const linha of resumo.data ?? []) {
+              const id = String(linha.auditoria_id ?? "");
+              if (!id) continue;
+              projetoDaCasa.set(id, String(linha.projeto ?? ""));
+              acc[id] = {
+                conferidas: Number(linha.conferidas ?? 0),
+                ok: Number(linha.ok ?? 0),
+                erros: Number(linha.erros ?? 0),
+                naoConformidades: Number(linha.nao_conformidades ?? 0),
+                fpy: null,
+                zeradaPelaRegra: false,
+              };
+            }
 
-  /* Mesma função do painel. A regra de zeramento continua sendo aplicada
-     no cliente, mas agora sobre dezenas de resumos, não milhares de linhas. */
-  for (const [id, a] of Object.entries(acc)) {
-    const afetadas = a.conferidas - a.ok;
-    const regra = regraDoProjeto(regras, projetoDaCasa.get(id));
-    a.fpy = fpyDaCasa(a.conferidas, afetadas, regra);
-    a.zeradaPelaRegra = a.ok > 0 && casaZeraOFpy(afetadas, regra);
-  }
-'''
+            /* Mesma função do painel. A regra de zeramento continua sendo aplicada
+               no cliente, mas agora sobre dezenas de resumos, não milhares de linhas. */
+            for (const [id, a] of Object.entries(acc)) {
+              const afetadas = a.conferidas - a.ok;
+              const regra = regraDoProjeto(regras, projetoDaCasa.get(id));
+              a.fpy = fpyDaCasa(a.conferidas, afetadas, regra);
+              a.zeradaPelaRegra = a.ok > 0 && casaZeraOFpy(afetadas, regra);
+            }
+          """)
 
+          # Mantém a indentação de dois espaços da função TS.
+          replacement = '\n'.join(('  ' + line if line else '') for line in replacement.splitlines()) + '\n'
           path.write_text(text[:start] + replacement + text[end:])
           PY
 
