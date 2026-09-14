@@ -16,7 +16,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - name: Clean Next.js caches
@@ -35,3 +35,20 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
           NEXT_PUBLIC_SUPABASE_ANON_KEY: dummy-build-key
         run: npm run build
+
+      - name: Verify live production commit
+        shell: bash
+        run: |
+          expected="$GITHUB_SHA"
+          url="https://tecverde-erros.vercel.app/api/version"
+          for attempt in $(seq 1 24); do
+            body="$(curl -fsS --max-time 10 "$url" 2>/dev/null || true)"
+            echo "Attempt $attempt: $body"
+            if printf '%s' "$body" | grep -Fq "$expected"; then
+              echo "Production is serving commit $expected"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::Production URL did not serve commit $expected"
+          exit 1
