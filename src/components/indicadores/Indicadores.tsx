@@ -168,6 +168,7 @@ export default function Indicadores({ role }: { role: Role }) {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- sincroniza a tela com o Supabase ao montar
     void carregar();
 
     const aoFocar = () => void carregar();
