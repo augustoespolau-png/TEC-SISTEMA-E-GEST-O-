@@ -1,5 +1,6 @@
 name: Patch Excel export
 
+# segunda execução: workflow já registrado na main
 on:
   push:
     paths:
