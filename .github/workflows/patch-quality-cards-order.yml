@@ -1,0 +1,89 @@
+name: Patch quality cards order
+
+on:
+  push:
+    paths:
+      - '.github/workflows/patch-quality-cards-order.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Reorder quality summary cards
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path('src/components/indicadores/FolhaDesvios.tsx')
+          text = path.read_text()
+          pattern = re.compile(r'''      <FaixaNumeros\n        itens=\{\[.*?        \]\}\n      />''', re.S)
+          replacement = '''      <FaixaNumeros
+        itens={[
+          {
+            rotulo: "Paredes produzidas",
+            valor: nBR(r.paredesAuditadas),
+            pe: "= paredes auditadas",
+            dica: `${nBR(r.paredesAuditadas)} paredes no período. O sistema não tem um contador de produção: ele só conhece a parede que passou pela auditoria. Como hoje a fábrica audita o que produz, o total auditado está sendo usado como o total produzido. Se algum dia sair parede sem auditoria, este número vira o MÍNIMO produzido, não o produzido.`,
+          },
+          {
+            rotulo: "Paredes afetadas",
+            valor: nBR(r.paredesAfetadas),
+            pe: `${pct(r.paredesAfetadas, r.paredesAuditadas)}% das auditadas`,
+            tom: "alta",
+            dica: `${nBR(r.paredesAfetadas)} de ${nBR(r.paredesAuditadas)} paredes auditadas tiveram pelo menos um desvio. Conta PAREDE, não desvio: uma parede com cinco desvios aparece aqui uma vez só.`,
+          },
+          {
+            rotulo: "Desvios registrados",
+            valor: nBR(r.erros),
+            pe: `${dBR(r.errosPorParedeAfetada)} por parede afetada`,
+            dica: `${nBR(r.erros)} desvios no período: ${nBR(r.critico)} críticos, ${nBR(r.medio)} médios e ${nBR(r.baixo)} baixos.`,
+          },
+          {
+            rotulo: "Sem devolutivas",
+            valor: nBR(r.naoConformidades),
+            pe: "sem devolutiva em 48 h",
+            tom: r.naoConformidades ? "alta" : undefined,
+            dica: `Desvios que passaram de 48 h sem devolutiva e seguiram para o cliente sem correção. Hoje são ${nBR(r.naoConformidades)}, ${pct(r.naoConformidades, r.erros)}% de tudo o que foi registrado.`,
+          },
+          {
+            rotulo: "Itens não aplicados",
+            valor: nBR(indiceQualidade.naoAplicaveis),
+            pe: "N/A fora da base do IQ",
+            dica: `${nBR(indiceQualidade.naoAplicaveis)} itens foram marcados como Não Aplicável (N/A) nas paredes auditadas do período. Eles são retirados da base válida antes do cálculo do Índice de Qualidade.`,
+          },
+          {
+            rotulo: "Índice de qualidade (IQ)",
+            valor:
+              indiceQualidade.percentual === null
+                ? "—"
+                : `${dBR(indiceQualidade.percentual, 1)}%`,
+            pe:
+              indiceQualidade.itensValidos > 0
+                ? `${nBR(indiceQualidade.itensConformes)} de ${nBR(indiceQualidade.itensValidos)} conformes`
+                : "sem base válida",
+            dica: `Cálculo do período: ${nBR(indiceQualidade.paineisAuditados)} paredes × ${nBR(indiceQualidade.itensPorPainel ?? itensPorPainel)} itens = ${nBR(indiceQualidade.totalBruto)} brutos; menos ${nBR(indiceQualidade.naoAplicaveis)} N/A = ${nBR(indiceQualidade.itensValidos)} válidos; menos ${nBR(indiceQualidade.desvios)} desvios = ${nBR(indiceQualidade.itensConformes)} conformes. Índice = conformes ÷ válidos × 100.`,
+          },
+        ]}
+      />'''
+
+          updated, count = pattern.subn(replacement, text, count=1)
+          if count != 1:
+              raise SystemExit(f'Expected one FaixaNumeros block, found {count}')
+          path.write_text(updated)
+          PY
+      - name: Commit patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/components/indicadores/FolhaDesvios.tsx
+          git diff --cached --quiet && exit 0
+          git commit -m "Reordena cards da Qualidade e adiciona N/A"
+          git push
