@@ -1,0 +1,28 @@
+name: Verify diagnostico branch
+
+on:
+  push:
+    branches: [feat/diagnostico-ia-interno]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint -- --max-warnings=0
+      - name: Build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: dummy-build-key
+        run: npm run build
+      - name: Verify diagnostic source
+        run: |
+          grep -Fq "Diagnóstico do Sistema" src/components/config/DiagnosticoSistemaCard.tsx
+          grep -Fq "diagnostico_sistema_health_check" src/app/api/diagnostico/route.ts
+          grep -Fq "diagnostico-sistema-15min" supabase/migrations/044_internal_ai_diagnostic_healthcheck.sql
