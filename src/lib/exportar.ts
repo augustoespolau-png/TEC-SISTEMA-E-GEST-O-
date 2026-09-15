@@ -417,12 +417,6 @@ export async function baixarExcel(
   URL.revokeObjectURL(url);
 }
 
-/* Compatibilidade temporária com qualquer chamada antiga ainda existente. */
-function celulaCsv(v: string): string {
-  const t = v.replace(/\r?\n/g, " ").trim();
-  return /[";]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
-}
-
 const PACOTE_XLSX = "__TECVERDE_XLSX__";
 
 export function montarCsv(itens: LinhaExportada[]): string {

@@ -97,10 +97,6 @@ function hojeISO() {
   return d.toISOString().slice(0, 10);
 }
 
-function chaveDaAuditoria(projeto: string, casa: string) {
-  return `${projeto.trim().toLocaleLowerCase("pt-BR")}|${casa.trim()}`;
-}
-
 function obraPadrao(projeto: string, casa: string) {
   const p = projeto.trim().toLocaleUpperCase("pt-BR");
   const numero = Number(casa.trim().match(/^\d+/)?.[0] ?? NaN);
