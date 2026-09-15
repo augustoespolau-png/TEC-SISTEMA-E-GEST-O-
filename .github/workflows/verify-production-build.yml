@@ -30,6 +30,22 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Verify instant audit flows in source
+        shell: bash
+        run: |
+          grep -Fq "Sincronizando em segundo plano" src/components/auditoria/AuditoriaCasa.tsx
+          grep -Fq "Foto enviando…" src/components/auditoria/PainelParede.tsx
+          grep -Fq "submetendoRef" src/components/auditoria/FormularioErro.tsx
+          grep -Fq "submetendoRef" src/components/auditoria/FormularioNa.tsx
+          if grep -Fq "Salvando…" src/components/auditoria/FormularioErro.tsx; then
+            echo "::error::FormularioErro voltou a bloquear o inspetor com Salvando…"
+            exit 1
+          fi
+          if grep -Fq "Salvando…" src/components/auditoria/FormularioNa.tsx; then
+            echo "::error::FormularioNa voltou a bloquear o inspetor com Salvando…"
+            exit 1
+          fi
+
       - name: Build
         env:
           NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
@@ -41,8 +57,9 @@ jobs:
         run: |
           grep -R -Fq "Itens que não se aplicam" .next
           grep -R -Fq "Anexo / foto do desvio (opcional)" .next
+          grep -R -Fq "Foto enviando…" .next
           grep -R -Fq "TECVERDE — RELATÓRIO DE OCORRÊNCIAS E HISTÓRICO DA QUALIDADE" .next
-          echo "Compiled bundle contains audit UI and professional XLSX export."
+          echo "Compiled bundle contains audit UI, background photo status and professional XLSX export."
 
       - name: Verify deployed commit and domain
         shell: bash
