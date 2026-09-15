@@ -32,7 +32,9 @@ jobs:
           NEXT_PUBLIC_SUPABASE_ANON_KEY: dummy-build-key
         run: npm run build
       - name: Verify business rule
-        run: grep -Fq '!gestao && status === "RETRABALHO" ? "RETRABALHO_PENDENTE" : status' src/components/OcorrenciaCard.tsx
+        shell: bash
+        run: |
+          grep -Fq '!gestao && status === "RETRABALHO" ? "RETRABALHO_PENDENTE" : status' src/components/OcorrenciaCard.tsx
       - name: Commit validated source
         shell: bash
         run: |
