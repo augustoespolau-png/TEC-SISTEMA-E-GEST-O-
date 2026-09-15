@@ -698,6 +698,7 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
       return {
         error: new Error("Sua sessão expirou. Entre novamente para anexar a foto."),
         caminho: null,
+        url: null,
         anexo: null,
       };
     }
@@ -724,9 +725,13 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
         extensao: "jpg",
         arquivo: arquivoOtimizado,
       });
+      const assinatura = await supabase.storage
+        .from(BUCKET_AUDITORIA)
+        .createSignedUrl(caminho, 60 * 60);
       return {
         error: null,
         caminho,
+        url: assinatura.data?.signedUrl ?? null,
         anexo: {
           id: anexoId,
           name: arquivoOtimizado.name,
@@ -743,6 +748,7 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
             ? caught
             : new Error("Não foi possível enviar a foto."),
         caminho: null,
+        url: null,
         anexo: null,
       };
     }
@@ -769,10 +775,7 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
       },
     });
 
-    if (error) {
-      await supabase.storage.from(BUCKET_AUDITORIA).remove([preparada.caminho]);
-      return { error };
-    }
+    if (error) return { error };
     return { error: null };
   }
 
@@ -916,11 +919,19 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
           return;
         }
 
-        /* O arquivo já chegou ao Storage: libera o feedback visual agora.
-           O vínculo final usa um RPC específico e continua em background. */
-        marcarFoto(undefined);
+        const anexoPreparado = preparada.anexo;
+        const caminhoPreparado = preparada.caminho;
+        if (!anexoPreparado || !caminhoPreparado) {
+          marcarFoto("ERRO");
+          toast.error("O erro foi salvo, mas a foto não ficou pronta para vincular.");
+          return;
+        }
+
+        /* Mantém “Foto enviando…” até o banco confirmar o vínculo. Se a rede
+           oscilar, uma segunda tentativa curta evita transformar um upload
+           válido em foto órfã. */
         void (async () => {
-          const vinculo = await vincularFotoAoDesvio(
+          let vinculo = await vincularFotoAoDesvio(
             supabase,
             auditoriaAtual,
             parede,
@@ -928,12 +939,56 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
             preparada
           );
           if (vinculo.error) {
+            await new Promise((resolve) => window.setTimeout(resolve, 450));
+            vinculo = await vincularFotoAoDesvio(
+              supabase,
+              auditoriaAtual,
+              parede,
+              id,
+              preparada
+            );
+          }
+
+          if (vinculo.error) {
             marcarFoto("ERRO");
+            await supabase.storage
+              .from(BUCKET_AUDITORIA)
+              .remove([caminhoPreparado]);
             toast.error(
               "O erro foi salvo, mas a foto não foi vinculada: " +
                 vinculo.error.message
             );
             return;
+          }
+
+          if (auditoriaIdRef.current === auditoriaId) {
+            const anexoLocal: AnexoDaAuditoria = {
+              id: anexoPreparado.id,
+              nome_arquivo: anexoPreparado.name,
+              mime_type: anexoPreparado.type,
+              tamanho_bytes: anexoPreparado.size,
+              storage_bucket: BUCKET_AUDITORIA,
+              storage_path: caminhoPreparado,
+              url: preparada.url,
+            };
+            const atualizados = errosRef.current.map((item) =>
+              item.id === id || item.id === idOtimista
+                ? {
+                    ...item,
+                    fotoStatus: undefined,
+                    anexos: [
+                      ...(item.anexos ?? []).filter(
+                        (existente) => existente.id !== anexoLocal.id
+                      ),
+                      anexoLocal,
+                    ],
+                  }
+                : item
+            );
+            errosRef.current = atualizados;
+            setErros(atualizados);
+          } else {
+            marcarFoto(undefined);
           }
           toast.success("Foto anexada ao desvio.");
         })();

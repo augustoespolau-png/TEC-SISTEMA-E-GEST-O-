@@ -194,6 +194,11 @@ export default function PainelParede({
                           src={anexo.url}
                           alt={`Foto anexada ao desvio ${e.tipo_erro}`}
                         />
+                        <span className="anexo-miniatura-info">
+                          <b>Foto do desvio</b>
+                          <small>{anexo.nome_arquivo ?? "Imagem anexada"}</small>
+                          <span>Abrir imagem ↗</span>
+                        </span>
                       </a>
                     ) : (
                       <span key={anexo.id} className="anexo-indisponivel">
