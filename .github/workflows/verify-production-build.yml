@@ -37,6 +37,9 @@ jobs:
           grep -Fq "Foto enviando…" src/components/auditoria/PainelParede.tsx
           grep -Fq "submetendoRef" src/components/auditoria/FormularioErro.tsx
           grep -Fq "submetendoRef" src/components/auditoria/FormularioNa.tsx
+          grep -Fq "Diagnóstico do Sistema" src/components/config/DiagnosticoSistemaCard.tsx
+          grep -Fq "diagnostico_sistema_health_check" src/app/api/diagnostico/route.ts
+          grep -Fq "diagnostico-sistema-15min" supabase/migrations/044_internal_ai_diagnostic_healthcheck.sql
           if grep -Fq "Salvando…" src/components/auditoria/FormularioErro.tsx; then
             echo "::error::FormularioErro voltou a bloquear o inspetor com Salvando…"
             exit 1
@@ -58,8 +61,10 @@ jobs:
           grep -R -Fq "Itens que não se aplicam" .next
           grep -R -Fq "Anexo / foto do desvio (opcional)" .next
           grep -R -Fq "Foto enviando…" .next
+          grep -R -Fq "Diagnóstico do Sistema" .next
+          grep -R -Fq "Assistente de Correção" .next
           grep -R -Fq "TECVERDE — RELATÓRIO DE OCORRÊNCIAS E HISTÓRICO DA QUALIDADE" .next
-          echo "Compiled bundle contains audit UI, background photo status and professional XLSX export."
+          echo "Compiled bundle contains audit UI, diagnostic status, safe correction assistant and professional XLSX export."
 
       - name: Verify deployed commit and domain
         shell: bash
