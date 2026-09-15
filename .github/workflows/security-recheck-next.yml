@@ -23,10 +23,11 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Upgrade patched Next.js line
+      - name: Upgrade patched Next.js and safe transitive fixes
         run: |
           npm install --save-exact next@16.3.3
           npm install --save-dev --save-exact eslint-config-next@16.3.3
+          npm audit fix
 
       - name: Clean install from updated lockfile
         run: |
@@ -66,5 +67,5 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git rm .github/workflows/security-recheck-next.yml
           git add package.json package-lock.json
-          git commit -m "Atualiza Next.js para correção crítica de segurança"
+          git commit -m "Atualiza Next.js e dependências de segurança"
           git push
