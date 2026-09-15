@@ -1030,44 +1030,29 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
   async function removerErro(id: string) {
     if (!auditoria || !iniciarSalvamento()) return;
     const supabase = createClient();
-    const errosAnteriores = erros;
-    const proximosErros = erros.filter((e) => e.id !== id);
+    const errosAnteriores = errosRef.current;
+    const erroAlvo = errosAnteriores.find((e) => e.id === id);
+    const proximosErros = errosAnteriores.filter((e) => e.id !== id);
+    const anexosDoErro: AnexoStorageRow[] = (erroAlvo?.anexos ?? []).map((anexo) => ({
+      storage_bucket: anexo.storage_bucket || BUCKET_AUDITORIA,
+      storage_path: anexo.storage_path,
+    }));
+
+    errosRef.current = proximosErros;
     setErros(proximosErros);
-    atualizarResumoLocal(auditoria, datas, proximosErros);
+    atualizarResumoLocal(auditoria, datasRef.current, proximosErros);
 
     try {
-      const anexosConsulta = await supabase
-        .from("produto_anexos")
-        .select("storage_bucket, storage_path")
-        .eq("desvio_id", id)
-        .not("storage_path", "is", null);
-
-      if (anexosConsulta.error) {
-        setErros(errosAnteriores);
-        atualizarResumoLocal(auditoria, datas, errosAnteriores);
-        toast.error(
-          "Não foi possível preparar a remoção das fotos: " +
-            anexosConsulta.error.message
-        );
-        return;
-      }
-
       const { error } = await mutarQualidade("REMOVER_DESVIO", { id });
       if (error) {
+        errosRef.current = errosAnteriores;
         setErros(errosAnteriores);
-        atualizarResumoLocal(auditoria, datas, errosAnteriores);
-        toast.error(
-          "Não foi possível remover: " +
-            error.message +
-            " (apenas a gestão pode excluir registros)"
-        );
+        atualizarResumoLocal(auditoria, datasRef.current, errosAnteriores);
+        toast.error("Não foi possível remover: " + error.message);
         return;
       }
 
-      void removerArquivosDoStorage(
-        supabase,
-        (anexosConsulta.data ?? []) as AnexoStorageRow[]
-      ).then((falhasStorage) => {
+      void removerArquivosDoStorage(supabase, anexosDoErro).then((falhasStorage) => {
         toast.success(
           falhasStorage.length
             ? "Erro removido. Algumas fotos não puderam ser removidas do Storage."
@@ -1075,10 +1060,104 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
         );
       });
     } catch (caught) {
+      errosRef.current = errosAnteriores;
       setErros(errosAnteriores);
-      atualizarResumoLocal(auditoria, datas, errosAnteriores);
+      atualizarResumoLocal(auditoria, datasRef.current, errosAnteriores);
       toast.error(
         "Não foi possível remover: " +
+          (caught instanceof Error ? caught.message : "falha de conexão")
+      );
+    } finally {
+      encerrarSalvamento();
+    }
+  }
+
+  async function zerarInspecaoParede(parede: string) {
+    if (!auditoria) return;
+
+    const errosDaParede = errosRef.current.filter((e) => e.parede === parede);
+    const nasDaParede = nasRef.current.filter((n) => n.parede === parede);
+    const tinhaData = Boolean(datasRef.current[parede]);
+    if (!tinhaData && errosDaParede.length === 0 && nasDaParede.length === 0) {
+      toast.info(`Parede ${parede} já está sem inspeção.`);
+      return;
+    }
+
+    const detalhe = [
+      tinhaData ? "a data da inspeção" : null,
+      errosDaParede.length ? `${errosDaParede.length} ${errosDaParede.length === 1 ? "erro" : "erros"}` : null,
+      nasDaParede.length ? `${nasDaParede.length} ${nasDaParede.length === 1 ? "NA" : "NAs"}` : null,
+      errosDaParede.some((e) => (e.anexos?.length ?? 0) > 0) ? "as fotos vinculadas" : null,
+    ].filter(Boolean).join(", ");
+
+    const confirmou = window.confirm(
+      `Zerar a inspeção da parede ${parede}?
+
+Isso remove ${detalhe || "todos os registros"} e a parede volta para “ainda não conferida”.`
+    );
+    if (!confirmou || !iniciarSalvamento()) return;
+
+    const auditoriaAtual = auditoria;
+    const datasAnteriores = datasRef.current;
+    const errosAnteriores = errosRef.current;
+    const nasAnteriores = nasRef.current;
+
+    const novasDatas = { ...datasAnteriores };
+    delete novasDatas[parede];
+    const novosErros = errosAnteriores.filter((e) => e.parede !== parede);
+    const novosNas = nasAnteriores.filter((n) => n.parede !== parede);
+
+    datasRef.current = novasDatas;
+    errosRef.current = novosErros;
+    nasRef.current = novosNas;
+    setDatas(novasDatas);
+    setErros(novosErros);
+    setNas(novosNas);
+    atualizarResumoLocal(auditoriaAtual, novasDatas, novosErros);
+
+    const rollback = (mensagem: string) => {
+      datasRef.current = datasAnteriores;
+      errosRef.current = errosAnteriores;
+      nasRef.current = nasAnteriores;
+      setDatas(datasAnteriores);
+      setErros(errosAnteriores);
+      setNas(nasAnteriores);
+      atualizarResumoLocal(auditoriaAtual, datasAnteriores, errosAnteriores);
+      toast.error(mensagem);
+    };
+
+    try {
+      const { data, error } = await mutarQualidade("ZERAR_INSPECAO_PAREDE", {
+        auditoria_id: auditoriaAtual.id,
+        parede,
+      });
+      if (error) {
+        rollback("Não foi possível zerar a inspeção: " + error.message);
+        return;
+      }
+
+      const retorno = data as { arquivos_removidos?: unknown } | null;
+      const caminhos = Array.isArray(retorno?.arquivos_removidos)
+        ? retorno.arquivos_removidos.filter((item): item is string => typeof item === "string" && item.length > 0)
+        : [];
+
+      toast.success(`Parede ${parede} zerada. Ela voltou para “ainda não conferida”.`);
+      if (caminhos.length > 0) {
+        void removerArquivosDoStorage(
+          createClient(),
+          caminhos.map((storage_path) => ({
+            storage_bucket: BUCKET_AUDITORIA,
+            storage_path,
+          }))
+        ).then((falhasStorage) => {
+          if (falhasStorage.length) {
+            toast.error("A inspeção foi zerada, mas alguns arquivos não puderam ser removidos do Storage.");
+          }
+        });
+      }
+    } catch (caught) {
+      rollback(
+        "Não foi possível zerar a inspeção: " +
           (caught instanceof Error ? caught.message : "falha de conexão")
       );
     } finally {
@@ -1361,6 +1440,7 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
                 aoAdicionarNa={(n) => adicionarNa(paredeAberta, n)}
                 aoRemoverNa={removerNa}
                 aoMudarData={(dia) => mudarDataDaParede(paredeAberta, dia)}
+                aoZerarInspecao={() => zerarInspecaoParede(paredeAberta)}
               />
             )}
 

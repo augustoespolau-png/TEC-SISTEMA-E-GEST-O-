@@ -25,6 +25,7 @@ export default function PainelParede({
   aoAdicionarNa,
   aoRemoverNa,
   aoMudarData,
+  aoZerarInspecao,
   projetoAnexo,
   salvando,
 }: {
@@ -50,6 +51,8 @@ export default function PainelParede({
   aoRemoverNa: (id: string) => void;
   /** só é chamado quando a parede JÁ está conferida */
   aoMudarData: (dia: string) => void;
+  /** volta a parede ao estado ainda não conferida e remove os registros da inspeção */
+  aoZerarInspecao: () => void;
   /** desenho técnico da posição, com URL assinada da sessão atual */
   projetoAnexo?: AnexoProjetoParede | null;
   salvando: boolean;
@@ -309,6 +312,39 @@ export default function PainelParede({
             </button>
           )}
         </div>
+      )}
+
+      {!somenteLeitura && (inspecionada || erros.length > 0 || nas.length > 0) && (
+        <button
+          type="button"
+          onClick={aoZerarInspecao}
+          disabled={salvando}
+          className="flex w-full items-center gap-3 rounded-lg border p-3 text-left transition"
+          style={{
+            borderColor: "color-mix(in srgb, var(--color-alta) 38%, var(--color-line))",
+            background: "color-mix(in srgb, var(--color-alta) 5%, var(--color-papel))",
+          }}
+          title="Apagar a inspeção desta parede e voltar para ainda não conferida"
+        >
+          <span
+            aria-hidden="true"
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-[17px]"
+            style={{
+              color: "var(--color-alta)",
+              background: "color-mix(in srgb, var(--color-alta) 10%, transparent)",
+            }}
+          >
+            ↺
+          </span>
+          <span className="min-w-0">
+            <b className="block text-[12.5px]" style={{ color: "var(--color-alta)" }}>
+              Zerar inspeção
+            </b>
+            <small className="block text-[11px] leading-snug text-ink-3">
+              Remove data, erros, N/A e fotos desta parede. Ela volta para “ainda não conferida”.
+            </small>
+          </span>
+        </button>
       )}
 
       {semErros && !inspecionada && !somenteLeitura && (
