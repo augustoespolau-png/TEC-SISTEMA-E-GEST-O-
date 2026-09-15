@@ -1,0 +1,63 @@
+name: Apply instant rework save
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/apply-retrabalho-instant.yml
+      - .github/scripts/apply_retrabalho_instant.py
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Apply instant rework patch
+        run: python .github/scripts/apply_retrabalho_instant.py
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint -- --max-warnings=0
+
+      - name: Build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: dummy-build-key
+        run: npm run build
+
+      - name: Verify instant behavior
+        shell: bash
+        run: |
+          grep -Fq '"ATUALIZAR_DESVIO",' src/lib/qualidadeCompat.ts
+          grep -Fq 'onSalvo(otimista);' src/components/OcorrenciaCard.tsx
+          grep -Fq '◌ Foto enviando…' src/components/OcorrenciaCard.tsx
+          grep -Fq 'const otimizada = await otimizarFoto(fotoOriginal);' src/components/OcorrenciaCard.tsx
+          if grep -Fq 'Salvando…' src/components/OcorrenciaCard.tsx; then
+            echo 'Fluxo ainda bloqueia em Salvando…'
+            exit 1
+          fi
+          echo 'Retrabalho instantâneo verificado.'
+
+      - name: Commit validated source
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/components/OcorrenciaCard.tsx src/lib/qualidadeCompat.ts
+          if git diff --cached --quiet; then
+            echo 'No source changes to commit.'
+            exit 0
+          fi
+          git commit -m 'Torna salvamento de retrabalho instantâneo'
+          git push origin HEAD:main
