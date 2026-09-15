@@ -100,6 +100,7 @@ export default function DiagnosticoSistemaCard() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- carga inicial assíncrona; estado muda após a resposta HTTP
     void carregar(false);
     const timer = window.setInterval(() => void carregar(false, true), 60_000);
     return () => window.clearInterval(timer);
