@@ -42,11 +42,11 @@ export default function PainelParede({
   tipos: ConfigItem[];
   setores: ConfigItem[];
   aoMarcarOk: (dia: string) => void;
-  aoAdicionarErro: (e: NovoErro, dia: string) => Promise<void>;
+  aoAdicionarErro: (e: NovoErro, dia: string) => void;
   aoRemoverErro: (id: string) => void;
   /* sem dia: o NA não é acontecimento de um dia, é característica da
      parede — ela não leva aquele item, e isso não muda de data para data */
-  aoAdicionarNa: (n: NovoNa) => Promise<void>;
+  aoAdicionarNa: (n: NovoNa) => void;
   aoRemoverNa: (id: string) => void;
   /** só é chamado quando a parede JÁ está conferida */
   aoMudarData: (dia: string) => void;
@@ -162,6 +162,12 @@ export default function PainelParede({
                 <b className="text-[13px]">{e.tipo_erro}</b>
                 <SeloCriticidade criticidade={e.criticidade} />
                 <SeloStatus status={e.status} />
+                {e.fotoStatus === "ENVIANDO" && (
+                  <span className="chip" title="Foto sendo compactada/enviada em segundo plano">◌ Foto enviando…</span>
+                )}
+                {e.fotoStatus === "ERRO" && (
+                  <span className="chip" style={{ color: "var(--color-alta)" }} title="O desvio foi salvo, mas a foto não sincronizou">⚠ Foto pendente</span>
+                )}
                 <span className="ml-auto text-[11px] text-ink-3">
                   {e.setor}
                 </span>
@@ -255,10 +261,9 @@ export default function PainelParede({
           setores={setores}
           salvando={salvando}
           aoCancelar={() => setAdicionando(false)}
-          aoAdicionar={async (e) => {
-            const envio = aoAdicionarErro(e, dia);
+          aoAdicionar={(e) => {
             setAdicionando(false);
-            await envio;
+            aoAdicionarErro(e, dia);
           }}
         />
       ) : adicionandoNa ? (
@@ -267,10 +272,9 @@ export default function PainelParede({
           tiposJaAdicionados={nas.map((n) => n.tipo_erro)}
           salvando={salvando}
           aoCancelar={() => setAdicionandoNa(false)}
-          aoAdicionar={async (n) => {
-            const envio = aoAdicionarNa(n);
+          aoAdicionar={(n) => {
             setAdicionandoNa(false);
-            await envio;
+            aoAdicionarNa(n);
           }}
         />
       ) : (

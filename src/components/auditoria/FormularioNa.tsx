@@ -49,6 +49,7 @@ export default function FormularioNa({
   const [menuAberto, setMenuAberto] = useState(false);
   const [menuParaCima, setMenuParaCima] = useState(false);
   const seletorRef = useRef<HTMLDivElement>(null);
+  const submetendoRef = useRef(false);
 
   const existentes = new Set(tiposJaAdicionados);
   const ehOutro = selecionados.includes(VALOR_OUTRO);
@@ -122,6 +123,12 @@ export default function FormularioNa({
       setMenuParaCima(menuDeveAbrirParaCima(seletorRef.current));
     }
     setMenuAberto((aberto) => !aberto);
+  }
+
+  function enviar() {
+    if (tiposFinais.length === 0 || salvando || submetendoRef.current) return;
+    submetendoRef.current = true;
+    aoAdicionar({ tipos_erro: tiposFinais, observacao: texto.trim() });
   }
 
   return (
@@ -269,15 +276,13 @@ export default function FormularioNa({
           Cancelar
         </button>
         <button
-          onClick={() => aoAdicionar({ tipos_erro: tiposFinais, observacao: texto.trim() })}
+          onClick={enviar}
           disabled={tiposFinais.length === 0 || salvando}
           className="btn btn-forte flex-1"
         >
-          {salvando
-            ? "Salvando…"
-            : tiposFinais.length > 0
-              ? `Adicionar ${tiposFinais.length} ${tiposFinais.length === 1 ? "NA" : "NAs"}`
-              : "Adicionar NAs"}
+          {tiposFinais.length > 0
+            ? `Adicionar ${tiposFinais.length} ${tiposFinais.length === 1 ? "NA" : "NAs"}`
+            : "Adicionar NAs"}
         </button>
       </div>
     </div>

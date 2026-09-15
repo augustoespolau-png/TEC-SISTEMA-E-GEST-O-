@@ -3,13 +3,6 @@
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import { MAX_FOTO_BYTES, otimizarFoto, tamanhoLegivel } from "@/lib/anexos";
 
-/**
- * Seletor único de foto usado pelos formulários da Auditoria de Produto.
- *
- * O input não recebe `capture`: assim o próprio celular oferece câmera,
- * galeria e arquivos no mesmo fluxo nativo. O formulário só recebe o arquivo
- * depois da compressão, nunca o original.
- */
 export default function SeletorFoto({
   id,
   titulo,
@@ -31,6 +24,7 @@ export default function SeletorFoto({
   const [erro, setErro] = useState("");
   const input = useRef<HTMLInputElement>(null);
   const selecao = useRef(0);
+  const processarAntesDeEntregar = Boolean(onProcessando);
 
   useEffect(() => {
     return () => {
@@ -50,11 +44,10 @@ export default function SeletorFoto({
 
     const idSelecao = ++selecao.current;
     setErro("");
-    onArquivoPronto(null);
-
     if (!escolhido.type.startsWith("image/")) {
       setArquivo(null);
       setPreview(null);
+      onArquivoPronto(null);
       atualizarProcessamento(false);
       setErro("Escolha uma imagem para anexar.");
       return;
@@ -62,6 +55,7 @@ export default function SeletorFoto({
     if (escolhido.size > MAX_FOTO_BYTES) {
       setArquivo(null);
       setPreview(null);
+      onArquivoPronto(null);
       atualizarProcessamento(false);
       setErro("A foto precisa ter no máximo 20 MB.");
       return;
@@ -69,22 +63,28 @@ export default function SeletorFoto({
 
     setArquivo(escolhido);
     setPreview(URL.createObjectURL(escolhido));
-    atualizarProcessamento(true);
 
+    if (!processarAntesDeEntregar) {
+      onArquivoPronto(escolhido);
+      return;
+    }
+
+    onArquivoPronto(null);
+    atualizarProcessamento(true);
     try {
       const otimizada = await otimizarFoto(escolhido);
       if (idSelecao !== selecao.current) return;
       setArquivo(otimizada);
       setPreview(URL.createObjectURL(otimizada));
       onArquivoPronto(otimizada);
-    } catch (error) {
+    } catch (caught) {
       if (idSelecao !== selecao.current) return;
       setArquivo(null);
       setPreview(null);
       onArquivoPronto(null);
       setErro(
-        error instanceof Error
-          ? error.message
+        caught instanceof Error
+          ? caught.message
           : "Não foi possível otimizar a foto. Escolha outra imagem."
       );
     } finally {
@@ -103,9 +103,7 @@ export default function SeletorFoto({
 
   return (
     <div>
-      <label className="rotulo" htmlFor={id}>
-        {titulo}
-      </label>
+      <label className="rotulo" htmlFor={id}>{titulo}</label>
       <div className="anexo-captura">
         <input
           ref={input}
@@ -120,53 +118,30 @@ export default function SeletorFoto({
           {preview ? (
             <div className="anexo-preview">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={preview}
-                alt={`Pré-visualização: ${titulo}`}
-                className="anexo-imagem"
-              />
+              <img src={preview} alt={`Pré-visualização: ${titulo}`} className="anexo-imagem" />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-[12.5px] text-ink">
-                  {arquivo?.name ?? "Foto selecionada"}
-                </p>
+                <p className="truncate text-[12.5px] text-ink">{arquivo?.name ?? "Foto selecionada"}</p>
                 <p className="sub">
                   {arquivo ? tamanhoLegivel(arquivo.size) : ""}
                   {processando
                     ? " · preparando foto…"
-                    : " · pronta para salvar"}
+                    : processarAntesDeEntregar
+                      ? " · pronta para salvar"
+                      : " · será compactada e enviada em segundo plano"}
                 </p>
                 <div className="mt-2 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => input.current?.click()}
-                    className="btn"
-                    disabled={salvando || processando}
-                    style={{ fontSize: 11, padding: "5px 9px" }}
-                  >
+                  <button type="button" onClick={() => input.current?.click()} className="btn" disabled={salvando || processando} style={{ fontSize: 11, padding: "5px 9px" }}>
                     Trocar foto
                   </button>
-                  <button
-                    type="button"
-                    onClick={remover}
-                    className="btn"
-                    disabled={salvando || processando}
-                    style={{ fontSize: 11, padding: "5px 9px" }}
-                  >
+                  <button type="button" onClick={remover} className="btn" disabled={salvando || processando} style={{ fontSize: 11, padding: "5px 9px" }}>
                     Remover
                   </button>
                 </div>
               </div>
             </div>
           ) : (
-            <button
-              type="button"
-              className="anexo-escolher"
-              onClick={() => input.current?.click()}
-              disabled={salvando}
-            >
-              <span className="anexo-icone" aria-hidden="true">
-                ▣
-              </span>
+            <button type="button" className="anexo-escolher" onClick={() => input.current?.click()} disabled={salvando}>
+              <span className="anexo-icone" aria-hidden="true">▣</span>
               <span>
                 <b>Tirar foto ou escolher imagem</b>
                 <small>Use a câmera do celular/tablet ou a galeria</small>
@@ -175,15 +150,7 @@ export default function SeletorFoto({
           )}
         </div>
       </div>
-      {erro && (
-        <p
-          className="sub"
-          style={{ color: "var(--color-alta)" }}
-          role="alert"
-        >
-          {erro}
-        </p>
-      )}
+      {erro && <p className="sub" style={{ color: "var(--color-alta)" }} role="alert">{erro}</p>}
       <p className="sub">{descricao}</p>
     </div>
   );

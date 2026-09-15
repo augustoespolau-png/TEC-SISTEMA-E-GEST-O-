@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { ConfigItem, Criticidade } from "@/lib/types";
 import SeletorFoto from "@/components/auditoria/SeletorFoto";
 
@@ -40,11 +40,23 @@ export default function FormularioErro({
   const [criticidade, setCriticidade] = useState<Criticidade | "">("");
   const [texto, setTexto] = useState("");
   const [arquivo, setArquivo] = useState<File | null>(null);
-  const [processandoFoto, setProcessandoFoto] = useState(false);
+  const submetendoRef = useRef(false);
 
   const ehOutro = tipo === "OUTRO";
   const tipoFinal = ehOutro ? tipoOutro.trim().toUpperCase() : tipo;
   const pronto = Boolean(tipoFinal && setor && criticidade && texto.trim());
+
+  function enviar() {
+    if (!pronto || salvando || submetendoRef.current) return;
+    submetendoRef.current = true;
+    aoAdicionar({
+      tipo_erro: tipoFinal,
+      setor,
+      criticidade: criticidade as Criticidade,
+      ocorrencia: texto.trim(),
+      anexo: arquivo,
+    });
+  }
 
   return (
     <div
@@ -140,7 +152,6 @@ export default function FormularioErro({
         descricao="A imagem será compactada para agilizar o envio e ficará vinculada a este desvio e à parede atual."
         salvando={salvando}
         onArquivoPronto={setArquivo}
-        onProcessando={setProcessandoFoto}
       />
 
       <div className="flex gap-2">
@@ -148,19 +159,11 @@ export default function FormularioErro({
           Cancelar
         </button>
         <button
-          onClick={() =>
-            aoAdicionar({
-              tipo_erro: tipoFinal,
-              setor,
-              criticidade: criticidade as Criticidade,
-              ocorrencia: texto.trim(),
-              anexo: arquivo,
-            })
-          }
-          disabled={!pronto || salvando || processandoFoto}
+          onClick={enviar}
+          disabled={!pronto || salvando}
           className="btn btn-forte flex-1"
         >
-          {salvando ? "Salvando…" : "Adicionar erro"}
+          Adicionar erro
         </button>
       </div>
     </div>

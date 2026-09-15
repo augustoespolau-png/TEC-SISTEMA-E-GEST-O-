@@ -43,6 +43,8 @@ export interface ErroDaAuditoria {
   criticidade: Criticidade;
   status: Status;
   anexos?: AnexoDaAuditoria[];
+  /** Estado efêmero da foto no cliente; não é persistido nem entra no FPY. */
+  fotoStatus?: "ENVIANDO" | "ERRO";
 }
 
 export type AnexoDaAuditoria = AnexoOcorrencia;

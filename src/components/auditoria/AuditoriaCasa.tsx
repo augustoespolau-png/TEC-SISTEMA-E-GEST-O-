@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import {
   assinarAnexosEmLote,
   BUCKET_AUDITORIA,
   enviarFotoAuditoria,
+  otimizarFoto,
 } from "@/lib/anexos";
 import { cachedClientRequest } from "@/lib/clientCache";
 import { carregarAnexosProjetoParede } from "@/lib/anexosProjetoParede";
@@ -18,7 +19,6 @@ import type { NovoErro } from "./FormularioErro";
 import type { NovoNa } from "./FormularioNa";
 import {
   resumoAuditoria,
-  situacaoDaParede,
   type AnexoDaAuditoria,
   type Auditoria,
   type ErroDaAuditoria,
@@ -235,6 +235,10 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
   const [datas, setDatas] = useState<Record<string, string>>({});
   const [erros, setErros] = useState<ErroDaAuditoria[]>([]);
   const [nas, setNas] = useState<NaDaAuditoria[]>([]);
+  const datasRef = useRef<Record<string, string>>({});
+  const errosRef = useRef<ErroDaAuditoria[]>([]);
+  const nasRef = useRef<NaDaAuditoria[]>([]);
+  const auditoriaIdRef = useRef<string | null>(null);
   /* O NA só existe depois da migration 023. Enquanto a tabela não estiver
      no banco, a tela esconde a função inteira em vez de oferecer um botão
      que responde com erro. Assim código e banco podem subir em momentos
@@ -256,6 +260,19 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
   // regras da qualidade vindas de Configurações; o FPY desta tela obedece
   // exatamente as mesmas do painel
   const [regras, setRegras] = useState<Regras>(REGRAS_PADRAO);
+
+  useEffect(() => {
+    datasRef.current = datas;
+  }, [datas]);
+  useEffect(() => {
+    errosRef.current = erros;
+  }, [erros]);
+  useEffect(() => {
+    nasRef.current = nas;
+  }, [nas]);
+  useEffect(() => {
+    auditoriaIdRef.current = auditoria?.id ?? null;
+  }, [auditoria?.id]);
 
   /* ---------- listas de configuração ---------- */
   useEffect(() => {
@@ -374,6 +391,23 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
       ? anexosProjetoParede[String(paredeAtual.origem_id)] ?? null
       : null;
   }, [anexosProjetoParede, auditoria?.projeto, cfg, paredeAberta, projeto]);
+
+  const errosPorParede = useMemo(() => {
+    const mapa = new Map<string, number>();
+    for (const erro of erros) mapa.set(erro.parede, (mapa.get(erro.parede) ?? 0) + 1);
+    return mapa;
+  }, [erros]);
+  const errosDaParedeAberta = useMemo(
+    () => (paredeAberta ? erros.filter((erro) => erro.parede === paredeAberta) : []),
+    [erros, paredeAberta]
+  );
+  const nasDaParedeAberta = useMemo(
+    () => (paredeAberta ? nas.filter((item) => item.parede === paredeAberta) : []),
+    [nas, paredeAberta]
+  );
+  const alternarParede = useCallback((parede: string) => {
+    setParedeAberta((atual) => (atual === parede ? null : parede));
+  }, []);
 
   async function persistirObra(a: Auditoria, novaObra: string) {
   const valor = novaObra.trim() || null;
@@ -671,7 +705,9 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
     const paredeId =
       cfg?.paredes.find((item) => item.nome === parede)?.id?.toString() ?? parede;
     let caminho: string;
+    let arquivoOtimizado: File;
     try {
+      arquivoOtimizado = await otimizarFoto(arquivo);
       caminho = await enviarFotoAuditoria(supabase, {
         usuarioId: usuario.user.id,
         projetoId,
@@ -679,7 +715,7 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
         paredeId,
         anexoId: anexoUid,
         extensao: "jpg",
-        arquivo,
+        arquivo: arquivoOtimizado,
       });
     } catch (caught) {
       return {
@@ -696,9 +732,9 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
       deviation_id: desvioId,
       anexo: {
         id: anexoId,
-        name: arquivo.name,
+        name: arquivoOtimizado.name,
         type: "image/jpeg",
-        size: arquivo.size,
+        size: arquivoOtimizado.size,
         path: caminho,
         deviationId: desvioId,
         wallId: paredeId,
@@ -712,14 +748,15 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
     return { error: null };
   }
 
-  async function adicionarErro(parede: string, novo: NovoErro, dia: string) {
-    if (!auditoria || !iniciarSalvamento()) return;
+  function adicionarErro(parede: string, novo: NovoErro, dia: string) {
+    if (!auditoria) return;
+    const auditoriaAtual = auditoria;
+    const auditoriaId = auditoriaAtual.id;
     const supabase = createClient();
     const { anexo, ...dadosErro } = novo;
     const idOtimista = `optimistic-error-${crypto.randomUUID()}`;
-    const datasAnteriores = datas;
-    const errosAnteriores = erros;
-    const novasDatas = { ...datas, [parede]: dia };
+    const tinhaDataAntes = Boolean(datasRef.current[parede]);
+    const novasDatas = { ...datasRef.current, [parede]: dia };
     const erroOtimista: ErroDaAuditoria = {
       id: idOtimista,
       parede,
@@ -729,97 +766,110 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
       criticidade: dadosErro.criticidade,
       status: "AGUARDANDO",
       anexos: [],
+      fotoStatus: anexo ? "ENVIANDO" : undefined,
     };
-    const novosErros = [...erros, erroOtimista];
+    const novosErros = [...errosRef.current, erroOtimista];
 
+    datasRef.current = novasDatas;
+    errosRef.current = novosErros;
     setDatas(novasDatas);
     setErros(novosErros);
-    atualizarResumoLocal(auditoria, novasDatas, novosErros);
+    atualizarResumoLocal(auditoriaAtual, novasDatas, novosErros);
+    toast.success(anexo ? "Erro adicionado. Foto sincronizando em segundo plano." : "Erro adicionado. Sincronizando em segundo plano.");
 
-    try {
-      const { data: criacao, error } = await mutarQualidade("REGISTRAR_DESVIO", {
-        data: dia,
-        projeto: auditoria.projeto,
-        casa: auditoria.casa,
-        parede,
-        auditoria_id: auditoria.id,
-        ...dadosErro,
-      });
-
-      const id = (criacao as { id?: string } | null)?.id;
-      if (error || !id) {
-        setDatas(datasAnteriores);
-        setErros(errosAnteriores);
-        atualizarResumoLocal(auditoria, datasAnteriores, errosAnteriores);
-        toast.error(
-          "Não foi possível salvar o erro: " +
-            (error?.message ?? "a operação não retornou um identificador")
-        );
+    const rollback = (mensagem: string) => {
+      if (auditoriaIdRef.current !== auditoriaId) {
+        toast.error(mensagem);
         return;
       }
-
-      setErros((lista) =>
-        lista.map((item) =>
-          item.id === idOtimista ? { ...item, id } : item
-        )
-      );
-
-      toast.success(
-        anexo
-          ? "Erro registrado. A foto está sendo enviada em segundo plano."
-          : "Erro registrado. Já aparece na tela Consultar."
-      );
-
-      /* Reconciliamos só o desvio criado, sem recarregar a casa inteira. */
-      void (async () => {
-        const leitura = await supabase
-          .from("ocorrencias")
-          .select("id, parede, setor, tipo_erro, ocorrencia, criticidade, status")
-          .eq("id", id)
-          .single();
-        if (!leitura.error && leitura.data) {
-          setErros((lista) =>
-            lista.map((item) =>
-              item.id === id
-                ? {
-                    ...(leitura.data as ErroDaAuditoria),
-                    anexos: item.anexos ?? [],
-                  }
-                : item
-            )
-          );
-        }
-      })();
-
-      if (anexo) {
-        void (async () => {
-          const anexoSalvo = await salvarFotoDoDesvio(
-            supabase,
-            parede,
-            id,
-            anexo
-          );
-          if (anexoSalvo.error) {
-            toast.error(
-              "O erro foi salvo, mas a foto não pôde ser vinculada: " +
-                anexoSalvo.error.message
-            );
-            return;
-          }
-          toast.success("Foto anexada ao desvio.");
-        })();
+      const errosAtuais = errosRef.current.filter((item) => item.id !== idOtimista);
+      let datasAtuais = datasRef.current;
+      if (!tinhaDataAntes && !errosAtuais.some((item) => item.parede === parede)) {
+        const copia = { ...datasAtuais };
+        delete copia[parede];
+        datasAtuais = copia;
       }
-    } catch (caught) {
-      setDatas(datasAnteriores);
-      setErros(errosAnteriores);
-      atualizarResumoLocal(auditoria, datasAnteriores, errosAnteriores);
-      toast.error(
-        "Não foi possível salvar o erro: " +
-          (caught instanceof Error ? caught.message : "falha de conexão")
-      );
-    } finally {
-      encerrarSalvamento();
-    }
+      errosRef.current = errosAtuais;
+      datasRef.current = datasAtuais;
+      setErros(errosAtuais);
+      setDatas(datasAtuais);
+      atualizarResumoLocal(auditoriaAtual, datasAtuais, errosAtuais);
+      toast.error(mensagem);
+    };
+
+    void (async () => {
+      try {
+        const { data: criacao, error } = await mutarQualidade("REGISTRAR_DESVIO", {
+          data: dia,
+          projeto: auditoriaAtual.projeto,
+          casa: auditoriaAtual.casa,
+          parede,
+          auditoria_id: auditoriaId,
+          ...dadosErro,
+        });
+        const id = (criacao as { id?: string } | null)?.id;
+        if (error || !id) {
+          rollback("Não foi possível sincronizar o erro: " + (error?.message ?? "sem identificador retornado"));
+          return;
+        }
+        if (auditoriaIdRef.current !== auditoriaId) {
+          if (anexo) {
+            const anexoSalvoForaDaTela = await salvarFotoDoDesvio(
+              supabase,
+              parede,
+              id,
+              anexo
+            );
+            if (anexoSalvoForaDaTela.error) {
+              toast.error(
+                "O erro foi salvo, mas a foto não sincronizou: " +
+                  anexoSalvoForaDaTela.error.message
+              );
+            }
+          }
+          return;
+        }
+
+        let atualizados = errosRef.current.map((item) => item.id === idOtimista ? { ...item, id } : item);
+        errosRef.current = atualizados;
+        setErros(atualizados);
+
+        void (async () => {
+          const leitura = await supabase
+            .from("ocorrencias")
+            .select("id, parede, setor, tipo_erro, ocorrencia, criticidade, status")
+            .eq("id", id)
+            .single();
+          if (leitura.error || !leitura.data || auditoriaIdRef.current !== auditoriaId) return;
+          const reconciliados = errosRef.current.map((item) =>
+            item.id === id
+              ? { ...(leitura.data as ErroDaAuditoria), anexos: item.anexos ?? [], fotoStatus: item.fotoStatus }
+              : item
+          );
+          errosRef.current = reconciliados;
+          setErros(reconciliados);
+        })();
+
+        if (!anexo) return;
+        const anexoSalvo = await salvarFotoDoDesvio(supabase, parede, id, anexo);
+        if (auditoriaIdRef.current !== auditoriaId) {
+          if (anexoSalvo.error) toast.error("O erro foi salvo, mas a foto não sincronizou: " + anexoSalvo.error.message);
+          return;
+        }
+        atualizados = errosRef.current.map((item) =>
+          item.id === id ? { ...item, fotoStatus: anexoSalvo.error ? "ERRO" : undefined } : item
+        );
+        errosRef.current = atualizados;
+        setErros(atualizados);
+        if (anexoSalvo.error) {
+          toast.error("O erro foi salvo, mas a foto não sincronizou: " + anexoSalvo.error.message);
+        } else {
+          toast.success("Foto anexada ao desvio.");
+        }
+      } catch (caught) {
+        rollback("Não foi possível sincronizar o erro: " + (caught instanceof Error ? caught.message : "falha de conexão"));
+      }
+    })();
   }
 
   /* NA não confere a parede: quem confere é "Parede sem erros" ou o
@@ -827,68 +877,72 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
      meio da conferência, e marcar a parede como conferida aqui poria no
      denominador do FPY uma parede que talvez nem tenha sido olhada
      inteira. */
-  async function adicionarNa(parede: string, novo: NovoNa) {
-    if (!auditoria || !iniciarSalvamento()) return;
+  function adicionarNa(parede: string, novo: NovoNa) {
+    if (!auditoria) return;
+    const auditoriaId = auditoria.id;
     const supabase = createClient();
-    const itens = novo.tipos_erro.map((tipo_erro) => ({
-      tipo_erro,
-      observacao: novo.observacao || null,
-    }));
-    const idsOtimistas = itens.map(
-      () => `optimistic-na-${crypto.randomUUID()}`
-    );
-    const nasAnteriores = nas;
+    const itens = novo.tipos_erro.map((tipo_erro) => ({ tipo_erro, observacao: novo.observacao || null }));
+    const idsOtimistas = itens.map(() => `optimistic-na-${crypto.randomUUID()}`);
     const nasOtimistas: NaDaAuditoria[] = itens.map((item, indice) => ({
       id: idsOtimistas[indice],
       parede,
       tipo_erro: item.tipo_erro,
       observacao: item.observacao,
     }));
-    setNas([...nas, ...nasOtimistas]);
+    const novosNas = [...nasRef.current, ...nasOtimistas];
+    nasRef.current = novosNas;
+    setNas(novosNas);
+    toast.success(`${itens.length} ${itens.length === 1 ? "NA adicionado" : "NAs adicionados"}. Sincronizando em segundo plano.`);
 
-    try {
-      const { data, error } = await mutarQualidade("ADICIONAR_NAS", {
-        auditoria_id: auditoria.id,
-        parede,
-        itens,
-      });
-      if (error) {
-        setNas(nasAnteriores);
-        toast.error("Não foi possível salvar os NAs: " + error.message);
+    const rollback = (mensagem: string) => {
+      if (auditoriaIdRef.current !== auditoriaId) {
+        toast.error(mensagem);
         return;
       }
+      const atuais = nasRef.current.filter((item) => !idsOtimistas.includes(item.id));
+      nasRef.current = atuais;
+      setNas(atuais);
+      toast.error(mensagem);
+    };
 
-      const adicionados = Number(
-        (data as { adicionados?: number } | null)?.adicionados ?? itens.length
-      );
-      toast.success(
-        `${adicionados} ${adicionados === 1 ? "NA registrado" : "NAs registrados"}. Eles não contam como erro.`
-      );
-
-      /* Busca somente a parede alterada para trocar IDs temporários pelos
-         IDs reais usados pelo botão Remover. */
-      void (async () => {
+    void (async () => {
+      try {
+        const { error } = await mutarQualidade("ADICIONAR_NAS", {
+          auditoria_id: auditoriaId,
+          parede,
+          itens,
+        });
+        if (error) {
+          rollback("Não foi possível sincronizar os NAs: " + error.message);
+          return;
+        }
         const leitura = await supabase
           .from("qualidade_auditoria_nas")
           .select("id, parede, tipo_erro, observacao")
-          .eq("auditoria_id", auditoria.id)
+          .eq("auditoria_id", auditoriaId)
           .eq("parede", parede)
           .order("id");
-        if (leitura.error) return;
-        setNas((lista) => [
-          ...lista.filter((item) => item.parede !== parede),
-          ...((leitura.data ?? []) as NaDaAuditoria[]),
-        ]);
-      })();
-    } catch (caught) {
-      setNas(nasAnteriores);
-      toast.error(
-        "Não foi possível salvar os NAs: " +
-          (caught instanceof Error ? caught.message : "falha de conexão")
-      );
-    } finally {
-      encerrarSalvamento();
-    }
+        if (leitura.error || auditoriaIdRef.current !== auditoriaId) return;
+        const persistidos = (leitura.data ?? []) as NaDaAuditoria[];
+        const tiposPersistidos = new Set(persistidos.map((item) => item.tipo_erro));
+        const pendentesPosteriores = nasRef.current.filter(
+          (item) =>
+            item.parede === parede &&
+            item.id.startsWith("optimistic-na-") &&
+            !idsOtimistas.includes(item.id) &&
+            !tiposPersistidos.has(item.tipo_erro)
+        );
+        const reconciliados = [
+          ...nasRef.current.filter((item) => item.parede !== parede),
+          ...persistidos,
+          ...pendentesPosteriores,
+        ];
+        nasRef.current = reconciliados;
+        setNas(reconciliados);
+      } catch (caught) {
+        rollback("Não foi possível sincronizar os NAs: " + (caught instanceof Error ? caught.message : "falha de conexão"));
+      }
+    })();
   }
 
   async function removerNa(id: string) {
@@ -1267,26 +1321,17 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
           <div className="corpo grid gap-3">
             <div className="chips grade">
               {paredesDoProjeto.map((p) => {
-                const sit = situacaoDaParede(p, inspecionadas, erros);
-                const qtd = erros.filter((e) => e.parede === p).length;
+                const qtd = errosPorParede.get(p) ?? 0;
+                const sit: SituacaoParede = qtd > 0 ? "COM_ERROS" : p in datas ? "OK" : "NAO_INSPECIONADA";
                 return (
-                  <button
+                  <ParedeChip
                     key={p}
-                    onClick={() => setParedeAberta(paredeAberta === p ? null : p)}
-                    className={`chip-esc ${CLASSE_SITUACAO[sit]} ${
-                      paredeAberta === p ? "selecionada" : ""
-                    }`}
-                    title={
-                      sit === "OK"
-                        ? "Sem erros"
-                        : sit === "COM_ERROS"
-                          ? `${qtd} erro(s)`
-                          : "Ainda não conferida"
-                    }
-                  >
-                    {p}
-                    {qtd > 0 && <span className="num"> ·{qtd}</span>}
-                  </button>
+                    parede={p}
+                    situacao={sit}
+                    qtd={qtd}
+                    selecionada={paredeAberta === p}
+                    aoAlternar={alternarParede}
+                  />
                 );
               })}
             </div>
@@ -1297,8 +1342,8 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
                    parede; sem ela o rascunho da anterior ficaria na tela */
                 key={paredeAberta}
                 parede={paredeAberta}
-                erros={erros.filter((e) => e.parede === paredeAberta)}
-                nas={nas.filter((n) => n.parede === paredeAberta)}
+                erros={errosDaParedeAberta}
+                nas={nasDaParedeAberta}
                 inspecionada={inspecionadas.has(paredeAberta)}
                 data={datas[paredeAberta] ?? ""}
                 hoje={hojeISO()}
@@ -1428,6 +1473,31 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
     </main>
   );
 }
+
+const ParedeChip = memo(function ParedeChip({
+  parede,
+  situacao,
+  qtd,
+  selecionada,
+  aoAlternar,
+}: {
+  parede: string;
+  situacao: SituacaoParede;
+  qtd: number;
+  selecionada: boolean;
+  aoAlternar: (parede: string) => void;
+}) {
+  return (
+    <button
+      onClick={() => aoAlternar(parede)}
+      className={`chip-esc ${CLASSE_SITUACAO[situacao]} ${selecionada ? "selecionada" : ""}`}
+      title={situacao === "OK" ? "Sem erros" : situacao === "COM_ERROS" ? `${qtd} erro(s)` : "Ainda não conferida"}
+    >
+      {parede}
+      {qtd > 0 && <span className="num"> ·{qtd}</span>}
+    </button>
+  );
+});
 
 /** A seta de "abre em outro lugar", no botão de abrir a casa. */
 function IconeAbrir() {
