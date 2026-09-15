@@ -239,15 +239,24 @@ export default function Indicadores({ role }: { role: Role }) {
     const { inicio, fim } = intervalo;
     const dentro = (d: string) =>
       (!inicio || d >= inicio) && (!fim || d <= fim);
+    const paredesDoPeriodo = paredes.filter(
+      (p) => pertenceAoEscopo(p.projeto) && dentro(p.data)
+    );
+    const errosDoPeriodo = erros.filter(
+      (e) => pertenceAoEscopo(e.projeto) && dentro(e.data)
+    );
+    /* O clique em dia/semana recorta os cartões e os demais gráficos,
+       mas a própria série temporal preserva o contexto do período para
+       que a marca selecionada possa virar uma barra e se mover para outro
+       ponto sem o restante da linha desaparecer. Outros recortes (casa,
+       parede etc.) continuam afetando a série normalmente. */
+    const recortesSemTempo = recortes.filter(
+      (r) => r.campo !== "dia" && r.campo !== "semanaMes"
+    );
     return {
-      paredes: aplicarRecortesEmParedes(
-        paredes.filter((p) => pertenceAoEscopo(p.projeto) && dentro(p.data)),
-        recortes
-      ),
-      erros: aplicarRecortes(
-        erros.filter((e) => pertenceAoEscopo(e.projeto) && dentro(e.data)),
-        recortes
-      ),
+      paredes: aplicarRecortesEmParedes(paredesDoPeriodo, recortes),
+      erros: aplicarRecortes(errosDoPeriodo, recortes),
+      paredesTempo: aplicarRecortesEmParedes(paredesDoPeriodo, recortesSemTempo),
     };
   }, [paredes, erros, intervalo, recortes, pertenceAoEscopo]);
 
@@ -316,7 +325,10 @@ export default function Indicadores({ role }: { role: Role }) {
           <select
             className="campo ind-projeto"
             value={projeto}
-            onChange={(e) => setProjeto(e.target.value)}
+            onChange={(e) => {
+              setRecortes([]);
+              setProjeto(e.target.value);
+            }}
             aria-label="Projeto"
           >
             <option value={PROJETO_CONSOLIDADO}>
@@ -337,7 +349,10 @@ export default function Indicadores({ role }: { role: Role }) {
               type="button"
               title={p.dica}
               aria-pressed={periodo === p.valor}
-              onClick={() => setPeriodo(p.valor)}
+              onClick={() => {
+                setRecortes([]);
+                setPeriodo(p.valor);
+              }}
             >
               {p.rotulo}
             </button>
@@ -347,7 +362,10 @@ export default function Indicadores({ role }: { role: Role }) {
               de={datas.de}
               ate={datas.ate}
               max={hoje}
-              aoEscolher={(de, ate) => setDatas({ de, ate })}
+              aoEscolher={(de, ate) => {
+                setRecortes([]);
+                setDatas({ de, ate });
+              }}
             />
           )}
           <span className="ind-resumo">{descrever(periodo, intervalo)}</span>
@@ -392,6 +410,7 @@ export default function Indicadores({ role }: { role: Role }) {
       {folha === "fpy" && (
         <FolhaFpy
           paredes={recorte.paredes}
+          paredesTempo={recorte.paredesTempo}
           erros={recorte.erros}
           paredesDoAno={anoCorrente?.paredes ?? []}
           paredesDoProjeto={doProjeto}

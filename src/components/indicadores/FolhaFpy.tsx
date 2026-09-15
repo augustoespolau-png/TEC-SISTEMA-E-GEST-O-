@@ -35,6 +35,7 @@ const mesCurto = (m: string) =>
  */
 export default function FolhaFpy({
   paredes,
+  paredesTempo,
   erros,
   paredesDoAno,
   paredesDoProjeto,
@@ -51,6 +52,9 @@ export default function FolhaFpy({
   aceso,
 }: {
   paredes: ParedeConferida[];
+  /** Série do período antes do recorte por dia/semana; mantém a linha
+      inteira visível enquanto o ponto selecionado vira uma barra. */
+  paredesTempo: ParedeConferida[];
   erros: LinhaDash[];
   /** paredes do ano corrente inteiro; NÃO acompanha o filtro de período */
   paredesDoAno: ParedeConferida[];
@@ -201,7 +205,7 @@ export default function FolhaFpy({
 
       <Cartao titulo="FPY por dia" largura="meio">
         <LinhaFpyTempo
-          pontos={fpyPorDia(paredes)}
+          pontos={fpyPorDia(paredesTempo)}
           meta={meta}
           unidade="dia"
           aoRecortar={aoRecortar}
@@ -210,7 +214,7 @@ export default function FolhaFpy({
       </Cartao>
       <Cartao titulo="FPY por semana" largura="meio">
         <LinhaFpyTempo
-          pontos={fpyPorSemana(paredes)}
+          pontos={fpyPorSemana(paredesTempo)}
           meta={meta}
           unidade="semana"
           aoRecortar={aoRecortar}

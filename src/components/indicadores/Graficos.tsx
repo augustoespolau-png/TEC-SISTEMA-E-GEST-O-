@@ -576,6 +576,14 @@ export function LinhaFpyTempo({
             {pontos.map((p, i) => {
               const cor = corDoPonto(p.fpy);
               const estaAceso = !!aceso && aceso(campo, p.chave);
+              /* Seleção temporal = coluna. O piso de 8px mantém 0% visível
+                 e a largura limitada evita que um único dia vire um bloco
+                 gigante quando o gráfico tem poucos pontos. */
+              const larguraBarra = Math.max(14, Math.min(40, passo * 0.54));
+              const baseBarra = y(0);
+              const alturaBarra = Math.max(8, baseBarra - y(p.fpy));
+              const topoBarra = baseBarra - alturaBarra;
+              const topoMarca = estaAceso ? topoBarra : y(p.fpy);
               return (
                 <g
                   key={p.chave}
@@ -612,17 +620,47 @@ export function LinhaFpyTempo({
                   </rect>
                   {/* anel da cor do papel: onde a linha passa por trás do
                       ponto, ela não borra a marca */}
-                  <circle
-                    cx={x(i)} cy={y(p.fpy)} r={raio}
-                    fill={cor}
-                    stroke="var(--color-papel)"
-                    strokeWidth={1.5}
-                    pointerEvents="none"
-                  />
-                  {cabe[i] && (
+                  {estaAceso ? (
+                    <>
+                      {/* halo de papel separa a barra da linha/área no tema escuro */}
+                      <rect
+                        x={x(i) - larguraBarra / 2}
+                        y={topoBarra}
+                        width={larguraBarra}
+                        height={alturaBarra}
+                        rx={3}
+                        fill={cor}
+                        fillOpacity={0.2}
+                        stroke="var(--color-papel)"
+                        strokeWidth={5}
+                        pointerEvents="none"
+                      />
+                      <rect
+                        x={x(i) - larguraBarra / 2}
+                        y={topoBarra}
+                        width={larguraBarra}
+                        height={alturaBarra}
+                        rx={3}
+                        fill={cor}
+                        fillOpacity={0.42}
+                        stroke={cor}
+                        strokeWidth={2}
+                        pointerEvents="none"
+                      />
+                    </>
+                  ) : (
+                    <circle
+                      cx={x(i)} cy={y(p.fpy)} r={raio}
+                      fill={cor}
+                      stroke="var(--color-papel)"
+                      strokeWidth={1.5}
+                      pointerEvents="none"
+                    />
+                  )}
+                  {(estaAceso || cabe[i]) && (
                     <text
                       className="ind-valor-svg"
-                      x={x(i)} y={y(p.fpy) - raio - 5}
+                      x={x(i)} y={topoMarca - (estaAceso ? 6 : raio + 5)}
                       textAnchor="middle"
                       style={{ fontSize: fonte, fill: cor }}
                       pointerEvents="none"
