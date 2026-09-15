@@ -1,0 +1,98 @@
+name: Recheck zero latency
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/recheck-zero-latency.yml
+
+permissions:
+  contents: write
+
+jobs:
+  recheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Remove lint warnings found by recheck
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          audit = Path('src/components/auditoria/AuditoriaCasa.tsx')
+          text = audit.read_text()
+          old = '''function chaveDaAuditoria(projeto: string, casa: string) {
+            return `${projeto.trim().toLocaleLowerCase("pt-BR")}|${casa.trim()}`;
+          }
+
+          '''
+          if old not in text:
+              raise SystemExit('chaveDaAuditoria unused block not found')
+          audit.write_text(text.replace(old, '', 1))
+
+          exportar = Path('src/lib/exportar.ts')
+          text = exportar.read_text()
+          old = '''/* Compatibilidade temporária com qualquer chamada antiga ainda existente. */
+          function celulaCsv(v: string): string {
+            const t = v.replace(/\\r?\\n/g, " ").trim();
+            return /[";]/.test(t) ? `"${t.replace(/"/g, '\"\"')}"` : t;
+          }
+
+          '''
+          if old not in text:
+              raise SystemExit('celulaCsv unused block not found')
+          exportar.write_text(text.replace(old, '', 1))
+          PY
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Clean caches
+        run: |
+          rm -rf .next
+          rm -rf node_modules/.cache
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint strict
+        run: npm run lint -- --max-warnings=0
+
+      - name: Build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: dummy-build-key
+        run: npm run build
+
+      - name: Production dependency audit snapshot
+        shell: bash
+        run: |
+          npm audit --omit=dev --json > /tmp/npm-audit.json || true
+          python - <<'PY'
+          import json
+          p='/tmp/npm-audit.json'
+          data=json.load(open(p))
+          print('PRODUCTION_AUDIT_SUMMARY', data.get('metadata',{}).get('vulnerabilities',{}))
+          vulns=data.get('vulnerabilities',{})
+          for name, info in sorted(vulns.items()):
+              sev=info.get('severity')
+              if sev in {'high','critical'}:
+                  print('PRODUCTION_AUDIT_FINDING', name, sev, 'direct='+str(info.get('isDirect')))
+          PY
+
+      - name: Commit warning fixes and remove temporary workflow
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/recheck-zero-latency.yml
+          git add src/components/auditoria/AuditoriaCasa.tsx src/lib/exportar.ts
+          git commit -m "Corrige warnings do recheck zero-latency"
+          git push
