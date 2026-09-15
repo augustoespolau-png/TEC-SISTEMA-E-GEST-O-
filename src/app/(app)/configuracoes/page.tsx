@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getAuthContext } from "@/lib/supabase/auth";
 import ConfigManager from "@/components/ConfigManager";
+import DiagnosticoSistemaCard from "@/components/config/DiagnosticoSistemaCard";
 import ObrasEmpreendimentosCard from "@/components/config/ObrasEmpreendimentosCard";
 
 export default async function ConfiguracoesPage() {
@@ -11,7 +12,8 @@ export default async function ConfiguracoesPage() {
 
   return (
     <>
-      <main className="tela" style={{ paddingBottom: 0 }}>
+      <main className="tela tela-2col" style={{ paddingBottom: 0 }}>
+        <DiagnosticoSistemaCard />
         <ObrasEmpreendimentosCard />
       </main>
       <ConfigManager />
