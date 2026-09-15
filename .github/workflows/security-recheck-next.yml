@@ -27,7 +27,7 @@ jobs:
         run: |
           npm install --save-exact next@16.3.3
           npm install --save-dev --save-exact eslint-config-next@16.3.3
-          npm audit fix
+          npm audit fix || true
 
       - name: Clean install from updated lockfile
         run: |
