@@ -206,7 +206,9 @@ export default function OcorrenciaCard({
     // A persistência acontece abaixo, sem prender o inspetor em "Salvando…".
     const otimista: Ocorrencia = {
       ...item,
-      status: status as Status,
+      status: (
+        !gestao && status === "RETRABALHO" ? "RETRABALHO_PENDENTE" : status
+      ) as Status,
       observacao: observacaoFinal,
       resolved_at: resolvedAt,
       updated_at: new Date().toISOString(),
