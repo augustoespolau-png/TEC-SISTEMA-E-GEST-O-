@@ -759,11 +759,11 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
       return { error: preparada.error ?? new Error("Foto não preparada.") };
     }
 
-    const { error } = await mutarQualidade("ADICIONAR_ANEXO", {
-      auditoria_id: auditoriaFoto.id,
-      parede,
-      deviation_id: desvioId,
-      anexo: {
+    const { error } = await supabase.rpc("qualidade_adicionar_anexo_fast", {
+      p_auditoria_id: auditoriaFoto.id,
+      p_parede: parede,
+      p_desvio_id: desvioId,
+      p_anexo: {
         ...preparada.anexo,
         deviationId: desvioId,
       },
@@ -916,24 +916,27 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
           return;
         }
 
-        const vinculo = await vincularFotoAoDesvio(
-          supabase,
-          auditoriaAtual,
-          parede,
-          id,
-          preparada
-        );
-        if (vinculo.error) {
-          marcarFoto("ERRO");
-          toast.error(
-            "O erro foi salvo, mas a foto não foi vinculada: " +
-              vinculo.error.message
-          );
-          return;
-        }
-
+        /* O arquivo já chegou ao Storage: libera o feedback visual agora.
+           O vínculo final usa um RPC específico e continua em background. */
         marcarFoto(undefined);
-        toast.success("Foto anexada ao desvio.");
+        void (async () => {
+          const vinculo = await vincularFotoAoDesvio(
+            supabase,
+            auditoriaAtual,
+            parede,
+            id,
+            preparada
+          );
+          if (vinculo.error) {
+            marcarFoto("ERRO");
+            toast.error(
+              "O erro foi salvo, mas a foto não foi vinculada: " +
+                vinculo.error.message
+            );
+            return;
+          }
+          toast.success("Foto anexada ao desvio.");
+        })();
       } catch (caught) {
         if (fotoEmSegundoPlano) {
           void fotoEmSegundoPlano.then((preparada) => {
