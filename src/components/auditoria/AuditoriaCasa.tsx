@@ -969,7 +969,9 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
               tamanho_bytes: anexoPreparado.size,
               storage_bucket: BUCKET_AUDITORIA,
               storage_path: caminhoPreparado,
-              url: preparada.url,
+              url:
+                preparada.url ??
+                (anexo ? URL.createObjectURL(anexo) : null),
             };
             const atualizados = errosRef.current.map((item) =>
               item.id === id || item.id === idOtimista
