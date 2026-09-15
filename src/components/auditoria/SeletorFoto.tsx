@@ -22,7 +22,8 @@ export default function SeletorFoto({
   const [preview, setPreview] = useState<string | null>(null);
   const [processando, setProcessando] = useState(false);
   const [erro, setErro] = useState("");
-  const input = useRef<HTMLInputElement>(null);
+  const cameraInput = useRef<HTMLInputElement>(null);
+  const galeriaInput = useRef<HTMLInputElement>(null);
   const selecao = useRef(0);
   const processarAntesDeEntregar = Boolean(onProcessando);
 
@@ -101,19 +102,32 @@ export default function SeletorFoto({
     setErro("");
   }
 
+  const bloqueado = salvando || processando;
+
   return (
     <div>
-      <label className="rotulo" htmlFor={id}>{titulo}</label>
+      <label className="rotulo" htmlFor={`${id}-camera`}>{titulo}</label>
       <div className="anexo-captura">
         <input
-          ref={input}
-          id={id}
+          ref={cameraInput}
+          id={`${id}-camera`}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          onChange={selecionar}
+          className="anexo-input"
+          aria-label={`${titulo} — tirar foto`}
+        />
+        <input
+          ref={galeriaInput}
+          id={`${id}-galeria`}
           type="file"
           accept="image/*"
           onChange={selecionar}
           className="anexo-input"
-          aria-label={titulo}
+          aria-label={`${titulo} — escolher da galeria`}
         />
+
         <div className="anexo-seletor">
           {preview ? (
             <div className="anexo-preview">
@@ -127,26 +141,66 @@ export default function SeletorFoto({
                     ? " · preparando foto…"
                     : processarAntesDeEntregar
                       ? " · pronta para salvar"
-                      : " · será compactada e enviada em segundo plano"}
+                      : " · será enviada em segundo plano"}
                 </p>
                 <div className="mt-2 flex flex-wrap gap-2">
-                  <button type="button" onClick={() => input.current?.click()} className="btn" disabled={salvando || processando} style={{ fontSize: 11, padding: "5px 9px" }}>
-                    Trocar foto
+                  <button
+                    type="button"
+                    onClick={() => cameraInput.current?.click()}
+                    className="btn"
+                    disabled={bloqueado}
+                    style={{ fontSize: 11, padding: "5px 9px" }}
+                  >
+                    Tirar outra
                   </button>
-                  <button type="button" onClick={remover} className="btn" disabled={salvando || processando} style={{ fontSize: 11, padding: "5px 9px" }}>
+                  <button
+                    type="button"
+                    onClick={() => galeriaInput.current?.click()}
+                    className="btn"
+                    disabled={bloqueado}
+                    style={{ fontSize: 11, padding: "5px 9px" }}
+                  >
+                    Galeria
+                  </button>
+                  <button
+                    type="button"
+                    onClick={remover}
+                    className="btn"
+                    disabled={bloqueado}
+                    style={{ fontSize: 11, padding: "5px 9px" }}
+                  >
                     Remover
                   </button>
                 </div>
               </div>
             </div>
           ) : (
-            <button type="button" className="anexo-escolher" onClick={() => input.current?.click()} disabled={salvando}>
-              <span className="anexo-icone" aria-hidden="true">▣</span>
-              <span>
-                <b>Tirar foto ou escolher imagem</b>
-                <small>Use a câmera do celular/tablet ou a galeria</small>
-              </span>
-            </button>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                className="anexo-escolher"
+                onClick={() => cameraInput.current?.click()}
+                disabled={salvando}
+              >
+                <span className="anexo-icone" aria-hidden="true">◉</span>
+                <span>
+                  <b>Tirar foto</b>
+                  <small>Abre a câmera traseira</small>
+                </span>
+              </button>
+              <button
+                type="button"
+                className="anexo-escolher"
+                onClick={() => galeriaInput.current?.click()}
+                disabled={salvando}
+              >
+                <span className="anexo-icone" aria-hidden="true">▣</span>
+                <span>
+                  <b>Galeria</b>
+                  <small>Escolher imagem existente</small>
+                </span>
+              </button>
+            </div>
           )}
         </div>
       </div>
