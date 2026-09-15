@@ -1,5 +1,6 @@
 from pathlib import Path
 
+# Patch temporário: garante preview local caso a URL assinada demore ou falhe.
 path = Path('src/components/auditoria/AuditoriaCasa.tsx')
 text = path.read_text(encoding='utf-8')
 old = '''              url: preparada.url,\n'''
