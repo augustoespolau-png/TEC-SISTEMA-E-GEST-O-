@@ -1,0 +1,70 @@
+name: Security recheck Next.js
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/security-recheck-next.yml
+
+permissions:
+  contents: write
+
+jobs:
+  security-recheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Upgrade patched Next.js line
+        run: |
+          npm install --save-exact next@16.3.3
+          npm install --save-dev --save-exact eslint-config-next@16.3.3
+
+      - name: Clean install from updated lockfile
+        run: |
+          rm -rf node_modules .next
+          npm ci
+
+      - name: Lint strict
+        run: npm run lint -- --max-warnings=0
+
+      - name: Build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: dummy-build-key
+        run: npm run build
+
+      - name: Gate production dependency audit
+        shell: bash
+        run: |
+          npm audit --omit=dev --json > /tmp/npm-audit.json || true
+          python - <<'PY'
+          import json, sys
+          data=json.load(open('/tmp/npm-audit.json'))
+          summary=data.get('metadata',{}).get('vulnerabilities',{})
+          print('PRODUCTION_AUDIT_SUMMARY', summary)
+          for name, info in sorted(data.get('vulnerabilities',{}).items()):
+              sev=info.get('severity')
+              if sev in {'moderate','high','critical'}:
+                  print('PRODUCTION_AUDIT_FINDING', name, sev, 'direct='+str(info.get('isDirect')), 'fix='+str(info.get('fixAvailable')))
+          if int(summary.get('critical',0)) or int(summary.get('high',0)):
+              sys.exit('High/critical production vulnerabilities remain')
+          PY
+
+      - name: Commit patched dependencies and remove temporary workflow
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/security-recheck-next.yml
+          git add package.json package-lock.json
+          git commit -m "Atualiza Next.js para correção crítica de segurança"
+          git push
