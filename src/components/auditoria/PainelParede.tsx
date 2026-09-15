@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import FormularioErro, { type NovoErro } from "./FormularioErro";
 import FormularioNa, { type NovoNa } from "./FormularioNa";
 import { SeloCriticidade, SeloStatus } from "@/components/Selo";
@@ -59,6 +59,7 @@ export default function PainelParede({
 }) {
   const [adicionando, setAdicionando] = useState(false);
   const [adicionandoNa, setAdicionandoNa] = useState(false);
+  const resetDialogo = useRef<HTMLDialogElement>(null);
   /* Enquanto a parede não foi conferida, a data fica só aqui: nada foi
      gravado ainda. Depois de conferida, mexer no campo salva na hora. */
   const [rascunho, setRascunho] = useState(data || hoje);
@@ -315,36 +316,71 @@ export default function PainelParede({
       )}
 
       {!somenteLeitura && (inspecionada || erros.length > 0 || nas.length > 0) && (
-        <button
-          type="button"
-          onClick={aoZerarInspecao}
-          disabled={salvando}
-          className="flex w-full items-center gap-3 rounded-lg border p-3 text-left transition"
-          style={{
-            borderColor: "color-mix(in srgb, var(--color-alta) 38%, var(--color-line))",
-            background: "color-mix(in srgb, var(--color-alta) 5%, var(--color-papel))",
-          }}
-          title="Apagar a inspeção desta parede e voltar para ainda não conferida"
-        >
-          <span
-            aria-hidden="true"
-            className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-[17px]"
+        <>
+          <button
+            type="button"
+            onClick={() => resetDialogo.current?.showModal()}
+            className="flex w-full items-center gap-3 rounded-lg border p-3 text-left transition"
             style={{
-              color: "var(--color-alta)",
-              background: "color-mix(in srgb, var(--color-alta) 10%, transparent)",
+              borderColor: "color-mix(in srgb, var(--color-media) 30%, var(--color-line))",
+              background: "color-mix(in srgb, var(--color-media) 7%, var(--color-papel))",
             }}
+            title="Apagar a inspeção desta parede e voltar para ainda não conferida"
           >
-            ↺
-          </span>
-          <span className="min-w-0">
-            <b className="block text-[12.5px]" style={{ color: "var(--color-alta)" }}>
-              Zerar inspeção
-            </b>
-            <small className="block text-[11px] leading-snug text-ink-3">
-              Remove data, erros, N/A e fotos desta parede. Ela volta para “ainda não conferida”.
-            </small>
-          </span>
-        </button>
+            <span
+              aria-hidden="true"
+              className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-[17px]"
+              style={{
+                color: "var(--color-media)",
+                background: "color-mix(in srgb, var(--color-media) 12%, transparent)",
+              }}
+            >
+              ↺
+            </span>
+            <span className="min-w-0">
+              <b className="block text-[12.5px]" style={{ color: "var(--color-media)" }}>
+                Zerar inspeção
+              </b>
+              <small className="block text-[11px] leading-snug text-ink-3">
+                Volta esta parede para “ainda não conferida”.
+              </small>
+            </span>
+          </button>
+
+          <dialog ref={resetDialogo} className="janela">
+            <h2>Zerar inspeção da parede {parede}?</h2>
+            <p className="sub">
+              A parede voltará para “ainda não conferida”. Serão removidos a data da inspeção,
+              {erros.length > 0 ? ` ${erros.length} ${erros.length === 1 ? "erro" : "erros"}` : " nenhum erro"},
+              {nas.length > 0 ? ` ${nas.length} ${nas.length === 1 ? "NA" : "NAs"}` : " nenhum NA"}
+              {erros.some((erro) => (erro.anexos?.length ?? 0) > 0) ? " e as fotos vinculadas" : ""}.
+            </p>
+            <div className="corpo flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                className="btn"
+                onClick={() => resetDialogo.current?.close()}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="btn"
+                style={{
+                  color: "var(--color-media)",
+                  borderColor: "color-mix(in srgb, var(--color-media) 55%, var(--color-line))",
+                  background: "color-mix(in srgb, var(--color-media) 8%, var(--color-papel))",
+                }}
+                onClick={() => {
+                  resetDialogo.current?.close();
+                  aoZerarInspecao();
+                }}
+              >
+                Zerar inspeção
+              </button>
+            </div>
+          </dialog>
+        </>
       )}
 
       {semErros && !inspecionada && !somenteLeitura && (

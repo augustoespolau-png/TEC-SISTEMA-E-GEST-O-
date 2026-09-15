@@ -251,6 +251,8 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
   const [abrindo, setAbrindo] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const salvandoRef = useRef(false);
+  const zerandoParedesRef = useRef(new Set<string>());
+  const removendoErrosRef = useRef(new Set<string>());
   const [salvandoObra, setSalvandoObra] = useState(false);
   const [todas, setTodas] = useState<Auditoria[]>([]);
   const [resumos, setResumos] = useState<Record<string, ResumoDaCasa>>({});
@@ -682,67 +684,93 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
     }
   }
 
-  async function salvarFotoDoDesvio(
+  async function prepararFotoDoDesvio(
     supabase: ReturnType<typeof createClient>,
+    auditoriaFoto: Auditoria,
     parede: string,
-    desvioId: string,
     arquivo: File
   ) {
-    if (!auditoria) return { error: new Error("Auditoria inválida") };
-
     const anexoUid = crypto.randomUUID();
     const anexoId = `attachment_${anexoUid}`;
-    const { data: usuario } = await supabase.auth.getUser();
-    if (!usuario.user) {
+    const { data: sessao } = await supabase.auth.getSession();
+    const usuario = sessao.session?.user;
+    if (!usuario) {
       return {
         error: new Error("Sua sessão expirou. Entre novamente para anexar a foto."),
+        caminho: null,
+        anexo: null,
       };
     }
 
+    const projetoCfg = cfg?.projetos.find((item) => item.nome === auditoriaFoto.projeto);
     const projetoId =
-      cfg?.projetos.find((item) => item.nome === auditoria.projeto)?.id?.toString() ??
-      (auditoria.id.split("|", 1)[0] || auditoria.projeto);
+      projetoCfg?.id?.toString() ??
+      (auditoriaFoto.id.split("|", 1)[0] || auditoriaFoto.projeto);
     const paredeId =
-      cfg?.paredes.find((item) => item.nome === parede)?.id?.toString() ?? parede;
-    let caminho: string;
-    let arquivoOtimizado: File;
+      cfg?.paredes.find(
+        (item) => item.projeto_id === projetoCfg?.id && item.nome === parede
+      )?.id?.toString() ?? parede;
+
     try {
-      arquivoOtimizado = await otimizarFoto(arquivo);
-      caminho = await enviarFotoAuditoria(supabase, {
-        usuarioId: usuario.user.id,
+      /* Compressão + upload começam em paralelo com o RPC que cria o desvio.
+         Assim a foto não adiciona espera ao gesto do inspetor. */
+      const arquivoOtimizado = await otimizarFoto(arquivo);
+      const caminho = await enviarFotoAuditoria(supabase, {
+        usuarioId: usuario.id,
         projetoId,
-        casaId: auditoria.casa,
+        casaId: auditoriaFoto.casa,
         paredeId,
         anexoId: anexoUid,
         extensao: "jpg",
         arquivo: arquivoOtimizado,
       });
+      return {
+        error: null,
+        caminho,
+        anexo: {
+          id: anexoId,
+          name: arquivoOtimizado.name,
+          type: "image/jpeg",
+          size: arquivoOtimizado.size,
+          path: caminho,
+          wallId: paredeId,
+        },
+      };
     } catch (caught) {
       return {
         error:
           caught instanceof Error
             ? caught
             : new Error("Não foi possível enviar a foto."),
+        caminho: null,
+        anexo: null,
       };
+    }
+  }
+
+  async function vincularFotoAoDesvio(
+    supabase: ReturnType<typeof createClient>,
+    auditoriaFoto: Auditoria,
+    parede: string,
+    desvioId: string,
+    preparada: Awaited<ReturnType<typeof prepararFotoDoDesvio>>
+  ) {
+    if (preparada.error || !preparada.anexo || !preparada.caminho) {
+      return { error: preparada.error ?? new Error("Foto não preparada.") };
     }
 
     const { error } = await mutarQualidade("ADICIONAR_ANEXO", {
-      auditoria_id: auditoria.id,
+      auditoria_id: auditoriaFoto.id,
       parede,
       deviation_id: desvioId,
       anexo: {
-        id: anexoId,
-        name: arquivoOtimizado.name,
-        type: "image/jpeg",
-        size: arquivoOtimizado.size,
-        path: caminho,
+        ...preparada.anexo,
         deviationId: desvioId,
-        wallId: paredeId,
       },
     });
 
     if (error) {
-      await supabase.storage.from(BUCKET_AUDITORIA).remove([caminho]);
+      await supabase.storage.from(BUCKET_AUDITORIA).remove([preparada.caminho]);
       return { error };
     }
     return { error: null };
@@ -754,6 +782,9 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
     const auditoriaId = auditoriaAtual.id;
     const supabase = createClient();
     const { anexo, ...dadosErro } = novo;
+    const fotoEmSegundoPlano = anexo
+      ? prepararFotoDoDesvio(supabase, auditoriaAtual, parede, anexo)
+      : null;
     const idOtimista = `optimistic-error-${crypto.randomUUID()}`;
     const tinhaDataAntes = Boolean(datasRef.current[parede]);
     const novasDatas = { ...datasRef.current, [parede]: dia };
@@ -775,14 +806,31 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
     setDatas(novasDatas);
     setErros(novosErros);
     atualizarResumoLocal(auditoriaAtual, novasDatas, novosErros);
-    toast.success(anexo ? "Erro adicionado. Foto sincronizando em segundo plano." : "Erro adicionado. Sincronizando em segundo plano.");
+    toast.success(
+      anexo
+        ? "Erro adicionado. Foto enviando em segundo plano."
+        : "Erro adicionado. Sincronizando em segundo plano."
+    );
+
+    const marcarFoto = (status: "ERRO" | undefined) => {
+      if (auditoriaIdRef.current !== auditoriaId) return;
+      const atualizados = errosRef.current.map((item) =>
+        item.id === idOtimista || item.id === idPersistido
+          ? { ...item, fotoStatus: status }
+          : item
+      );
+      errosRef.current = atualizados;
+      setErros(atualizados);
+    };
 
     const rollback = (mensagem: string) => {
       if (auditoriaIdRef.current !== auditoriaId) {
         toast.error(mensagem);
         return;
       }
-      const errosAtuais = errosRef.current.filter((item) => item.id !== idOtimista);
+      const errosAtuais = errosRef.current.filter(
+        (item) => item.id !== idOtimista && item.id !== idPersistido
+      );
       let datasAtuais = datasRef.current;
       if (!tinhaDataAntes && !errosAtuais.some((item) => item.parede === parede)) {
         const copia = { ...datasAtuais };
@@ -797,6 +845,8 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
       toast.error(mensagem);
     };
 
+    let idPersistido = "";
+
     void (async () => {
       try {
         const { data: criacao, error } = await mutarQualidade("REGISTRAR_DESVIO", {
@@ -809,30 +859,30 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
         });
         const id = (criacao as { id?: string } | null)?.id;
         if (error || !id) {
-          rollback("Não foi possível sincronizar o erro: " + (error?.message ?? "sem identificador retornado"));
-          return;
-        }
-        if (auditoriaIdRef.current !== auditoriaId) {
-          if (anexo) {
-            const anexoSalvoForaDaTela = await salvarFotoDoDesvio(
-              supabase,
-              parede,
-              id,
-              anexo
-            );
-            if (anexoSalvoForaDaTela.error) {
-              toast.error(
-                "O erro foi salvo, mas a foto não sincronizou: " +
-                  anexoSalvoForaDaTela.error.message
-              );
-            }
+          if (fotoEmSegundoPlano) {
+            void fotoEmSegundoPlano.then((preparada) => {
+              if (preparada.caminho) {
+                return supabase.storage
+                  .from(BUCKET_AUDITORIA)
+                  .remove([preparada.caminho]);
+              }
+            });
           }
+          rollback(
+            "Não foi possível sincronizar o erro: " +
+              (error?.message ?? "sem identificador retornado")
+          );
           return;
         }
+        idPersistido = id;
 
-        let atualizados = errosRef.current.map((item) => item.id === idOtimista ? { ...item, id } : item);
-        errosRef.current = atualizados;
-        setErros(atualizados);
+        if (auditoriaIdRef.current === auditoriaId) {
+          const atualizados = errosRef.current.map((item) =>
+            item.id === idOtimista ? { ...item, id } : item
+          );
+          errosRef.current = atualizados;
+          setErros(atualizados);
+        }
 
         void (async () => {
           const leitura = await supabase
@@ -840,34 +890,64 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
             .select("id, parede, setor, tipo_erro, ocorrencia, criticidade, status")
             .eq("id", id)
             .single();
-          if (leitura.error || !leitura.data || auditoriaIdRef.current !== auditoriaId) return;
+          if (leitura.error || !leitura.data || auditoriaIdRef.current !== auditoriaId)
+            return;
           const reconciliados = errosRef.current.map((item) =>
             item.id === id
-              ? { ...(leitura.data as ErroDaAuditoria), anexos: item.anexos ?? [], fotoStatus: item.fotoStatus }
+              ? {
+                  ...(leitura.data as ErroDaAuditoria),
+                  anexos: item.anexos ?? [],
+                  fotoStatus: item.fotoStatus,
+                }
               : item
           );
           errosRef.current = reconciliados;
           setErros(reconciliados);
         })();
 
-        if (!anexo) return;
-        const anexoSalvo = await salvarFotoDoDesvio(supabase, parede, id, anexo);
-        if (auditoriaIdRef.current !== auditoriaId) {
-          if (anexoSalvo.error) toast.error("O erro foi salvo, mas a foto não sincronizou: " + anexoSalvo.error.message);
+        if (!fotoEmSegundoPlano) return;
+        const preparada = await fotoEmSegundoPlano;
+        if (preparada.error) {
+          marcarFoto("ERRO");
+          toast.error(
+            "O erro foi salvo, mas a foto não foi enviada: " +
+              preparada.error.message
+          );
           return;
         }
-        atualizados = errosRef.current.map((item) =>
-          item.id === id ? { ...item, fotoStatus: anexoSalvo.error ? "ERRO" : undefined } : item
+
+        const vinculo = await vincularFotoAoDesvio(
+          supabase,
+          auditoriaAtual,
+          parede,
+          id,
+          preparada
         );
-        errosRef.current = atualizados;
-        setErros(atualizados);
-        if (anexoSalvo.error) {
-          toast.error("O erro foi salvo, mas a foto não sincronizou: " + anexoSalvo.error.message);
-        } else {
-          toast.success("Foto anexada ao desvio.");
+        if (vinculo.error) {
+          marcarFoto("ERRO");
+          toast.error(
+            "O erro foi salvo, mas a foto não foi vinculada: " +
+              vinculo.error.message
+          );
+          return;
         }
+
+        marcarFoto(undefined);
+        toast.success("Foto anexada ao desvio.");
       } catch (caught) {
-        rollback("Não foi possível sincronizar o erro: " + (caught instanceof Error ? caught.message : "falha de conexão"));
+        if (fotoEmSegundoPlano) {
+          void fotoEmSegundoPlano.then((preparada) => {
+            if (preparada.caminho) {
+              return supabase.storage
+                .from(BUCKET_AUDITORIA)
+                .remove([preparada.caminho]);
+            }
+          });
+        }
+        rollback(
+          "Não foi possível sincronizar o erro: " +
+            (caught instanceof Error ? caught.message : "falha de conexão")
+        );
       }
     })();
   }
@@ -1027,8 +1107,12 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
     );
   }
 
-  async function removerErro(id: string) {
-    if (!auditoria || !iniciarSalvamento()) return;
+  function removerErro(id: string) {
+    if (!auditoria || removendoErrosRef.current.has(id)) return;
+    removendoErrosRef.current.add(id);
+
+    const auditoriaAtual = auditoria;
+    const auditoriaId = auditoriaAtual.id;
     const supabase = createClient();
     const errosAnteriores = errosRef.current;
     const erroAlvo = errosAnteriores.find((e) => e.id === id);
@@ -1040,40 +1124,43 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
 
     errosRef.current = proximosErros;
     setErros(proximosErros);
-    atualizarResumoLocal(auditoria, datasRef.current, proximosErros);
+    atualizarResumoLocal(auditoriaAtual, datasRef.current, proximosErros);
+    toast.success("Erro removido.");
 
-    try {
-      const { error } = await mutarQualidade("REMOVER_DESVIO", { id });
-      if (error) {
+    const rollback = (mensagem: string) => {
+      if (auditoriaIdRef.current === auditoriaId) {
         errosRef.current = errosAnteriores;
         setErros(errosAnteriores);
-        atualizarResumoLocal(auditoria, datasRef.current, errosAnteriores);
-        toast.error("Não foi possível remover: " + error.message);
-        return;
+        atualizarResumoLocal(auditoriaAtual, datasRef.current, errosAnteriores);
       }
+      toast.error(mensagem);
+    };
 
-      void removerArquivosDoStorage(supabase, anexosDoErro).then((falhasStorage) => {
-        toast.success(
-          falhasStorage.length
-            ? "Erro removido. Algumas fotos não puderam ser removidas do Storage."
-            : "Erro removido."
+    void (async () => {
+      try {
+        const { error } = await mutarQualidade("REMOVER_DESVIO", { id });
+        if (error) {
+          rollback("Não foi possível remover o erro. A alteração foi restaurada: " + error.message);
+          return;
+        }
+
+        const falhasStorage = await removerArquivosDoStorage(supabase, anexosDoErro);
+        if (falhasStorage.length) {
+          toast.error("O erro foi removido, mas algumas fotos não puderam ser apagadas do Storage.");
+        }
+      } catch (caught) {
+        rollback(
+          "Não foi possível remover o erro. A alteração foi restaurada: " +
+            (caught instanceof Error ? caught.message : "falha de conexão")
         );
-      });
-    } catch (caught) {
-      errosRef.current = errosAnteriores;
-      setErros(errosAnteriores);
-      atualizarResumoLocal(auditoria, datasRef.current, errosAnteriores);
-      toast.error(
-        "Não foi possível remover: " +
-          (caught instanceof Error ? caught.message : "falha de conexão")
-      );
-    } finally {
-      encerrarSalvamento();
-    }
+      } finally {
+        removendoErrosRef.current.delete(id);
+      }
+    })();
   }
 
-  async function zerarInspecaoParede(parede: string) {
-    if (!auditoria) return;
+  function zerarInspecaoParede(parede: string) {
+    if (!auditoria || zerandoParedesRef.current.has(parede)) return;
 
     const errosDaParede = errosRef.current.filter((e) => e.parede === parede);
     const nasDaParede = nasRef.current.filter((n) => n.parede === parede);
@@ -1083,21 +1170,9 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
       return;
     }
 
-    const detalhe = [
-      tinhaData ? "a data da inspeção" : null,
-      errosDaParede.length ? `${errosDaParede.length} ${errosDaParede.length === 1 ? "erro" : "erros"}` : null,
-      nasDaParede.length ? `${nasDaParede.length} ${nasDaParede.length === 1 ? "NA" : "NAs"}` : null,
-      errosDaParede.some((e) => (e.anexos?.length ?? 0) > 0) ? "as fotos vinculadas" : null,
-    ].filter(Boolean).join(", ");
-
-    const confirmou = window.confirm(
-      `Zerar a inspeção da parede ${parede}?
-
-Isso remove ${detalhe || "todos os registros"} e a parede volta para “ainda não conferida”.`
-    );
-    if (!confirmou || !iniciarSalvamento()) return;
-
+    zerandoParedesRef.current.add(parede);
     const auditoriaAtual = auditoria;
+    const auditoriaId = auditoriaAtual.id;
     const datasAnteriores = datasRef.current;
     const errosAnteriores = errosRef.current;
     const nasAnteriores = nasRef.current;
@@ -1114,55 +1189,65 @@ Isso remove ${detalhe || "todos os registros"} e a parede volta para “ainda n�
     setErros(novosErros);
     setNas(novosNas);
     atualizarResumoLocal(auditoriaAtual, novasDatas, novosErros);
+    toast.success(`Inspeção da parede ${parede} zerada.`);
 
     const rollback = (mensagem: string) => {
-      datasRef.current = datasAnteriores;
-      errosRef.current = errosAnteriores;
-      nasRef.current = nasAnteriores;
-      setDatas(datasAnteriores);
-      setErros(errosAnteriores);
-      setNas(nasAnteriores);
-      atualizarResumoLocal(auditoriaAtual, datasAnteriores, errosAnteriores);
+      if (auditoriaIdRef.current === auditoriaId) {
+        datasRef.current = datasAnteriores;
+        errosRef.current = errosAnteriores;
+        nasRef.current = nasAnteriores;
+        setDatas(datasAnteriores);
+        setErros(errosAnteriores);
+        setNas(nasAnteriores);
+        atualizarResumoLocal(auditoriaAtual, datasAnteriores, errosAnteriores);
+      }
       toast.error(mensagem);
     };
 
-    try {
-      const { data, error } = await mutarQualidade("ZERAR_INSPECAO_PAREDE", {
-        auditoria_id: auditoriaAtual.id,
-        parede,
-      });
-      if (error) {
-        rollback("Não foi possível zerar a inspeção: " + error.message);
-        return;
-      }
-
-      const retorno = data as { arquivos_removidos?: unknown } | null;
-      const caminhos = Array.isArray(retorno?.arquivos_removidos)
-        ? retorno.arquivos_removidos.filter((item): item is string => typeof item === "string" && item.length > 0)
-        : [];
-
-      toast.success(`Parede ${parede} zerada. Ela voltou para “ainda não conferida”.`);
-      if (caminhos.length > 0) {
-        void removerArquivosDoStorage(
-          createClient(),
-          caminhos.map((storage_path) => ({
-            storage_bucket: BUCKET_AUDITORIA,
-            storage_path,
-          }))
-        ).then((falhasStorage) => {
-          if (falhasStorage.length) {
-            toast.error("A inspeção foi zerada, mas alguns arquivos não puderam ser removidos do Storage.");
-          }
+    void (async () => {
+      try {
+        const { data, error } = await mutarQualidade("ZERAR_INSPECAO_PAREDE", {
+          auditoria_id: auditoriaId,
+          parede,
         });
+        if (error) {
+          rollback(
+            "Não foi possível zerar a inspeção. A parede foi restaurada: " +
+              error.message
+          );
+          return;
+        }
+
+        const retorno = data as { arquivos_removidos?: unknown } | null;
+        const caminhos = Array.isArray(retorno?.arquivos_removidos)
+          ? retorno.arquivos_removidos.filter(
+              (item): item is string => typeof item === "string" && item.length > 0
+            )
+          : [];
+
+        if (caminhos.length > 0) {
+          const falhasStorage = await removerArquivosDoStorage(
+            createClient(),
+            caminhos.map((storage_path) => ({
+              storage_bucket: BUCKET_AUDITORIA,
+              storage_path,
+            }))
+          );
+          if (falhasStorage.length) {
+            toast.error(
+              "A inspeção foi zerada, mas alguns arquivos não puderam ser removidos do Storage."
+            );
+          }
+        }
+      } catch (caught) {
+        rollback(
+          "Não foi possível zerar a inspeção. A parede foi restaurada: " +
+            (caught instanceof Error ? caught.message : "falha de conexão")
+        );
+      } finally {
+        zerandoParedesRef.current.delete(parede);
       }
-    } catch (caught) {
-      rollback(
-        "Não foi possível zerar a inspeção: " +
-          (caught instanceof Error ? caught.message : "falha de conexão")
-      );
-    } finally {
-      encerrarSalvamento();
-    }
+    })();
   }
 
   /* ---------- render ---------- */
