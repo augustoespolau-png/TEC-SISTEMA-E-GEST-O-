@@ -72,7 +72,7 @@ function CartaoMetrica({ rotulo, valor, detalhe }: { rotulo: string; valor: stri
 
 export default function DiagnosticoSistemaCard() {
   const [health, setHealth] = useState<HealthDiagnostico | null>(null);
-  const [ia, setIa] = useState<RespostaIa["ia"]>(null);
+  const [ia, setIa] = useState<NonNullable<RespostaIa["ia"]> | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [rechecando, setRechecando] = useState(false);
   const [analisando, setAnalisando] = useState(false);
