@@ -7,6 +7,7 @@ const MUTACOES_QUENTES = new Set([
   "REGISTRAR_DESVIO",
   "ADICIONAR_NAS",
   "ADICIONAR_ANEXO",
+  "ATUALIZAR_DESVIO",
 ]);
 
 async function executarRpc(

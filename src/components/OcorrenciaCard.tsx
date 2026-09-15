@@ -11,7 +11,7 @@ import ChipGroup from "@/components/ChipGroup";
 import HistoricoRegistro from "@/components/HistoricoRegistro";
 import { SeloCriticidade, SeloStatus } from "@/components/Selo";
 import SeletorFoto from "@/components/auditoria/SeletorFoto";
-import { BUCKET_AUDITORIA, enviarFotoAuditoria } from "@/lib/anexos";
+import { BUCKET_AUDITORIA, enviarFotoAuditoria, otimizarFoto } from "@/lib/anexos";
 import type { AnexoOcorrencia, Ocorrencia, Role, Status } from "@/lib/types";
 import { ROTULO_STATUS } from "@/lib/types";
 
@@ -149,11 +149,14 @@ export default function OcorrenciaCard({
   const [dataRetrabalho, setDataRetrabalho] = useState(
     item.resolved_at?.slice(0, 10) ?? new Date().toISOString().slice(0, 10)
   );
-  const [salvando, setSalvando] = useState(false);
+  const [sincronizando, setSincronizando] = useState(false);
+  const [fotoEmEnvio, setFotoEmEnvio] = useState(false);
+  const [fotoFalhou, setFotoFalhou] = useState(false);
   const [faltaObs, setFaltaObs] = useState(false);
   const [fotoPosRetrabalho, setFotoPosRetrabalho] = useState<File | null>(null);
-  const [processandoFoto, setProcessandoFoto] = useState(false);
   const campoObs = useRef<HTMLTextAreaElement>(null);
+  // Trava síncrona: impede dois POSTs antes de o React renderizar o disabled.
+  const enviandoRef = useRef(false);
 
   const gestao = role === "gestao";
   /* Consultor acompanha e não altera. Aberto o cartão, ele vê a
@@ -178,77 +181,114 @@ export default function OcorrenciaCard({
   const viraPendente =
     !gestao && novoStatus === "RETRABALHO" && item.status !== "RETRABALHO";
 
-  async function enviar(status: string, observacao: string, avisoOk: string) {
-    if (salvando) return;
-    setSalvando(true);
+  function enviar(status: string, observacao: string, avisoOk: string) {
+    if (enviandoRef.current) return;
+    enviandoRef.current = true;
+    setSincronizando(true);
+    setFotoFalhou(false);
+
     const supabase = createClient();
-    let fotoPendente: FotoPosRetrabalhoPendente | null = null;
-    let fotoRemovida = false;
+    const fotoOriginal =
+      fotoPosRetrabalho &&
+      (status === "RETRABALHO" || status === "RETRABALHO_PENDENTE")
+        ? fotoPosRetrabalho
+        : null;
+    const observacaoFinal = observacao.trim() || null;
 
-    const limparFotoPendente = async () => {
-      if (!fotoPendente || fotoRemovida) return;
-      fotoRemovida = true;
-      const { error } = await supabase.storage
-        .from(BUCKET_AUDITORIA)
-        .remove([fotoPendente.path]);
-      if (error) {
-        toast.error(
-          "Não foi possível limpar a foto enviada. O arquivo ficou preservado para revisão."
-        );
-      }
+    // Meio-dia em São Paulo: a data não desliza de fuso em nenhuma direção.
+    const resolvedAt =
+      (status === "RETRABALHO" || status === "RETRABALHO_PENDENTE") &&
+      dataRetrabalho
+        ? `${dataRetrabalho}T12:00:00-03:00`
+        : null;
+
+    // OPTIMISTIC UI: o cartão fecha e muda de status no mesmo frame do toque.
+    // A persistência acontece abaixo, sem prender o inspetor em "Salvando…".
+    const otimista: Ocorrencia = {
+      ...item,
+      status: status as Status,
+      observacao: observacaoFinal,
+      resolved_at: resolvedAt,
+      updated_at: new Date().toISOString(),
     };
+    onSalvo(otimista);
+    setAberto(false);
+    if (fotoOriginal) setFotoEmEnvio(true);
 
-    try {
-      if (
-        fotoPosRetrabalho &&
-        (status === "RETRABALHO" || status === "RETRABALHO_PENDENTE")
-      ) {
-        fotoPendente = await prepararFotoPosRetrabalho(
-          supabase,
-          item,
-          fotoPosRetrabalho
-        );
-      }
+    void (async () => {
+      let fotoPendente: FotoPosRetrabalhoPendente | null = null;
+      let fotoRemovida = false;
 
-      // Meio-dia em São Paulo: a data não desliza de fuso em nenhuma direção.
-      const resolvedAt =
-        (status === "RETRABALHO" || status === "RETRABALHO_PENDENTE") &&
-        dataRetrabalho
-          ? `${dataRetrabalho}T12:00:00-03:00`
-          : null;
+      const limparFotoPendente = async () => {
+        if (!fotoPendente || fotoRemovida) return;
+        fotoRemovida = true;
+        const { error } = await supabase.storage
+          .from(BUCKET_AUDITORIA)
+          .remove([fotoPendente.path]);
+        if (error) {
+          toast.error(
+            "Não foi possível limpar a foto enviada. O arquivo ficou preservado para revisão."
+          );
+        }
+      };
 
-      const { data, error } = await mutarQualidade("ATUALIZAR_DESVIO", {
-        id: item.id,
-        status,
-        observacao: observacao.trim() || null,
-        resolved_at: resolvedAt,
-      });
-      if (error) {
-        await limparFotoPendente();
-        toast.error(error.message);
-        return;
-      }
-
-      let novo =
-        (data as Ocorrencia | null) ??
-        ({
-          ...item,
-          status: status as Status,
-          observacao: observacao.trim() || null,
-        } as Ocorrencia);
-
-      if (fotoPendente) {
-        const { error: vinculoError } = await adicionarAnexoRetrabalho({
-          deviation_id: String(item.id),
-          anexo: fotoPendente.dados,
+      try {
+        // O status é sempre a primeira escrita: foto nenhuma pode atrasá-lo.
+        const { data, error } = await mutarQualidade("ATUALIZAR_DESVIO", {
+          id: item.id,
+          status,
+          observacao: observacaoFinal,
+          resolved_at: resolvedAt,
         });
 
-        if (vinculoError) {
-          await limparFotoPendente();
-          toast.error(
-            "O status foi salvo, mas não foi possível vincular a foto pós-retrabalho. Tente anexá-la novamente."
+        if (error) {
+          // Falha de rede/banco: volta exatamente ao snapshot anterior e
+          // reabre o cartão para o inspetor poder tentar novamente.
+          onSalvo(item);
+          setAberto(true);
+          setFotoEmEnvio(false);
+          toast.error(error.message);
+          return;
+        }
+
+        const vindoDoBanco = data as Ocorrencia | null;
+        let confirmado: Ocorrencia = vindoDoBanco
+          ? {
+              ...item,
+              ...vindoDoBanco,
+              anexos: item.anexos ?? vindoDoBanco.anexos,
+            }
+          : otimista;
+        onSalvo(confirmado);
+        toast.success(avisoOk);
+        setFotoPosRetrabalho(null);
+
+        if (!fotoOriginal) return;
+
+        // Compressão + Storage + vínculo rodam somente DEPOIS do desvio
+        // confirmado. O inspetor já está livre para continuar trabalhando.
+        try {
+          const otimizada = await otimizarFoto(fotoOriginal);
+          fotoPendente = await prepararFotoPosRetrabalho(
+            supabase,
+            item,
+            otimizada
           );
-        } else {
+
+          const { error: vinculoError } = await adicionarAnexoRetrabalho({
+            deviation_id: String(item.id),
+            anexo: fotoPendente.dados,
+          });
+
+          if (vinculoError) {
+            await limparFotoPendente();
+            setFotoFalhou(true);
+            toast.error(
+              "Alteração salva, mas não foi possível vincular a foto pós-retrabalho. Tente anexá-la novamente."
+            );
+            return;
+          }
+
           const assinado = await supabase.storage
             .from(BUCKET_AUDITORIA)
             .createSignedUrl(fotoPendente.path, 60 * 60);
@@ -262,30 +302,41 @@ export default function OcorrenciaCard({
             storage_path: fotoPendente.path,
             url: assinado.data?.signedUrl ?? null,
           };
-          novo = {
-            ...novo,
-            anexos: [...(item.anexos ?? []), anexo],
+          confirmado = {
+            ...confirmado,
+            anexos: [...(confirmado.anexos ?? []), anexo],
           };
+          onSalvo(confirmado);
+          setFotoFalhou(false);
+        } catch (errorFoto) {
+          await limparFotoPendente();
+          setFotoFalhou(true);
+          toast.error(
+            errorFoto instanceof Error
+              ? `Alteração salva, mas a foto ficou pendente: ${errorFoto.message}`
+              : "Alteração salva, mas a foto pós-retrabalho ficou pendente."
+          );
+        } finally {
+          setFotoEmEnvio(false);
         }
+      } catch (error) {
+        onSalvo(item);
+        setAberto(true);
+        setFotoEmEnvio(false);
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "Não foi possível salvar a alteração."
+        );
+      } finally {
+        enviandoRef.current = false;
+        setSincronizando(false);
       }
-
-      toast.success(avisoOk);
-      setAberto(false);
-      onSalvo(novo);
-    } catch (error) {
-      await limparFotoPendente();
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : "Não foi possível salvar a alteração."
-      );
-    } finally {
-      setSalvando(false);
-    }
+    })();
   }
 
-  async function salvar() {
-    if (salvando) return;
+  function salvar() {
+    if (enviandoRef.current) return;
     if (!novoStatus) {
       toast.error("Escolha o novo status.");
       return;
@@ -301,7 +352,7 @@ export default function OcorrenciaCard({
       return;
     }
     setFaltaObs(false);
-    await enviar(
+    enviar(
       novoStatus,
       obs,
       viraPendente
@@ -310,16 +361,16 @@ export default function OcorrenciaCard({
     );
   }
 
-  async function aprovar() {
-    if (salvando) return;
+  function aprovar() {
+    if (enviandoRef.current) return;
     const texto =
       obs.trim() ||
       `${item.observacao ?? ""}${item.observacao ? " · " : ""}Retrabalho aprovado.`;
-    await enviar("RETRABALHO", texto, "Retrabalho aprovado.");
+    enviar("RETRABALHO", texto, "Retrabalho aprovado.");
   }
 
-  async function recusar() {
-    if (salvando) return;
+  function recusar() {
+    if (enviandoRef.current) return;
     if (obs.trim() === "") {
       setFaltaObs(true);
       campoObs.current?.focus();
@@ -327,7 +378,7 @@ export default function OcorrenciaCard({
       return;
     }
     setFaltaObs(false);
-    await enviar(
+    enviar(
       "AGUARDANDO",
       obs,
       "Retrabalho recusado. O erro voltou para a fila."
@@ -372,6 +423,21 @@ export default function OcorrenciaCard({
         </div>
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <SeloStatus status={item.status} />
+          {sincronizando && (
+            <span className="text-[10.5px] text-ink-3" aria-live="polite">
+              ◌ Sincronizando…
+            </span>
+          )}
+          {fotoEmEnvio && (
+            <span className="text-[10.5px] text-ink-3" aria-live="polite">
+              ◌ Foto enviando…
+            </span>
+          )}
+          {fotoFalhou && !fotoEmEnvio && (
+            <span className="text-[10.5px]" style={{ color: "var(--color-media)" }}>
+              ⚠ Foto pendente
+            </span>
+          )}
           {(item.status === "RETRABALHO" ||
             item.status === "RETRABALHO_PENDENTE") &&
             item.resolved_at && (
@@ -425,15 +491,15 @@ export default function OcorrenciaCard({
                 <div className="mt-3 grid gap-2 sm:grid-cols-2">
                   <button
                     onClick={aprovar}
-                    disabled={salvando}
+                    disabled={sincronizando}
                     className="btn btn-forte"
                     style={{ padding: "10px 14px" }}
                   >
-                    {salvando ? "…" : "Aprovar retrabalho"}
+                    Aprovar retrabalho
                   </button>
                   <button
                     onClick={recusar}
-                    disabled={salvando}
+                    disabled={sincronizando}
                     className="btn"
                     style={{ padding: "10px 14px" }}
                   >
@@ -463,7 +529,6 @@ export default function OcorrenciaCard({
                 setNovoStatus(v);
                 if (v !== "RETRABALHO") {
                   setFotoPosRetrabalho(null);
-                  setProcessandoFoto(false);
                 }
               }}
             />
@@ -534,21 +599,20 @@ export default function OcorrenciaCard({
               <SeletorFoto
                 id={`foto-pos-retrabalho-${String(item.id)}`}
                 titulo="Foto pós-retrabalho (opcional)"
-                descricao="A evidência será compactada e vinculada a este desvio no Storage privado."
-                salvando={salvando}
+                descricao="A evidência será compactada, enviada e vinculada em segundo plano, sem bloquear o salvamento."
+                salvando={sincronizando}
                 onArquivoPronto={setFotoPosRetrabalho}
-                onProcessando={setProcessandoFoto}
               />
             </div>
           )}
 
           <button
             onClick={salvar}
-            disabled={salvando || processandoFoto}
+            disabled={sincronizando}
             className="btn btn-forte mt-3 w-full"
             style={{ padding: "11px 16px", fontSize: 14.5 }}
           >
-            {salvando ? "Salvando…" : "Salvar alteração"}
+            Salvar alteração
           </button>
           </>
           )}
