@@ -22,7 +22,9 @@ jobs:
           cache: npm
 
       - name: Apply frontend zero-latency patch
-        run: python .github/scripts/apply_instant_audit_flows.py
+        run: |
+          python .github/scripts/apply_instant_audit_flows.py
+          python .github/scripts/fix_instant_audit_patch.py
 
       - name: Clean install
         run: |
@@ -42,7 +44,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git rm .github/workflows/apply-instant-audit-flows.yml .github/scripts/apply_instant_audit_flows.py
+          git rm .github/workflows/apply-instant-audit-flows.yml .github/scripts/apply_instant_audit_flows.py .github/scripts/fix_instant_audit_patch.py
           git add src/lib/auditoria.ts src/components/auditoria/SeletorFoto.tsx src/components/auditoria/FormularioErro.tsx src/components/auditoria/FormularioNa.tsx src/components/auditoria/PainelParede.tsx src/components/auditoria/AuditoriaCasa.tsx
           git commit -m "Torna NAs e erros instantâneos na auditoria"
           git push origin HEAD:main
