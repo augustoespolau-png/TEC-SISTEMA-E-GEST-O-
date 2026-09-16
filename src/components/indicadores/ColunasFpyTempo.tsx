@@ -3,6 +3,7 @@
 import type { CSSProperties } from "react";
 import type { CampoRecorte } from "@/lib/dashboard";
 import type { FpyNoTempo } from "@/lib/indicadores";
+import { LinhaFpyTempo } from "./Graficos";
 import { opacidadeDaMarca, type Clicavel } from "./clique";
 import { useTamanho } from "./medir";
 import { nBR, Vazio } from "./Pecas";
@@ -75,9 +76,8 @@ function caminhoBarra(
 }
 
 /**
- * FPY temporal em gráfico combinado (barra + linha), no estilo Pareto.
- * Barras enxutas para leitura executiva; linha suavizada renderizada por
- * último para ficar sempre acima das colunas.
+ * FPY temporal. O semanal mantém exatamente o visual histórico de linha
+ * + área; o diário continua no combinado barra + linha.
  */
 export default function ColunasFpyTempo({
   pontos,
@@ -92,11 +92,23 @@ export default function ColunasFpyTempo({
 } & Clicavel) {
   const [ref, tamanho] = useTamanho<HTMLDivElement>();
 
+  if (unidade === "semana") {
+    return (
+      <LinhaFpyTempo
+        pontos={pontos}
+        meta={meta}
+        unidade="semana"
+        aoRecortar={aoRecortar}
+        aceso={aceso}
+      />
+    );
+  }
+
   if (!pontos.length) {
     return <Vazio>Nenhuma parede conferida no período.</Vazio>;
   }
 
-  const campo: CampoRecorte = unidade === "semana" ? "semanaMes" : "dia";
+  const campo: CampoRecorte = "dia";
   const algumAceso = !!aceso && pontos.some((p) => aceso(campo, p.chave));
 
   const maiorRotulo = pontos.reduce(
@@ -108,9 +120,8 @@ export default function ColunasFpyTempo({
     1
   );
 
-  // Mais respiro entre categorias, especialmente no Pareto semanal.
   const passoMinimo = Math.max(
-    unidade === "semana" ? 96 : 64,
+    64,
     maiorRotulo * FONTE_EIXO * 0.62 + 22,
     maiorValor * FONTE_VALOR * 0.68 + 26
   );
@@ -132,7 +143,7 @@ export default function ColunasFpyTempo({
     (Math.max(0, Math.min(100, valor)) / 100) * areaAltura;
   const base = y(0);
 
-  const larguraMaxima = unidade === "semana" ? 34 : 30;
+  const larguraMaxima = 30;
   const larguraBarra = Math.max(14, Math.min(larguraMaxima, passo * 0.34));
 
   const corDoValor = (fpy: number) =>
@@ -194,7 +205,6 @@ export default function ColunasFpyTempo({
             <title>{`Meta ${meta}%`}</title>
           </line>
 
-          {/* Barras e alvos vêm primeiro: a linha é desenhada por último. */}
           {pontos.map((ponto, indice) => {
             const cor = corDoValor(ponto.fpy);
             const estaAceso = !!aceso && aceso(campo, ponto.chave);
@@ -241,7 +251,7 @@ export default function ColunasFpyTempo({
                       (aoRecortar
                         ? estaAceso
                           ? " · clique para tirar o recorte"
-                          : ` · clique para filtrar esta ${unidade}`
+                          : " · clique para filtrar este dia"
                         : "")}
                   </title>
                 </rect>
@@ -268,7 +278,6 @@ export default function ColunasFpyTempo({
             );
           })}
 
-          {/* Linha por ÚLTIMO: halo discreto + traço principal suavizado. */}
           {pontos.length > 1 && (
             <path
               d={caminhoLinha}
@@ -294,7 +303,6 @@ export default function ColunasFpyTempo({
             />
           )}
 
-          {/* Dots e valores pertencem à camada da linha e fecham o SVG. */}
           {pontos.map((ponto, indice) => {
             const cor = corDoValor(ponto.fpy);
             const estaAceso = !!aceso && aceso(campo, ponto.chave);
