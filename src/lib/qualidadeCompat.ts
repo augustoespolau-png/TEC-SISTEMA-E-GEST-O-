@@ -1,16 +1,31 @@
 import { createClient } from "@/lib/supabase/client";
 import { invalidateClientRequestCache } from "@/lib/clientCache";
 
-const MUTACOES_QUENTES = new Set([
+/**
+ * Mutações operacionais que nunca devem voltar ao snapshot JSON monolítico.
+ * O RPC fast opera diretamente nas tabelas relacionais e mantém o caminho
+ * crítico limitado às linhas realmente afetadas.
+ */
+const MUTACOES_DIRETAS = new Set([
+  "ABRIR_AUDITORIA",
   "MARCAR_PAREDE_OK",
   "ALTERAR_DATA_PAREDE",
   "REGISTRAR_DESVIO",
   "ADICIONAR_NAS",
+  "ADICIONAR_NA",
+  "REMOVER_NA",
   "ADICIONAR_ANEXO",
   "ATUALIZAR_DESVIO",
   "REMOVER_DESVIO",
   "ZERAR_INSPECAO_PAREDE",
+  "EXCLUIR_AUDITORIA",
 ]);
+
+function payloadMinimo(dados: Record<string, unknown>) {
+  return Object.fromEntries(
+    Object.entries(dados).filter(([, valor]) => valor !== undefined)
+  );
+}
 
 async function executarRpc(
   funcao: string,
@@ -19,7 +34,7 @@ async function executarRpc(
 ) {
   return await createClient().rpc(funcao, {
     p_operacao: operacao,
-    p_dados: dados,
+    p_dados: payloadMinimo(dados),
   });
 }
 
@@ -34,7 +49,7 @@ function chaveDaMutacao(
   operacao: string,
   dados: Record<string, unknown>
 ) {
-  return `${funcao}:${operacao}:${JSON.stringify(dados)}`;
+  return `${funcao}:${operacao}:${JSON.stringify(payloadMinimo(dados))}`;
 }
 
 function invalidarDepoisDaMutacao(operacao: string) {
@@ -46,13 +61,10 @@ function invalidarDepoisDaMutacao(operacao: string) {
 }
 
 /**
- * Escritas da aplicação nova sobre a base de Auditoria de Produto legada.
- *
- * As views de compatibilidade são somente leitura por desenho. Toda
- * alteração passa por uma função RPC do banco, que valida o papel do
- * usuário e atualiza o estado legado de forma atômica. As ações mais comuns
- * usam o fast-path incremental: apenas a parede alterada é reprojetada nas
- * tabelas relacionais, evitando reconstruir toda a base a cada clique.
+ * Escritas operacionais usam RPC relacional de baixa latência. A UI já
+ * aplica o estado otimista antes da resposta de rede; esta camada apenas
+ * confirma a mutação e invalida o cache local específico depois do commit.
+ * Não existe router.refresh/revalidatePath no caminho quente.
  */
 export async function mutarQualidade(
   operacao: string,
@@ -62,17 +74,33 @@ export async function mutarQualidade(
     ? "qualidade_compat_regra"
     : operacao.startsWith("CONFIG_")
       ? "qualidade_compat_configuracao"
-      : MUTACOES_QUENTES.has(operacao)
+      : MUTACOES_DIRETAS.has(operacao)
         ? "qualidade_compat_mutacao_fast"
         : "qualidade_compat_mutacao";
 
-  const chave = chaveDaMutacao(funcao, operacao, dados);
+  const dadosMinimos = payloadMinimo(dados);
+  const chave = chaveDaMutacao(funcao, operacao, dadosMinimos);
   const existente = mutacoesEmAndamento.get(chave);
   if (existente) return existente;
 
-  const promise = executarRpc(funcao, operacao, dados)
+  const inicio = typeof performance !== "undefined" ? performance.now() : 0;
+  const promise = executarRpc(funcao, operacao, dadosMinimos)
     .then((resposta) => {
       if (!resposta.error) invalidarDepoisDaMutacao(operacao);
+
+      if (inicio > 0 && typeof performance !== "undefined") {
+        const duracao = performance.now() - inicio;
+        performance.measure(`qualidade:${operacao}`, {
+          start: inicio,
+          duration: duracao,
+        });
+        if (duracao > 1000) {
+          console.warn(
+            `[Zero-Latency] ${operacao} respondeu em ${duracao.toFixed(0)} ms`,
+          );
+        }
+      }
+
       return resposta;
     })
     .finally(() => {
@@ -83,13 +111,13 @@ export async function mutarQualidade(
   return promise;
 }
 
-/** Foto de correção: o RPC dedicado grava no estado canônico e deixa os
- * sincronizadores existentes materializarem produto_anexos/sistema_anexos. */
+/** Foto de correção: upload binário ocorre fora do RPC; aqui trafega apenas
+ * o metadado mínimo que vincula o arquivo já salvo ao desvio. */
 export async function adicionarAnexoRetrabalho(
   dados: Record<string, unknown>
 ) {
   const resposta = await createClient().rpc("qualidade_adicionar_anexo_retrabalho", {
-    p_dados: dados,
+    p_dados: payloadMinimo(dados),
   });
   if (!resposta.error) {
     invalidateClientRequestCache(undefined, { preservarEstaticos: true });
@@ -102,7 +130,7 @@ export async function salvarProjetoParedeAnexo(
   dados: Record<string, unknown>
 ) {
   const resposta = await createClient().rpc("qualidade_salvar_projeto_parede_anexo", {
-    p_dados: dados,
+    p_dados: payloadMinimo(dados),
   });
   if (!resposta.error) {
     invalidateClientRequestCache(undefined, { preservarEstaticos: true });
