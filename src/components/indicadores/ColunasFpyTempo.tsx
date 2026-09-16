@@ -15,41 +15,14 @@ const RAIO_TOPO = 6;
 
 type PontoSvg = { x: number; y: number };
 
-const limitar = (valor: number, minimo: number, maximo: number) =>
-  Math.max(minimo, Math.min(maximo, valor));
-
-/**
- * Curva cardinal suavizada, limitada entre os dois pontos de cada trecho.
- * O efeito é equivalente visual ao "monotone" de bibliotecas de chart:
- * mantém continuidade e suavidade sem criar picos artificiais acima ou
- * abaixo dos valores reais.
- */
-function caminhoSuave(pontos: PontoSvg[]) {
-  if (!pontos.length) return "";
-  if (pontos.length === 1) return `M${pontos[0].x},${pontos[0].y}`;
-  if (pontos.length === 2) {
-    return `M${pontos[0].x},${pontos[0].y} L${pontos[1].x},${pontos[1].y}`;
-  }
-
-  let caminho = `M${pontos[0].x.toFixed(1)},${pontos[0].y.toFixed(1)}`;
-
-  for (let i = 0; i < pontos.length - 1; i += 1) {
-    const p0 = pontos[Math.max(0, i - 1)];
-    const p1 = pontos[i];
-    const p2 = pontos[i + 1];
-    const p3 = pontos[Math.min(pontos.length - 1, i + 2)];
-
-    const minY = Math.min(p1.y, p2.y);
-    const maxY = Math.max(p1.y, p2.y);
-    const cp1x = p1.x + (p2.x - p0.x) / 6;
-    const cp1y = limitar(p1.y + (p2.y - p0.y) / 6, minY, maxY);
-    const cp2x = p2.x - (p3.x - p1.x) / 6;
-    const cp2y = limitar(p2.y - (p3.y - p1.y) / 6, minY, maxY);
-
-    caminho += ` C${cp1x.toFixed(1)},${cp1y.toFixed(1)} ${cp2x.toFixed(1)},${cp2y.toFixed(1)} ${p2.x.toFixed(1)},${p2.y.toFixed(1)}`;
-  }
-
-  return caminho;
+/** Segmentos retos entre os pontos: sem curva/interpolação. */
+function caminhoReto(pontos: PontoSvg[]) {
+  return pontos
+    .map(
+      (ponto, indice) =>
+        `${indice === 0 ? "M" : "L"}${ponto.x.toFixed(1)},${ponto.y.toFixed(1)}`
+    )
+    .join(" ");
 }
 
 /** Barra com arredondamento SOMENTE nos cantos superiores. */
@@ -157,7 +130,7 @@ export default function ColunasFpyTempo({
     x: x(indice),
     y: y(ponto.fpy),
   }));
-  const caminhoLinha = caminhoSuave(pontosDaLinha);
+  const caminhoLinha = caminhoReto(pontosDaLinha);
 
   return (
     <div
@@ -283,11 +256,11 @@ export default function ColunasFpyTempo({
               d={caminhoLinha}
               fill="none"
               stroke="var(--color-papel)"
-              strokeWidth={5.5}
+              strokeWidth={3.2}
               strokeLinejoin="round"
               strokeLinecap="round"
               pointerEvents="none"
-              opacity={algumAceso ? 0.48 : 0.82}
+              opacity={algumAceso ? 0.3 : 0.52}
             />
           )}
           {pontos.length > 1 && (
@@ -295,11 +268,11 @@ export default function ColunasFpyTempo({
               d={caminhoLinha}
               fill="none"
               stroke="var(--color-brand)"
-              strokeWidth={2.4}
+              strokeWidth={1.65}
               strokeLinejoin="round"
               strokeLinecap="round"
               pointerEvents="none"
-              opacity={algumAceso ? 0.68 : 1}
+              opacity={algumAceso ? 0.62 : 0.94}
             />
           )}
 
