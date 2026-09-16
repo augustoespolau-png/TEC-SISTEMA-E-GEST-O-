@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getAuthContext } from "@/lib/supabase/auth";
 import TabBar from "@/components/TabBar";
 import NavInferior from "@/components/NavInferior";
+import IndicadoresAiSlot from "@/components/ai/IndicadoresAiSlot";
 import type { Role } from "@/lib/types";
 
 export default async function AppLayout({
@@ -23,7 +24,10 @@ export default async function AppLayout({
   return (
     <div className="quadro-app">
       <TabBar role={role} nome={nome} />
-      <div className="conteudo-app">{children}</div>
+      <div className="conteudo-app">
+        {role === "gestao" && <IndicadoresAiSlot />}
+        {children}
+      </div>
       <NavInferior role={role} />
     </div>
   );
