@@ -12,7 +12,8 @@ import {
 } from "@/lib/indicadores";
 import type { RegraPorProjeto } from "@/lib/indicadores";
 import { Cartao, dBR, FaixaNumeros, nBR } from "./Pecas";
-import { ColunasFpy, LinhaFpyTempo } from "./Graficos";
+import { ColunasFpy } from "./Graficos";
+import ColunasFpyTempo from "./ColunasFpyTempo";
 import type { Clicavel } from "./clique";
 
 const MESES = [
@@ -52,8 +53,8 @@ export default function FolhaFpy({
   aceso,
 }: {
   paredes: ParedeConferida[];
-  /** Série do período antes do recorte por dia/semana; mantém a linha
-      inteira visível enquanto o ponto selecionado vira uma barra. */
+  /** Série do período antes do recorte por dia/semana; mantém todas as
+      colunas visíveis enquanto a selecionada ganha destaque. */
   paredesTempo: ParedeConferida[];
   erros: LinhaDash[];
   /** paredes do ano corrente inteiro; NÃO acompanha o filtro de período */
@@ -204,7 +205,7 @@ export default function FolhaFpy({
       />
 
       <Cartao titulo="FPY por dia" largura="meio">
-        <LinhaFpyTempo
+        <ColunasFpyTempo
           pontos={fpyPorDia(paredesTempo)}
           meta={meta}
           unidade="dia"
@@ -213,7 +214,7 @@ export default function FolhaFpy({
         />
       </Cartao>
       <Cartao titulo="FPY por semana" largura="meio">
-        <LinhaFpyTempo
+        <ColunasFpyTempo
           pontos={fpyPorSemana(paredesTempo)}
           meta={meta}
           unidade="semana"
