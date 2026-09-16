@@ -9,21 +9,21 @@ import { nBR, Vazio } from "./Pecas";
 const ALTURA_PADRAO = 165;
 const FONTE_EIXO = 11;
 const FONTE_VALOR = 12;
+const MAX_BARRA = 38;
+const MAX_BARRA_ATIVA = 46;
 
 /**
  * FPY por dia/semana em colunas verticais.
  *
- * O mesmo vocabulário visual de FPY por Casa é aplicado aqui:
- * - faixa acima da meta = zona verde;
- * - coluna verde = meta atingida;
- * - coluna âmbar = abaixo da meta;
- * - coluna vermelha = 0% de FPY;
- * - valor exato sempre no topo;
- * - rótulo do período sempre na base.
+ * Regra estrutural: independentemente da quantidade de pontos, este
+ * componente NUNCA troca para linha/círculo. Um período único continua
+ * sendo uma coluna vertical centralizada, com valor no topo e rótulo na
+ * base. Para 2 ou 3 pontos, o conjunto fica centralizado e não se espalha
+ * artificialmente por todo o card.
  *
- * Em séries longas o desenho ganha largura mínima por período e rola
- * horizontalmente. Assim nenhum rótulo ou valor precisa ser omitido e
- * as barras continuam utilizáveis em notebook e celular.
+ * Em séries longas, cada período mantém uma largura mínima e o container
+ * passa a rolar horizontalmente. Isso evita sobreposição de rótulos e
+ * preserva o mesmo vocabulário visual do FPY por Casa em qualquer filtro.
  */
 export default function ColunasFpyTempo({
   pontos,
@@ -44,6 +44,7 @@ export default function ColunasFpyTempo({
 
   const campo: CampoRecorte = unidade === "semana" ? "semanaMes" : "dia";
   const algumAceso = !!aceso && pontos.some((p) => aceso(campo, p.chave));
+  const poucosDados = pontos.length <= 3;
 
   const maiorRotulo = pontos.reduce(
     (maior, p) => Math.max(maior, p.rotulo.length),
@@ -62,12 +63,27 @@ export default function ColunasFpyTempo({
     ? Math.max(caixa, margem.esq + margem.dir + pontos.length * passoMinimo)
     : 0;
   const areaUtil = Math.max(1, largura - margem.esq - margem.dir);
-  const passo = pontos.length ? areaUtil / pontos.length : areaUtil;
+
+  /*
+   * Série esparsa: não deixa uma única barra herdar a largura inteira do
+   * card. Criamos uma "janela" central de até 360 px e distribuímos nela
+   * 1–3 colunas. Assim 1 ponto nasce exatamente no centro e 2/3 pontos
+   * continuam visualmente próximos, sem parecerem uma linha temporal
+   * incompleta esticada de uma borda à outra.
+   */
+  const larguraGrupo = poucosDados
+    ? Math.min(areaUtil, Math.max(96, pontos.length * 104))
+    : areaUtil;
+  const deslocamentoGrupo = (areaUtil - larguraGrupo) / 2;
+  const passo = Math.max(1, larguraGrupo / pontos.length);
   const areaAltura = Math.max(1, altura - margem.topo - margem.base);
-  const larguraBarra = Math.max(14, Math.min(38, passo * 0.58));
-  const x = (i: number) => margem.esq + (i + 0.5) * passo;
+  const larguraBarra = Math.max(18, Math.min(MAX_BARRA, passo * 0.46));
+  const x = (i: number) =>
+    margem.esq + deslocamentoGrupo + (i + 0.5) * passo;
   const y = (valor: number) =>
-    margem.topo + areaAltura - (Math.max(0, Math.min(100, valor)) / 100) * areaAltura;
+    margem.topo +
+    areaAltura -
+    (Math.max(0, Math.min(100, valor)) / 100) * areaAltura;
   const base = y(0);
 
   const corDaBarra = (fpy: number) =>
@@ -81,6 +97,8 @@ export default function ColunasFpyTempo({
     <div
       ref={ref}
       className="ind-caixa-grafico"
+      data-cardinalidade={pontos.length}
+      data-modo={poucosDados ? "esparso" : "serie"}
       style={
         {
           "--alt-padrao": `${ALTURA_PADRAO}px`,
@@ -91,10 +109,11 @@ export default function ColunasFpyTempo({
     >
       {largura > 0 && (
         <svg
+          key={`${unidade}:${pontos.map((p) => `${p.chave}:${p.fpy}:${p.conferidas}`).join("|")}`}
           width={largura}
           height={altura}
           role="img"
-          aria-label={`FPY por ${unidade}, ${pontos.length} períodos, meta ${meta}%`}
+          aria-label={`FPY por ${unidade}, ${pontos.length} ${pontos.length === 1 ? "período" : "períodos"}, meta ${meta}%`}
         >
           <rect
             x={margem.esq}
@@ -133,10 +152,11 @@ export default function ColunasFpyTempo({
           {pontos.map((ponto, i) => {
             const cor = corDaBarra(ponto.fpy);
             const estaAceso = !!aceso && aceso(campo, ponto.chave);
-            const alturaBarra = Math.max(2, base - y(ponto.fpy));
+            /* 0% continua sendo barra: piso de 3px, nunca círculo/ponto. */
+            const alturaBarra = Math.max(3, base - y(ponto.fpy));
             const topoBarra = base - alturaBarra;
             const larguraAtiva = estaAceso
-              ? Math.min(passo * 0.72, larguraBarra + 8)
+              ? Math.min(Math.max(larguraBarra + 8, 26), MAX_BARRA_ATIVA)
               : larguraBarra;
             const dica =
               `${ponto.rotuloLongo ?? ponto.rotulo}: FPY ${ponto.fpy}% — ` +
@@ -150,9 +170,9 @@ export default function ColunasFpyTempo({
               >
                 {estaAceso && (
                   <rect
-                    x={x(i) - passo / 2 + 2}
+                    x={x(i) - passo / 2 + 3}
                     y={margem.topo}
-                    width={Math.max(1, passo - 4)}
+                    width={Math.max(1, passo - 6)}
                     height={areaAltura}
                     rx={5}
                     fill={cor}
@@ -186,7 +206,7 @@ export default function ColunasFpyTempo({
                     x={x(i) - larguraAtiva / 2 - 3}
                     y={Math.max(margem.topo, topoBarra - 3)}
                     width={larguraAtiva + 6}
-                    height={Math.max(5, alturaBarra + 6)}
+                    height={Math.max(6, alturaBarra + 6)}
                     rx={5}
                     fill="var(--color-papel)"
                     pointerEvents="none"
