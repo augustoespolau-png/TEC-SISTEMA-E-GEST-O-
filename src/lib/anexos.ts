@@ -9,6 +9,96 @@ export const BUCKET_AUDITORIA = "auditoria-arquivos";
 export const MAX_FOTO_BYTES = 20 * 1024 * 1024;
 export const DURACAO_URL_ANEXO = 60 * 60;
 
+export interface DetalheErroSupabase {
+  message: string;
+  code?: string;
+  details?: string;
+  hint?: string;
+}
+
+function campoDoErro(error: unknown, campo: keyof DetalheErroSupabase) {
+  if (!error || typeof error !== "object") return "";
+  const valor = (error as Record<string, unknown>)[campo];
+  if (typeof valor === "string") return valor.trim();
+  return valor == null ? "" : String(valor);
+}
+
+/** Mantém a mensagem do PostgREST completa sem expor tokens ou o arquivo. */
+export function detalhesErroSupabase(error: unknown): DetalheErroSupabase {
+  const message =
+    campoDoErro(error, "message") ||
+    (error instanceof Error ? error.message : "Erro desconhecido.");
+  const code = campoDoErro(error, "code");
+  const details = campoDoErro(error, "details");
+  const hint = campoDoErro(error, "hint");
+  return {
+    message,
+    ...(code ? { code } : {}),
+    ...(details ? { details } : {}),
+    ...(hint ? { hint } : {}),
+  };
+}
+
+/** Texto curto, mas completo, para o toast de campo e para o suporte. */
+export function textoErroSupabase(error: unknown) {
+  const detalhe = detalhesErroSupabase(error);
+  return [
+    detalhe.message,
+    detalhe.code ? `código ${detalhe.code}` : "",
+    detalhe.details ? `detalhes: ${detalhe.details}` : "",
+    detalhe.hint ? `orientação: ${detalhe.hint}` : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+/** Registra o objeto estruturado para diferenciar RLS, Storage e rede. */
+export function registrarErroSupabase(contexto: string, error: unknown) {
+  const detalhe = detalhesErroSupabase(error);
+  console.error(`[${contexto}]`, detalhe);
+  return detalhe;
+}
+
+export class ErroAnexo extends Error {
+  readonly code?: string;
+  readonly details?: string;
+  readonly hint?: string;
+  readonly caminho?: string;
+
+  constructor(prefixo: string, error: unknown, caminho?: string) {
+    const detalhe = detalhesErroSupabase(error);
+    super(`${prefixo}: ${textoErroSupabase(error)}`);
+    this.name = "ErroAnexo";
+    this.code = detalhe.code;
+    this.details = detalhe.details;
+    this.hint = detalhe.hint;
+    this.caminho = caminho;
+  }
+}
+
+const MIME_POR_EXTENSAO: Record<string, string> = {
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  png: "image/png",
+  webp: "image/webp",
+  pdf: "application/pdf",
+};
+
+/** Alguns seletores móveis retornam File.type vazio ou genérico. */
+export function mimeArquivo(arquivo: Pick<File, "name" | "type">) {
+  const informado = arquivo.type.trim().toLowerCase();
+  if (informado === "image/jpg") return "image/jpeg";
+  if (informado && informado !== "application/octet-stream") return informado;
+  const extensao = arquivo.name.split(".").pop()?.trim().toLowerCase() ?? "";
+  return MIME_POR_EXTENSAO[extensao] ?? informado;
+}
+
+export function extensaoParaMime(mime: string) {
+  if (mime === "application/pdf") return "pdf";
+  if (mime === "image/png") return "png";
+  if (mime === "image/webp") return "webp";
+  return "jpg";
+}
 /**
  * URL assinada é apenas visualização. Uma falha momentânea do Storage não
  * pode desfazer um upload ou o vínculo relacional já confirmado.
@@ -85,16 +175,17 @@ self.onmessage = async (event) => {
 
   try {
     worker = new Worker(workerUrl);
+    const workerAtual = worker;
     return await new Promise<Blob>((resolve, reject) => {
-      worker.onmessage = (event: MessageEvent<{ blob?: Blob; erro?: string }>) => {
+      workerAtual.onmessage = (event: MessageEvent<{ blob?: Blob; erro?: string }>) => {
         if (event.data?.blob) {
           resolve(event.data.blob);
           return;
         }
         reject(new Error(event.data?.erro || "Não foi possível compactar a foto."));
       };
-      worker.onerror = () => reject(new Error("Não foi possível compactar a foto."));
-      worker.postMessage(arquivo);
+      workerAtual.onerror = () => reject(new Error("Não foi possível compactar a foto."));
+      workerAtual.postMessage(arquivo);
     });
   } catch {
     return null;
@@ -301,18 +392,41 @@ export async function assinarAnexosEmLote(
 /** Envia uma foto JPEG já otimizada para o Storage privado da auditoria. */
 export async function enviarFotoAuditoria(
   supabase: SupabaseClient,
-  dados: CaminhoAnexoAuditoria & { arquivo: File }
+  dados: CaminhoAnexoAuditoria & { arquivo: File; caminho?: string }
 ) {
-  const caminho = caminhoAnexoAuditoria(dados);
-  const { error } = await supabase.storage
-    .from(BUCKET_AUDITORIA)
-    .upload(caminho, dados.arquivo, {
-      cacheControl: "3600",
-      contentType: "image/jpeg",
-      upsert: false,
-    });
-  if (error) {
-    throw new Error("Não foi possível enviar a foto: " + error.message);
+  const caminho = dados.caminho ?? caminhoAnexoAuditoria(dados);
+  const contentType = mimeArquivo(dados.arquivo);
+  let ultimoErro: unknown = null;
+
+  for (let tentativa = 1; tentativa <= 3; tentativa += 1) {
+    try {
+      const { error } = await supabase.storage
+        .from(BUCKET_AUDITORIA)
+        .upload(caminho, dados.arquivo, {
+          cacheControl: "3600",
+          contentType: contentType || "image/jpeg",
+          /* O caminho contém um UUID do anexo. Repetir a mesma operação é
+             seguro mesmo se a primeira resposta se perder no celular. */
+          upsert: true,
+        });
+      if (!error) return caminho;
+      ultimoErro = error;
+      registrarErroSupabase(
+        `auditoria/upload-foto tentativa ${tentativa}`,
+        error,
+      );
+    } catch (error) {
+      ultimoErro = error;
+      registrarErroSupabase(
+        `auditoria/upload-foto tentativa ${tentativa}`,
+        error,
+      );
+    }
+
+    if (tentativa < 3) {
+      await new Promise((resolve) => setTimeout(resolve, tentativa * 350));
+    }
   }
-  return caminho;
+
+  throw new ErroAnexo("Não foi possível enviar a foto", ultimoErro, caminho);
 }
