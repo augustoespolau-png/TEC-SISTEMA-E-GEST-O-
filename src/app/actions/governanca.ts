@@ -44,12 +44,16 @@ export interface UpdateGovernanceUserInput {
 
 export interface CreateGovernanceTeamInput {
   nome: string;
+  descricao: string;
+  projeto_id: string | null;
   codigo: string | null;
 }
 
 export interface UpdateGovernanceTeamInput {
   id: string;
   nome: string;
+  descricao: string;
+  projeto_id: string | null;
   codigo: string | null;
   ativo: boolean;
 }
@@ -107,20 +111,57 @@ async function requireGestao() {
   return { actorId: contexto.user.id, admin: createAdminClient() };
 }
 
-function normalizeUserId(value: string) {
+function normalizeUserId(value: unknown) {
+  if (typeof value !== "string") throw new Error("Identificador inválido.");
   const id = value.trim();
   if (!/^[0-9a-f-]{36}$/i.test(id)) throw new Error("Usuário inválido.");
   return id;
 }
 
-function normalizeName(value: string, label: string) {
+function normalizeName(value: unknown, label: string) {
+  if (typeof value !== "string") throw new Error(`${label} inválido.`);
   const name = value.trim().replace(/\s+/g, " ");
   if (!name) throw new Error(`${label} é obrigatório.`);
   if (name.length > 120) throw new Error(`${label} deve ter até 120 caracteres.`);
   return name;
 }
 
-function normalizeEmail(value: string) {
+function normalizeDescription(value: unknown) {
+  if (typeof value !== "string") throw new Error("Descrição inválida.");
+  const description = value.trim();
+  if (description.length > 5000) {
+    throw new Error("A descrição deve ter até 5.000 caracteres.");
+  }
+  return description;
+}
+
+function normalizeOptionalProjectId(value: unknown) {
+  if (value === null || value === undefined || value === "") return null;
+  if (typeof value !== "string") throw new Error("Projeto inválido.");
+  const projectId = value.trim();
+  if (projectId.length > 200) throw new Error("Projeto inválido.");
+  return projectId || null;
+}
+
+function normalizeOptionalTeamCode(value: unknown) {
+  if (value === null || value === undefined || value === "") return null;
+  if (typeof value !== "string") throw new Error("Código da equipe inválido.");
+  const code = value.trim().toUpperCase();
+  if (code.length > 24) throw new Error("O código deve ter até 24 caracteres.");
+  return code || null;
+}
+
+function normalizeUserIds(value: unknown) {
+  if (!Array.isArray(value)) throw new Error("Lista de membros inválida.");
+  const ids = [...new Set(value.map(normalizeUserId))];
+  if (ids.length > 500) {
+    throw new Error("Uma equipe pode ter até 500 membros.");
+  }
+  return ids;
+}
+
+function normalizeEmail(value: unknown) {
+  if (typeof value !== "string") throw new Error("E-mail inválido.");
   const email = value.trim().toLowerCase();
   if (!email || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     throw new Error("Informe um e-mail válido.");
@@ -471,12 +512,19 @@ export async function createGovernanceTeam(
   try {
     const { admin, actorId } = await requireGestao();
     const nome = normalizeName(input.nome, "Nome da equipe");
-    const codigo = input.codigo?.trim().toUpperCase() || null;
-    if (codigo && codigo.length > 24) throw new Error("O código deve ter até 24 caracteres.");
+    const descricao = normalizeDescription(input.descricao);
+    const projetoId = normalizeOptionalProjectId(input.projeto_id);
+    const codigo = normalizeOptionalTeamCode(input.codigo);
     const result = await admin
-      .from("governanca_equipes")
-      .insert({ nome, codigo, ativo: true, created_by: actorId })
-      .select("id, nome, codigo, ativo, created_at")
+      .from("equipes")
+      .insert({
+        nome,
+        descricao,
+        projeto_id: projetoId,
+        codigo,
+        ativo: true,
+      })
+      .select("id, nome, descricao, projeto_id, codigo, ativo, created_at")
       .single();
     if (result.error || !result.data) throw new Error(messageFrom(result.error));
     await audit(admin, actorId, "EQUIPE_CRIADA", result.data.id, { nome });
@@ -497,17 +545,24 @@ export async function updateGovernanceTeam(
     const { admin, actorId } = await requireGestao();
     const id = normalizeUserId(input.id);
     const nome = normalizeName(input.nome, "Nome da equipe");
-    const codigo = input.codigo?.trim().toUpperCase() || null;
-    if (codigo && codigo.length > 24) throw new Error("O código deve ter até 24 caracteres.");
+    const descricao = normalizeDescription(input.descricao);
+    const projetoId = normalizeOptionalProjectId(input.projeto_id);
+    const codigo = normalizeOptionalTeamCode(input.codigo);
     const result = await admin
-      .from("governanca_equipes")
-      .update({ nome, codigo, ativo: Boolean(input.ativo) })
+      .from("equipes")
+      .update({
+        nome,
+        descricao,
+        projeto_id: projetoId,
+        codigo,
+        ativo: Boolean(input.ativo),
+      })
       .eq("id", id)
-      .select("id, nome, codigo, ativo, created_at")
+      .select("id, nome, descricao, projeto_id, codigo, ativo, created_at")
       .single();
     if (result.error || !result.data) throw new Error(messageFrom(result.error));
     const members = await admin
-      .from("governanca_equipe_membros")
+      .from("usuario_equipes")
       .select("usuario_id")
       .eq("equipe_id", id);
     if (members.error) throw new Error(messageFrom(members.error));
@@ -532,22 +587,21 @@ export async function saveGovernanceTeamMembers(
   try {
     const { admin, actorId } = await requireGestao();
     const id = normalizeUserId(teamId);
-    const uniqueUserIds = [...new Set(userIds.map(normalizeUserId))];
-    if (uniqueUserIds.length > 500) throw new Error("Uma equipe pode ter até 500 membros.");
+    const uniqueUserIds = normalizeUserIds(userIds);
     const team = await admin
-      .from("governanca_equipes")
-      .select("id, nome, codigo, ativo, created_at")
+      .from("equipes")
+      .select("id, nome, descricao, projeto_id, codigo, ativo, created_at")
       .eq("id", id)
       .single();
     if (team.error || !team.data) throw new Error("Equipe não encontrada.");
 
     const existing = await admin
-      .from("governanca_equipe_membros")
+      .from("usuario_equipes")
       .delete()
       .eq("equipe_id", id);
     if (existing.error) throw new Error(messageFrom(existing.error));
     if (uniqueUserIds.length > 0) {
-      const inserted = await admin.from("governanca_equipe_membros").insert(
+      const inserted = await admin.from("usuario_equipes").insert(
         uniqueUserIds.map((usuarioId) => ({ equipe_id: id, usuario_id: usuarioId })),
       );
       if (inserted.error) throw new Error(messageFrom(inserted.error));
@@ -571,7 +625,7 @@ export async function deleteGovernanceTeam(
   try {
     const { admin, actorId } = await requireGestao();
     const id = normalizeUserId(teamId);
-    const result = await admin.from("governanca_equipes").delete().eq("id", id);
+    const result = await admin.from("equipes").delete().eq("id", id);
     if (result.error) throw new Error(messageFrom(result.error));
     await audit(admin, actorId, "EQUIPE_EXCLUIDA", id);
     revalidatePath("/cadastros");

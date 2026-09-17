@@ -45,7 +45,10 @@ type UserDraft = Pick<
   | "project_ids"
 >;
 
-type TeamDraft = Pick<GovernanceTeam, "id" | "nome" | "codigo" | "ativo">;
+type TeamDraft = Pick<
+  GovernanceTeam,
+  "id" | "nome" | "descricao" | "projeto_id" | "codigo" | "ativo"
+>;
 
 function draftFromUser(user: GovernanceUser): UserDraft {
   return {
@@ -72,6 +75,28 @@ function emptyUserDraft(): UserDraft {
     permissions: permissionRowsForRole("consultor"),
     project_scope: "all",
     project_ids: [],
+  };
+}
+
+function draftFromTeam(team: GovernanceTeam): TeamDraft {
+  return {
+    id: team.id,
+    nome: team.nome,
+    descricao: team.descricao,
+    projeto_id: team.projeto_id,
+    codigo: team.codigo,
+    ativo: team.ativo,
+  };
+}
+
+function emptyTeamDraft(): TeamDraft {
+  return {
+    id: "",
+    nome: "",
+    descricao: "",
+    projeto_id: null,
+    codigo: null,
+    ativo: true,
   };
 }
 
@@ -309,9 +334,10 @@ export default function GovernancaAcessos({
           <strong>Ativação do cadastro pendente</strong>
           <p>{snapshot.error}</p>
           <span>
-            Configure a chave administrativa somente no servidor e aplique a
-            migration <code>050_governanca_acessos.sql</code>. Depois, recarregue
-            esta tela para liberar o CRUD.
+            Configure a chave administrativa somente no servidor e aplique as
+            migrations <code>050_governanca_acessos.sql</code> e
+            <code>051_equipes_cadastros.sql</code>. Depois, recarregue esta
+            tela para liberar o CRUD.
           </span>
         </section>
       )}
@@ -593,38 +619,69 @@ function TeamsPanel({
   onTeamChange: (team: GovernanceTeam, wasNew?: boolean) => void;
   onSnapshot: Dispatch<SetStateAction<GovernanceSnapshot>>;
 }) {
-  const [selectedId, setSelectedId] = useState<string | null>(snapshot.teams[0]?.id ?? null);
+  const [selectedId, setSelectedId] = useState<string | null>(
+    snapshot.teams[0]?.id ?? null,
+  );
   const [creating, setCreating] = useState(false);
   const selected = snapshot.teams.find((team) => team.id === selectedId) ?? null;
-  const [draft, setDraft] = useState<TeamDraft | null>(selected ? { ...selected } : null);
+  const [draft, setDraft] = useState<TeamDraft | null>(
+    selected ? draftFromTeam(selected) : null,
+  );
   const [memberIds, setMemberIds] = useState<string[]>(selected?.member_ids ?? []);
   const [memberSearch, setMemberSearch] = useState("");
+
+  const namesByUserId = useMemo(
+    () =>
+      new Map(
+        snapshot.directory_users.map((user) => [
+          user.id,
+          user.nome.trim() || user.email,
+        ]),
+      ),
+    [snapshot.directory_users],
+  );
+  const projectNamesById = useMemo(
+    () => new Map(snapshot.projects.map((project) => [project.id, project.nome])),
+    [snapshot.projects],
+  );
 
   function selectTeam(team: GovernanceTeam) {
     setCreating(false);
     setSelectedId(team.id);
-    setDraft({ id: team.id, nome: team.nome, codigo: team.codigo, ativo: team.ativo });
+    setDraft(draftFromTeam(team));
     setMemberIds([...team.member_ids]);
+    setMemberSearch("");
   }
 
   function newTeam() {
     setCreating(true);
     setSelectedId(null);
-    setDraft({ id: "", nome: "", codigo: null, ativo: true });
+    setDraft(emptyTeamDraft());
     setMemberIds([]);
+    setMemberSearch("");
   }
 
   async function saveTeam() {
     if (!draft || busy) return;
     setBusy(draft.id ? `equipe:${draft.id}` : "equipe:nova");
     const result = draft.id
-      ? await updateGovernanceTeam({ ...draft } satisfies UpdateGovernanceTeamInput)
-      : await createGovernanceTeam({ nome: draft.nome, codigo: draft.codigo } satisfies CreateGovernanceTeamInput);
+      ? await updateGovernanceTeam({
+          ...draft,
+        } satisfies UpdateGovernanceTeamInput)
+      : await createGovernanceTeam({
+          nome: draft.nome,
+          descricao: draft.descricao,
+          projeto_id: draft.projeto_id,
+          codigo: draft.codigo,
+        } satisfies CreateGovernanceTeamInput);
     setBusy(null);
-    if (!result.ok) { toast.error(result.error); return; }
+    if (!result.ok) {
+      toast.error(result.error);
+      return;
+    }
     onTeamChange(result.data, !draft.id);
     setSelectedId(result.data.id);
-    setDraft({ id: result.data.id, nome: result.data.nome, codigo: result.data.codigo, ativo: result.data.ativo });
+    setDraft(draftFromTeam(result.data));
     setCreating(false);
     toast.success(draft.id ? "Equipe atualizada." : "Equipe criada.");
   }
@@ -634,51 +691,342 @@ function TeamsPanel({
     setBusy(`membros:${draft.id}`);
     const result = await saveGovernanceTeamMembers(draft.id, memberIds);
     setBusy(null);
-    if (!result.ok) { toast.error(result.error); return; }
+    if (!result.ok) {
+      toast.error(result.error);
+      return;
+    }
     onTeamChange(result.data);
     toast.success("Membros da equipe atualizados.");
   }
 
   async function removeTeam() {
     if (!draft?.id || busy) return;
-    if (!window.confirm(`Excluir a equipe ${draft.nome}? Os vínculos dos membros serão removidos.`)) return;
+    if (
+      !window.confirm(
+        `Excluir a equipe ${draft.nome}? Os vínculos dos membros serão removidos.`,
+      )
+    ) {
+      return;
+    }
     setBusy(`delete-team:${draft.id}`);
     const result = await deleteGovernanceTeam(draft.id);
     setBusy(null);
-    if (!result.ok) { toast.error(result.error); return; }
+    if (!result.ok) {
+      toast.error(result.error);
+      return;
+    }
     const remaining = snapshot.teams.filter((team) => team.id !== draft.id);
-    onSnapshot((current) => ({ ...current, teams: current.teams.filter((team) => team.id !== draft.id) }));
+    onSnapshot((current) => ({
+      ...current,
+      teams: current.teams.filter((team) => team.id !== draft.id),
+    }));
     const next = remaining[0] ?? null;
     if (next) selectTeam(next);
-    else { setSelectedId(null); setDraft(null); setMemberIds([]); }
+    else {
+      setSelectedId(null);
+      setDraft(null);
+      setMemberIds([]);
+    }
     toast.success("Equipe excluída.");
   }
 
-  const filteredDirectory = snapshot.directory_users.filter((user) => {
+  const filteredDirectory = useMemo(() => {
     const query = memberSearch.trim().toLowerCase();
-    return !query || `${user.nome} ${user.email}`.toLowerCase().includes(query);
-  });
+    return snapshot.directory_users.filter(
+      (user) =>
+        !query || `${user.nome} ${user.email}`.toLowerCase().includes(query),
+    );
+  }, [memberSearch, snapshot.directory_users]);
+
+  function memberPreview(team: GovernanceTeam) {
+    const names = team.member_ids
+      .map((id) => namesByUserId.get(id))
+      .filter((name): name is string => Boolean(name));
+    if (names.length === 0) return "Sem membros vinculados";
+    const visible = names.slice(0, 3).join(", ");
+    return names.length > 3 ? `${visible} +${names.length - 3}` : visible;
+  }
+
+  function projectLabel(projectId: string | null) {
+    if (!projectId) return "Sem projeto associado";
+    return `Projeto: ${projectNamesById.get(projectId) ?? projectId}`;
+  }
 
   return (
     <div className="gov-layout gov-layout-teams">
       <section className="cartao gov-list-card">
-        <div className="gov-card-heading"><div><h2>Equipes</h2><p className="sub">Agrupe pessoas para administrar a operação.</p></div><button type="button" className="btn btn-forte" onClick={newTeam} disabled={Boolean(busy)}>+ Nova equipe</button></div>
+        <div className="gov-card-heading">
+          <div>
+            <h2>Equipes</h2>
+            <p className="sub">
+              Agrupe pessoas, associe um projeto e mantenha os responsáveis
+              visíveis em um só lugar.
+            </p>
+          </div>
+          <button
+            type="button"
+            className="btn btn-forte"
+            onClick={newTeam}
+            disabled={Boolean(busy)}
+          >
+            + Nova equipe
+          </button>
+        </div>
         <div className="gov-team-list">
-          {snapshot.teams.map((team) => <button type="button" key={team.id} className={`gov-team-row ${selectedId === team.id && !creating ? "on" : ""}`} onClick={() => selectTeam(team)}><span><b>{team.nome}</b><small>{team.codigo || "Sem código"}</small></span><span>{team.member_ids.length} {team.member_ids.length === 1 ? "membro" : "membros"}</span><i className={team.ativo ? "gov-status gov-status-active" : "gov-status gov-status-blocked"}>{team.ativo ? "Ativa" : "Inativa"}</i></button>)}
-          {snapshot.teams.length === 0 && <p className="gov-no-results">Nenhuma equipe cadastrada.</p>}
+          {snapshot.teams.map((team) => (
+            <button
+              type="button"
+              key={team.id}
+              className={`gov-team-row ${selectedId === team.id && !creating ? "on" : ""}`}
+              onClick={() => selectTeam(team)}
+              aria-label={`Editar equipe ${team.nome}`}
+            >
+              <span className="gov-team-primary">
+                <b>{team.nome}</b>
+                <small>{team.descricao || team.codigo || "Sem descrição"}</small>
+                <small>{memberPreview(team)}</small>
+              </span>
+              <span className="gov-team-count">
+                {team.member_ids.length} {team.member_ids.length === 1 ? "membro" : "membros"}
+              </span>
+              <i className={team.ativo ? "gov-status gov-status-active" : "gov-status gov-status-blocked"}>
+                {team.ativo ? "Ativa" : "Inativa"}
+              </i>
+            </button>
+          ))}
+          {snapshot.teams.length === 0 && (
+            <p className="gov-no-results">
+              Nenhuma equipe cadastrada. Clique em “+ Nova equipe” para começar.
+            </p>
+          )}
         </div>
       </section>
 
       <section className="cartao gov-editor">
-        {!draft ? <><h2>Detalhes da equipe</h2><p className="sub">Crie uma equipe para começar.</p></> : <>
-          <div className="gov-card-heading"><div><p className="gov-eyebrow">{creating ? "Novo cadastro" : "Editar equipe"}</p><h2>{creating ? "Criar equipe" : draft.nome}</h2></div></div>
-          <form onSubmit={(event) => { event.preventDefault(); void saveTeam(); }}>
-            <div className="gov-form-grid"><label><span className="rotulo">Nome da equipe</span><input className="campo" value={draft.nome} onChange={(event) => setDraft((current) => current ? { ...current, nome: event.target.value } : current)} required maxLength={120} /></label><label><span className="rotulo">Código curto</span><input className="campo" value={draft.codigo ?? ""} onChange={(event) => setDraft((current) => current ? { ...current, codigo: event.target.value || null } : current)} maxLength={24} placeholder="Ex.: QUALIDADE" /></label></div>
-            {!creating && <label className="gov-switch"><input type="checkbox" checked={draft.ativo} onChange={(event) => setDraft((current) => current ? { ...current, ativo: event.target.checked } : current)} /> Equipe ativa</label>}
-            <div className="gov-fieldset gov-members-fieldset"><div className="gov-legend-row"><div><h3>Membros</h3><p className="sub">Marque as contas que pertencem a esta equipe.</p></div><b>{memberIds.length}</b></div><input className="campo" value={memberSearch} onChange={(event) => setMemberSearch(event.target.value)} placeholder="Buscar membro" aria-label="Buscar membro" /><div className="gov-member-list">{filteredDirectory.map((user) => <label key={user.id}><input type="checkbox" checked={memberIds.includes(user.id)} onChange={(event) => setMemberIds((current) => event.target.checked ? [...new Set([...current, user.id])] : current.filter((id) => id !== user.id))} /><span><b>{user.nome || "Sem nome"}</b><small>{user.email}</small></span></label>)}{filteredDirectory.length === 0 && <span className="sub">Nenhuma conta encontrada.</span>}</div></div>
-            <div className="gov-editor-actions"><button type="submit" className="btn btn-forte" disabled={Boolean(busy)}>{busy === (draft.id ? `equipe:${draft.id}` : "equipe:nova") ? "Salvando…" : creating ? "Criar equipe" : "Salvar equipe"}</button>{!creating && <button type="button" className="btn" onClick={() => selected && selectTeam(selected)} disabled={Boolean(busy)}>Desfazer</button>}{!creating && <button type="button" className="btn" onClick={() => void saveMembers()} disabled={Boolean(busy)}>{busy === `membros:${draft.id}` ? "Salvando…" : "Salvar membros"}</button>}{!creating && <button type="button" className="btn gov-danger" onClick={() => void removeTeam()} disabled={Boolean(busy)}>{busy === `delete-team:${draft.id}` ? "Excluindo…" : "Excluir equipe"}</button>}</div>
-          </form>
-        </>}
+        {!draft ? (
+          <>
+            <h2>Detalhes da equipe</h2>
+            <p className="sub">
+              Crie uma equipe para começar a organizar os responsáveis.
+            </p>
+          </>
+        ) : (
+          <>
+            <div className="gov-card-heading">
+              <div>
+                <p className="gov-eyebrow">
+                  {creating ? "Novo cadastro" : "Editar equipe"}
+                </p>
+                <h2>{creating ? "Criar equipe" : draft.nome}</h2>
+              </div>
+              {!creating && (
+                <i className={draft.ativo ? "gov-status gov-status-active" : "gov-status gov-status-blocked"}>
+                  {draft.ativo ? "Ativa" : "Inativa"}
+                </i>
+              )}
+            </div>
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                void saveTeam();
+              }}
+            >
+              <div className="gov-form-grid">
+                <label>
+                  <span className="rotulo">Nome da equipe</span>
+                  <input
+                    className="campo"
+                    value={draft.nome}
+                    onChange={(event) =>
+                      setDraft((current) =>
+                        current ? { ...current, nome: event.target.value } : current,
+                      )
+                    }
+                    required
+                    maxLength={120}
+                  />
+                </label>
+                <label>
+                  <span className="rotulo">Código curto</span>
+                  <input
+                    className="campo"
+                    value={draft.codigo ?? ""}
+                    onChange={(event) =>
+                      setDraft((current) =>
+                        current
+                          ? { ...current, codigo: event.target.value || null }
+                          : current,
+                      )
+                    }
+                    maxLength={24}
+                    placeholder="Ex.: QUALIDADE"
+                  />
+                </label>
+                <label className="gov-form-wide">
+                  <span className="rotulo">Descrição</span>
+                  <textarea
+                    className="campo"
+                    value={draft.descricao}
+                    onChange={(event) =>
+                      setDraft((current) =>
+                        current
+                          ? { ...current, descricao: event.target.value }
+                          : current,
+                      )
+                    }
+                    maxLength={5000}
+                    placeholder="Explique a responsabilidade desta equipe."
+                    rows={3}
+                  />
+                </label>
+                <label>
+                  <span className="rotulo">Projeto associado</span>
+                  <select
+                    className="campo"
+                    value={draft.projeto_id ?? ""}
+                    onChange={(event) =>
+                      setDraft((current) =>
+                        current
+                          ? {
+                              ...current,
+                              projeto_id: event.target.value || null,
+                            }
+                          : current,
+                      )
+                    }
+                  >
+                    <option value="">Sem projeto específico</option>
+                    {snapshot.projects.map((project) => (
+                      <option key={project.id} value={project.id}>
+                        {project.nome}
+                        {!project.ativo ? " · inativo" : ""}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              {!creating && (
+                <label className="gov-switch">
+                  <input
+                    type="checkbox"
+                    checked={draft.ativo}
+                    onChange={(event) =>
+                      setDraft((current) =>
+                        current ? { ...current, ativo: event.target.checked } : current,
+                      )
+                    }
+                  />
+                  Equipe ativa
+                </label>
+              )}
+
+              <div className="gov-fieldset gov-members-fieldset">
+                <div className="gov-legend-row">
+                  <div>
+                    <h3>Membros</h3>
+                    <p className="sub">
+                      Adicione ou remova usuários vinculados a esta equipe.
+                    </p>
+                  </div>
+                  <b>{memberIds.length}</b>
+                </div>
+                {creating ? (
+                  <p className="gov-invite-note">
+                    Salve a equipe primeiro. Depois você poderá vincular os
+                    usuários nesta mesma aba.
+                  </p>
+                ) : (
+                  <>
+                    <input
+                      className="campo"
+                      value={memberSearch}
+                      onChange={(event) => setMemberSearch(event.target.value)}
+                      placeholder="Buscar membro por nome ou e-mail"
+                      aria-label="Buscar membro"
+                    />
+                    <div className="gov-member-list">
+                      {filteredDirectory.map((user) => (
+                        <label key={user.id}>
+                          <input
+                            type="checkbox"
+                            checked={memberIds.includes(user.id)}
+                            onChange={(event) =>
+                              setMemberIds((current) =>
+                                event.target.checked
+                                  ? [...new Set([...current, user.id])]
+                                  : current.filter((id) => id !== user.id),
+                              )
+                            }
+                          />
+                          <span>
+                            <b>{user.nome || "Sem nome"}</b>
+                            <small>{user.email}</small>
+                          </span>
+                        </label>
+                      ))}
+                      {filteredDirectory.length === 0 && (
+                        <span className="sub">Nenhuma conta encontrada.</span>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+
+              <p className="gov-team-association">
+                {projectLabel(draft.projeto_id)}
+              </p>
+
+              <div className="gov-editor-actions">
+                <button
+                  type="submit"
+                  className="btn btn-forte"
+                  disabled={Boolean(busy)}
+                >
+                  {busy === (draft.id ? `equipe:${draft.id}` : "equipe:nova")
+                    ? "Salvando…"
+                    : creating
+                      ? "Criar equipe"
+                      : "Salvar equipe"}
+                </button>
+                {!creating && (
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={() => selected && selectTeam(selected)}
+                    disabled={Boolean(busy)}
+                  >
+                    Desfazer
+                  </button>
+                )}
+                {!creating && (
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={() => void saveMembers()}
+                    disabled={Boolean(busy)}
+                  >
+                    {busy === `membros:${draft.id}`
+                      ? "Salvando…"
+                      : "Salvar membros"}
+                  </button>
+                )}
+                {!creating && (
+                  <button
+                    type="button"
+                    className="btn gov-danger"
+                    onClick={() => void removeTeam()}
+                    disabled={Boolean(busy)}
+                  >
+                    {busy === `delete-team:${draft.id}`
+                      ? "Excluindo…"
+                      : "Excluir equipe"}
+                  </button>
+                )}
+              </div>
+            </form>
+          </>
+        )}
       </section>
     </div>
   );

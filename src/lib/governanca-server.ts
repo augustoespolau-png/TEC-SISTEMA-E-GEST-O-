@@ -41,6 +41,8 @@ type ProjectAccessRow = { usuario_id: string; projeto_id: string };
 type TeamRow = {
   id: string;
   nome: string;
+  descricao: string;
+  projeto_id: string | null;
   codigo: string | null;
   ativo: boolean;
   created_at: string;
@@ -198,7 +200,7 @@ export async function readGovernanceUser(
         .select("usuario_id, projeto_id")
         .eq("usuario_id", userId),
       admin
-        .from("governanca_equipe_membros")
+        .from("usuario_equipes")
         .select("equipe_id, usuario_id")
         .eq("usuario_id", userId),
     ]);
@@ -251,11 +253,11 @@ export async function loadGovernanceSnapshot(
         perPage: 1000,
       }),
       admin
-        .from("governanca_equipes")
-        .select("id, nome, codigo, ativo, created_at")
+        .from("equipes")
+        .select("id, nome, descricao, projeto_id, codigo, ativo, created_at")
         .order("nome", { ascending: true }),
       admin
-        .from("governanca_equipe_membros")
+        .from("usuario_equipes")
         .select("equipe_id, usuario_id"),
       listProjects(admin),
     ]);
@@ -350,6 +352,8 @@ export async function loadGovernanceSnapshot(
     const teams = (teamsResult.data as TeamRow[]).map<GovernanceTeam>((team) => ({
       id: team.id,
       nome: team.nome,
+      descricao: team.descricao ?? "",
+      projeto_id: team.projeto_id ?? null,
       codigo: team.codigo,
       ativo: Boolean(team.ativo),
       created_at: team.created_at,

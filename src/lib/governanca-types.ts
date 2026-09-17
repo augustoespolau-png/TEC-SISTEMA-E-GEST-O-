@@ -69,6 +69,8 @@ export interface GovernanceUser {
 export interface GovernanceTeam {
   id: string;
   nome: string;
+  descricao: string;
+  projeto_id: string | null;
   codigo: string | null;
   ativo: boolean;
   created_at: string;
