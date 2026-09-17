@@ -7,53 +7,18 @@ import { createClient } from "@/lib/supabase/client";
 import LogoTecverde from "@/components/LogoTecverde";
 import BotaoTema from "@/components/BotaoTema";
 import NomeSistema from "@/components/NomeSistema";
+import { canAccess, isManagement, type AccessSnapshot } from "@/lib/access";
 import type { Role } from "@/lib/types";
 
-/* A aba Registrar saiu do ar: a auditoria virou o único caminho de
-   entrada de erro, porque ela também diz quantas paredes foram
-   conferidas — sem isso o FPY não tem denominador. Como religar está
-   no comentário de src/app/(app)/page.tsx. */
-const TABS: { href: string; rotulo: string; papeis: Role[] }[] = [
-  /* O CONSULTOR NÃO ENTRA NA AUDITORIA. Antes ele entrava "só para
-     ler" — a tela escondia as ações e o banco recusava a escrita —,
-     mas tela de operação com tudo desligado convida a tentar. A
-     CONSULTA ele tem, a pedido: lá o cartão aberto mostra o que está
-     escrito e o formulário inteiro some (ver OcorrenciaCard).
-     E isto NÃO é só menu: a página da auditoria confere o papel no
-     servidor e manda o consultor para /indicadores. Esconder aba é
-     cortesia; a trava está lá e na RLS. */
-  {
-    href: "/auditoria",
-    rotulo: "Auditoria",
-    papeis: ["gestao"],
-  },
-  {
-    href: "/consultar",
-    rotulo: "Consultar",
-    papeis: ["operador", "consultor", "gestao"],
-  },
-  {
-    href: "/indicadores",
-    rotulo: "Indicadores",
-    /* O OPERADOR entra aqui, a pedido, e só na folha de FPY: ele
-       precisa ver quanta parede passa de primeira, que é o resultado do
-       trabalho dele. As outras três folhas continuam de gestão — ver
-       FOLHAS_DO_PAPEL logo abaixo. */
-    /* Porta unica dos paineis. O antigo /painel saiu do menu e virou a
-       folha "Execucao" daqui — dois botoes levando a leituras da mesma
-       coisa so faziam a pessoa escolher errado. A rota continua de pe
-       para quem tem o endereco salvo ou uma TV apontada para ela. */
-    papeis: ["consultor", "gestao"],
-  },
-  { href: "/historico", rotulo: "Histórico", papeis: ["gestao"] },
-  { href: "/configuracoes", rotulo: "Config.", papeis: ["gestao"] },
-];
+const TABS = [
+  { href: "/auditoria", rotulo: "Auditoria", modulo: "AUDITORIA" },
+  { href: "/consultar", rotulo: "Consultar", modulo: "AUDITORIA" },
+  { href: "/indicadores", rotulo: "Indicadores", modulo: "INDICADORES" },
+  { href: "/historico", rotulo: "Histórico", modulo: "HISTÓRICO" },
+  { href: "/configuracoes", rotulo: "Config.", modulo: "CONFIGURAÇÃO", gestao: true },
+  { href: "/cadastros", rotulo: "Cadastros", modulo: "ADMINISTRAÇÃO", gestao: true },
+] as const;
 
-/* As folhas dos indicadores moram na LATERAL, aninhadas sob a aba
-   Indicadores: sao cinco destinos que so existem dentro dela, e como
-   abas de uma segunda linha disputavam a largura com o topo. A folha
-   escolhida viaja pela URL (?folha=), e nao por estado interno, para o
-   link poder ser marcado, compartilhado e aberto direto. */
 export const FOLHAS_INDICADORES: { id: string; rotulo: string }[] = [
   { id: "fpy", rotulo: "FPY" },
   { id: "desvios", rotulo: "Qualidade" },
@@ -61,26 +26,31 @@ export const FOLHAS_INDICADORES: { id: string; rotulo: string }[] = [
   { id: "comparativos", rotulo: "Comparativos" },
 ];
 
-/* Quais folhas cada papel alcança. O operador vê o FPY e nada mais: é
-   o indicador do trabalho dele. Esconder as outras é só metade — a
-   página confere isto de novo, senão bastava digitar ?folha=desvios. */
 export function folhasDoPapel(role: Role) {
   return role === "operador"
     ? FOLHAS_INDICADORES.filter((f) => f.id === "fpy")
     : FOLHAS_INDICADORES;
 }
 
-export default function TabBar({ role, nome }: { role: Role; nome: string }) {
+export default function TabBar({
+  role,
+  nome,
+  access,
+}: {
+  role: Role;
+  nome: string;
+  access: AccessSnapshot;
+}) {
   const pathname = usePathname();
   const busca = useSearchParams();
   const router = useRouter();
-  const abas = TABS.filter((t) => t.papeis.includes(role));
+  const abas = TABS.filter((t) =>
+    t.gestao ? isManagement(access) : canAccess(access, t.modulo, "ver")
+  );
   const folhaAtual = busca.get("folha") ?? "fpy";
   const [weinmannAberto, setWeinmannAberto] = useState(true);
   const moduloAtivo = abas.some((t) => pathname === t.href);
 
-  // o Painel tem cabeçalho próprio, com período e modo TV
-  // o painel tem cabeçalho próprio, com projeto, período e modo TV
   if (pathname === "/painel") return null;
 
   async function sair() {
@@ -98,8 +68,6 @@ export default function TabBar({ role, nome }: { role: Role; nome: string }) {
           <NomeSistema />
         </Link>
 
-        {/* no celular a navegação fica na barra de baixo (NavInferior);
-            a própria classe .abas se esconde abaixo de 1024px */}
         <nav className="abas flex-1">
           <button
             type="button"
@@ -136,8 +104,6 @@ export default function TabBar({ role, nome }: { role: Role; nome: string }) {
                     {t.rotulo}
                   </Link>
                   {t.href === "/indicadores" && pathname === "/indicadores" &&
-                    /* uma folha só não é escolha: para o operador a lista
-                       some, em vez de virar um botão sozinho aceso */
                     folhasDoPapel(role).length > 1 &&
                     folhasDoPapel(role).map((f) => (
                       <Link
@@ -154,16 +120,10 @@ export default function TabBar({ role, nome }: { role: Role; nome: string }) {
           )}
         </nav>
 
-        {/* .rodape-topo empurra para a direita no celular e para o pe
-            da coluna quando isto vira barra lateral no PC */}
         <div className="rodape-topo">
-          <span className="hidden text-[11px] text-ink-3 sm:inline">
-            {nome}
-          </span>
+          <span className="hidden text-[11px] text-ink-3 sm:inline">{nome}</span>
           <BotaoTema />
-          <button onClick={sair} className="btn">
-            Sair
-          </button>
+          <button onClick={sair} className="btn">Sair</button>
         </div>
       </div>
     </header>
