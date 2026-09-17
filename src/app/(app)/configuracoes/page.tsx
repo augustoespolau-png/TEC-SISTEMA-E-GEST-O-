@@ -4,12 +4,12 @@ import { getAuthContext } from "@/lib/supabase/auth";
 import ConfigManager from "@/components/ConfigManager";
 import DiagnosticoSistemaCard from "@/components/config/DiagnosticoSistemaCard";
 import ObrasEmpreendimentosCard from "@/components/config/ObrasEmpreendimentosCard";
+import { isManagement } from "@/lib/access";
 
 export default async function ConfiguracoesPage() {
   const contexto = await getAuthContext();
   if (!contexto) redirect("/login");
-
-  if (contexto.profile?.role !== "gestao") redirect("/");
+  if (!isManagement(contexto.access)) redirect("/");
 
   return (
     <>
