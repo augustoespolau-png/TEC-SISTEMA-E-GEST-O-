@@ -1,7 +1,8 @@
 import { cache } from "react";
 import {
-  isRole,
   normalizarPermissoes,
+  roleFromStored,
+  statusFromStored,
   type GovernancePermission,
 } from "@/lib/governanca-types";
 import { createClient } from "@/lib/supabase/server";
@@ -34,32 +35,62 @@ export const getAuthContext = cache(async () => {
   let profile: {
     nome: string | null;
     role: unknown;
-    status?: unknown;
+    status: unknown;
     suspenso_ate?: string | null;
   } | null = null;
 
-  const extendedProfile = await supabase
-    .from("profiles")
-    .select("nome, role, status, suspenso_ate")
-    .eq("id", user.id)
+  // O projeto atual mantém perfis_acesso como tabela canônica. A view
+  // profiles continua sendo consultada abaixo para instalações antigas.
+  const canonicalProfile = await supabase
+    .from("perfis_acesso")
+    .select("email, full_name, role, status, suspended_until")
+    .eq("user_id", user.id)
     .maybeSingle();
 
-  if (!extendedProfile.error) {
-    profile = extendedProfile.data;
+  if (!canonicalProfile.error && canonicalProfile.data) {
+    profile = {
+      nome:
+        canonicalProfile.data.full_name ??
+        canonicalProfile.data.email ??
+        user.email ??
+        "",
+      role: canonicalProfile.data.role,
+      status: canonicalProfile.data.status,
+      suspenso_ate: canonicalProfile.data.suspended_until ?? null,
+    };
   } else {
-    // Compatibilidade durante a janela entre o deploy da aplicação e a
-    // aplicação da migration 050 no projeto Supabase.
-    const legacyProfile = await supabase
+    const extendedProfile = await supabase
       .from("profiles")
-      .select("nome, role")
+      .select("nome, role, status, suspenso_ate")
       .eq("id", user.id)
       .maybeSingle();
-    profile = legacyProfile.data
-      ? { ...legacyProfile.data, status: "active", suspenso_ate: null }
-      : null;
+
+    if (!extendedProfile.error && extendedProfile.data) {
+      profile = {
+        nome: extendedProfile.data.nome,
+        role: extendedProfile.data.role,
+        status: extendedProfile.data.status,
+        suspenso_ate: extendedProfile.data.suspenso_ate ?? null,
+      };
+    } else {
+      // Compatibilidade durante a janela entre o deploy da aplicação e a
+      // aplicação das migrations de governança no projeto Supabase.
+      const legacyProfile = await supabase
+        .from("profiles")
+        .select("nome, role")
+        .eq("id", user.id)
+        .maybeSingle();
+      profile = legacyProfile.data
+        ? {
+            ...legacyProfile.data,
+            status: "active",
+            suspenso_ate: null,
+          }
+        : null;
+    }
   }
 
-  const role = isRole(profile?.role) ? profile.role : "consultor";
+  const role = roleFromStored(profile?.role);
   let permissionRows: GovernancePermission[] = [];
   if (profile) {
     const permissions = await supabase
@@ -78,9 +109,7 @@ export const getAuthContext = cache(async () => {
           id: user.id,
           nome: profile.nome ?? "",
           role,
-          status: (profile.status === "blocked" || profile.status === "suspended"
-            ? profile.status
-            : "active") as "active" | "blocked" | "suspended",
+          status: statusFromStored(profile.status),
           suspenso_ate: profile.suspenso_ate ?? null,
         }
       : null,

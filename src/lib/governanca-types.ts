@@ -105,6 +105,56 @@ export function isRole(value: unknown): value is Role {
   return value === "operador" || value === "consultor" || value === "gestao";
 }
 
+function normalizeStoredValue(value: unknown) {
+  return typeof value === "string"
+    ? value
+        .trim()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toUpperCase()
+    : "";
+}
+
+/** Converte os papéis legados/canônicos do Supabase para o domínio da UI. */
+export function roleFromStored(value: unknown): Role {
+  if (isRole(value)) return value;
+
+  const role = normalizeStoredValue(value);
+  if (["GESTAO", "GESTOR", "ADMIN", "ADMINISTRADOR"].includes(role)) {
+    return "gestao";
+  }
+  if (["OPERADOR", "INSPETOR", "AUDITOR", "QUALIDADE"].includes(role)) {
+    return "operador";
+  }
+  return "consultor";
+}
+
+/** Converte o papel da aplicação para o enum textual aceito pelo schema remoto. */
+export function storedRoleFor(role: Role) {
+  if (role === "gestao") return "GESTAO";
+  if (role === "operador") return "INSPETOR";
+  return "SUPERVISOR";
+}
+
+/** Converte os status legados/canônicos do Supabase para o domínio da UI. */
+export function statusFromStored(value: unknown): AccountStatus {
+  if (value === "active" || value === "blocked" || value === "suspended") {
+    return value;
+  }
+
+  const status = normalizeStoredValue(value);
+  if (["APROVADO", "ATIVO", "ACTIVE"].includes(status)) return "active";
+  if (["SUSPENSO", "SUSPENDED"].includes(status)) return "suspended";
+  return "blocked";
+}
+
+/** Converte o status da aplicação para o enum textual aceito pelo schema remoto. */
+export function storedStatusFor(status: AccountStatus) {
+  if (status === "active") return "APROVADO";
+  if (status === "suspended") return "SUSPENSO";
+  return "BLOQUEADO";
+}
+
 export function isGovernanceModule(value: unknown): value is GovernanceModule {
   return GOVERNANCE_MODULES.some((module) => module.id === value);
 }

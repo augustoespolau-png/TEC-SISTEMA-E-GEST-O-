@@ -2,8 +2,9 @@ import type { User } from "@supabase/supabase-js";
 import { createAdminClient, isAdminConfigured } from "@/lib/supabase/admin";
 import {
   isGovernanceModule,
-  isRole,
   normalizarPermissoes,
+  roleFromStored,
+  statusFromStored,
   type AccountStatus,
   type GovernancePermission,
   type GovernanceDirectoryUser,
@@ -20,13 +21,17 @@ export const GOVERNANCE_PAGE_SIZE = 25;
 type AdminClient = ReturnType<typeof createAdminClient>;
 
 type ProfileRow = {
-  id: string;
-  nome: string | null;
+  id?: string | null;
+  user_id?: string | null;
+  nome?: string | null;
+  full_name?: string | null;
+  email?: string | null;
   role: unknown;
   status: unknown;
-  suspenso_ate: string | null;
-  escopo_projetos: unknown;
-  created_at: string;
+  suspenso_ate?: string | null;
+  suspended_until?: string | null;
+  escopo_projetos?: unknown;
+  created_at?: string | null;
 };
 
 type PermissionRow = {
@@ -50,12 +55,11 @@ type TeamRow = {
 type TeamMemberRow = { equipe_id: string; usuario_id: string };
 
 function statusFromRow(value: unknown): AccountStatus {
-  if (value === "blocked" || value === "suspended") return value;
-  return "active";
+  return statusFromStored(value);
 }
 
 function roleFromRow(value: unknown): Role {
-  return isRole(value) ? value : "consultor";
+  return roleFromStored(value);
 }
 
 function errorText(error: unknown) {
@@ -77,6 +81,48 @@ function profileFallback(user: User): ProfileRow {
     escopo_projetos: "all",
     created_at: user.created_at,
   };
+}
+
+function profileId(profile: ProfileRow) {
+  return profile.user_id ?? profile.id ?? "";
+}
+
+function profileName(profile: ProfileRow) {
+  return profile.full_name?.trim() || profile.nome?.trim() || profile.email?.trim() || "";
+}
+
+async function loadProfileRows(
+  admin: AdminClient,
+  userIds: string[],
+): Promise<ProfileRow[]> {
+  if (userIds.length === 0) return [];
+
+  const canonical = await admin
+    .from("perfis_acesso")
+    .select(
+      "id, user_id, email, full_name, role, status, suspended_until, escopo_projetos, created_at",
+    )
+    .in("user_id", userIds);
+  if (!canonical.error) return (canonical.data ?? []) as ProfileRow[];
+
+  const legacyExtended = await admin
+    .from("profiles")
+    .select("id, nome, role, status, suspenso_ate, escopo_projetos, created_at")
+    .in("id", userIds);
+  if (!legacyExtended.error) return (legacyExtended.data ?? []) as ProfileRow[];
+
+  const legacyMinimal = await admin
+    .from("profiles")
+    .select("id, nome, role")
+    .in("id", userIds);
+  if (legacyMinimal.error) throw new Error(errorText(canonical.error));
+
+  return ((legacyMinimal.data ?? []) as ProfileRow[]).map((profile) => ({
+    ...profile,
+    status: "active",
+    suspenso_ate: null,
+    escopo_projetos: "all",
+  }));
 }
 
 function toPermission(row: PermissionRow): GovernancePermission | null {
@@ -102,10 +148,10 @@ function makeUser(
   return {
     id: user.id,
     email: user.email ?? "",
-    nome: profile.nome?.trim() || user.email || "",
+    nome: profileName(profile) || user.email || "",
     role,
     status: statusFromRow(profile.status),
-    suspenso_ate: profile.suspenso_ate,
+    suspenso_ate: profile.suspenso_ate ?? profile.suspended_until ?? null,
     project_scope: projectScope,
     created_at: profile.created_at || user.created_at,
     last_sign_in_at: user.last_sign_in_at ?? null,
@@ -184,13 +230,9 @@ export async function readGovernanceUser(
   const authResult = await admin.auth.admin.getUserById(userId);
   if (authResult.error || !authResult.data.user) return null;
 
-  const [profileResult, permissionResult, projectResult, teamResult] =
+  const [profileRows, permissionResult, projectResult, teamResult] =
     await Promise.all([
-      admin
-        .from("profiles")
-        .select("id, nome, role, status, suspenso_ate, escopo_projetos, created_at")
-        .eq("id", userId)
-        .maybeSingle(),
+      loadProfileRows(admin, [userId]),
       admin
         .from("governanca_permissoes_modulo")
         .select("usuario_id, modulo, pode_visualizar, pode_editar, pode_gerenciar")
@@ -205,13 +247,11 @@ export async function readGovernanceUser(
         .eq("usuario_id", userId),
     ]);
 
-  if (profileResult.error) throw new Error(errorText(profileResult.error));
   if (permissionResult.error) throw new Error(errorText(permissionResult.error));
   if (projectResult.error) throw new Error(errorText(projectResult.error));
   if (teamResult.error) throw new Error(errorText(teamResult.error));
 
-  const profile = (profileResult.data as ProfileRow | null) ??
-    profileFallback(authResult.data.user);
+  const profile = profileRows[0] ?? profileFallback(authResult.data.user);
   const permissions = (permissionResult.data ?? []) as PermissionRow[];
   const projectIds = ((projectResult.data ?? []) as ProjectAccessRow[]).map(
     (row) => String(row.projeto_id),
@@ -279,15 +319,12 @@ export async function loadGovernanceSnapshot(
     const [profilesResult, permissionsResult, projectAccessResult] =
       userIds.length === 0
         ? [
-            { data: [], error: null },
+            [] as ProfileRow[],
             { data: [], error: null },
             { data: [], error: null },
           ]
         : await Promise.all([
-            admin
-              .from("profiles")
-              .select("id, nome, role, status, suspenso_ate, escopo_projetos, created_at")
-              .in("id", userIds),
+            loadProfileRows(admin, userIds),
             admin
               .from("governanca_permissoes_modulo")
               .select(
@@ -300,7 +337,6 @@ export async function loadGovernanceSnapshot(
               .in("usuario_id", userIds),
           ]);
 
-    if (profilesResult.error) throw new Error(errorText(profilesResult.error));
     if (permissionsResult.error) {
       throw new Error(errorText(permissionsResult.error));
     }
@@ -309,7 +345,7 @@ export async function loadGovernanceSnapshot(
     }
 
     const profiles = new Map(
-      (profilesResult.data as ProfileRow[]).map((profile) => [profile.id, profile]),
+      (profilesResult as ProfileRow[]).map((profile) => [profileId(profile), profile]),
     );
     const permissionsByUser = new Map<string, PermissionRow[]>();
     for (const row of (permissionsResult.data ?? []) as PermissionRow[]) {

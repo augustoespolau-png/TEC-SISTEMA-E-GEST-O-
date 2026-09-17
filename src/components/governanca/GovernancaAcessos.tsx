@@ -335,9 +335,10 @@ export default function GovernancaAcessos({
           <p>{snapshot.error}</p>
           <span>
             Configure a chave administrativa somente no servidor e aplique as
-            migrations <code>050_governanca_acessos.sql</code> e
-            <code>051_equipes_cadastros.sql</code>. Depois, recarregue esta
-            tela para liberar o CRUD.
+            migrations <code>050_governanca_acessos.sql</code>,
+            <code>051_equipes_cadastros.sql</code> e
+            <code>052_cadastros_schema_compatibilidade.sql</code>. Depois,
+            recarregue esta tela para liberar o CRUD.
           </span>
         </section>
       )}

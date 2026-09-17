@@ -39,9 +39,10 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/bui
 
 O módulo nativo fica em `/cadastros` e é exclusivo da Gestão. Antes de
 publicar a funcionalidade, aplique, nesta ordem, as migrations
-`supabase/migrations/050_governanca_acessos.sql` e
-`supabase/migrations/051_equipes_cadastros.sql` no projeto Supabase e configure
-na Vercel:
+`supabase/migrations/050_governanca_acessos.sql`,
+`supabase/migrations/051_equipes_cadastros.sql` e
+`supabase/migrations/052_cadastros_schema_compatibilidade.sql` no projeto
+Supabase e configure na Vercel:
 
 - `SUPABASE_SERVICE_ROLE_KEY` como variável somente de servidor;
 - `NEXT_PUBLIC_SITE_URL` com a URL autorizada pelo Supabase Auth para convites

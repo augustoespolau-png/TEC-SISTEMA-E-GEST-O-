@@ -8,6 +8,10 @@ import {
   isGovernanceModule,
   isRole,
   permissionRowsForRole,
+  roleFromStored,
+  statusFromStored,
+  storedRoleFor,
+  storedStatusFor,
   type AccountStatus,
   type GovernancePermission,
   type GovernanceTeam,
@@ -64,6 +68,16 @@ export type ActionResult<T> =
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
+const REMOTE_MODULE_KEYS: Record<string, string> = {
+  AUDITORIA: "AUDITORIA",
+  CONSULTA: "CONSULTA",
+  INDICADORES: "INDICADORES",
+  HISTORICO: "HISTÓRICO",
+  CONFIGURACOES: "CONFIGURAÇÃO",
+  IA: "IA",
+  CADASTROS: "CADASTROS",
+};
+
 export async function loadGovernancePage(
   page: number,
 ): Promise<ActionResult<GovernanceSnapshot>> {
@@ -90,6 +104,48 @@ function failure(error: unknown): { ok: false; error: string } {
     return { ok: false, error: "Já existe uma conta com este e-mail." };
   }
   return { ok: false, error: message };
+}
+
+function isSchemaMissing(error: unknown) {
+  const code =
+    error && typeof error === "object" && "code" in error
+      ? String((error as { code?: unknown }).code ?? "")
+      : "";
+  const message = messageFrom(error);
+  return (
+    code === "42P01" ||
+    code === "42703" ||
+    code === "PGRST205" ||
+    /relation .* does not exist|column .* does not exist|could not find the table/i.test(
+      message,
+    )
+  );
+}
+
+function remotePermissionsForRows(
+  rows: GovernancePermission[],
+  current: unknown = {},
+) {
+  const base =
+    current && typeof current === "object" && !Array.isArray(current)
+      ? { ...(current as Record<string, unknown>) }
+      : {};
+
+  for (const row of rows) {
+    const key = REMOTE_MODULE_KEYS[row.modulo] ?? row.modulo;
+    const previous =
+      base[key] && typeof base[key] === "object" && !Array.isArray(base[key])
+        ? (base[key] as Record<string, unknown>)
+        : {};
+    base[key] = {
+      ...previous,
+      ver: row.pode_visualizar,
+      editar: row.pode_editar,
+      gerenciar: row.pode_gerenciar,
+    };
+  }
+
+  return base;
 }
 
 async function requireGestao() {
@@ -254,25 +310,66 @@ async function ensureNotLastManager(
   nextRole: Role,
   nextStatus: AccountStatus,
 ) {
-  const current = await admin
-    .from("profiles")
+  const canonicalCurrent = await admin
+    .from("perfis_acesso")
     .select("role, status")
-    .eq("id", targetId)
+    .eq("user_id", targetId)
     .maybeSingle();
-  if (current.error) throw new Error(messageFrom(current.error));
+
+  let currentRow: { role: unknown; status: unknown } | null = null;
+  let canonical = !canonicalCurrent.error;
+  if (canonical) {
+    const data = canonicalCurrent.data as {
+      role?: unknown;
+      status?: unknown;
+    } | null;
+    currentRow = data
+      ? { role: data.role, status: data.status }
+      : null;
+  } else {
+    const legacyCurrent = await admin
+      .from("profiles")
+      .select("role, status")
+      .eq("id", targetId)
+      .maybeSingle();
+    if (legacyCurrent.error) {
+      throw new Error(messageFrom(canonicalCurrent.error));
+    }
+    const data = legacyCurrent.data as {
+      role?: unknown;
+      status?: unknown;
+    } | null;
+    currentRow = data
+      ? { role: data.role, status: data.status }
+      : null;
+    canonical = false;
+  }
 
   const isCurrentlyActiveManager =
-    current.data?.role === "gestao" && current.data?.status === "active";
+    roleFromStored(currentRow?.role) === "gestao" &&
+    statusFromStored(currentRow?.status) === "active";
   const remainsManager = nextRole === "gestao" && nextStatus === "active";
   if (!isCurrentlyActiveManager || remainsManager) return;
 
-  const managers = await admin
-    .from("profiles")
-    .select("id", { count: "exact", head: true })
-    .eq("role", "gestao")
-    .eq("status", "active");
-  if (managers.error) throw new Error(messageFrom(managers.error));
-  if ((managers.count ?? 0) <= 1) {
+  let managerCount = 0;
+  if (canonical) {
+    const managers = await admin.from("perfis_acesso").select("role, status");
+    if (managers.error) throw new Error(messageFrom(managers.error));
+    managerCount = (managers.data ?? []).filter(
+      (row) =>
+        roleFromStored(row.role) === "gestao" &&
+        statusFromStored(row.status) === "active",
+    ).length;
+  } else {
+    const managers = await admin.from("profiles").select("role, status");
+    if (managers.error) throw new Error(messageFrom(managers.error));
+    managerCount = (managers.data ?? []).filter(
+      (row) =>
+        roleFromStored(row.role) === "gestao" &&
+        statusFromStored(row.status) === "active",
+    ).length;
+  }
+  if (managerCount <= 1) {
     throw new Error("A última conta ativa de Gestão não pode ser removida ou suspensa.");
   }
 }
@@ -293,6 +390,48 @@ async function audit(
   if (result.error) {
     console.error("[governanca] não foi possível registrar auditoria", result.error);
   }
+}
+
+async function updateStoredAccess(
+  admin: AdminClient,
+  userId: string,
+  projectScope: ProjectScope,
+  role: Role,
+  rows: GovernancePermission[],
+) {
+  const canonicalCurrent = await admin
+    .from("perfis_acesso")
+    .select("permissions")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (!canonicalCurrent.error) {
+    if (!canonicalCurrent.data) {
+      throw new Error("Perfil de acesso não encontrado para esta conta.");
+    }
+    const result = await admin
+      .from("perfis_acesso")
+      .update({
+        escopo_projetos: projectScope,
+        permissions: remotePermissionsForRows(rows, canonicalCurrent.data.permissions),
+      })
+      .eq("user_id", userId);
+    if (result.error) throw new Error(messageFrom(result.error));
+    return;
+  }
+
+  if (!isSchemaMissing(canonicalCurrent.error)) {
+    throw new Error(messageFrom(canonicalCurrent.error));
+  }
+
+  const legacy = await admin
+    .from("profiles")
+    .update({
+      role,
+      escopo_projetos: projectScope,
+    })
+    .eq("id", userId);
+  if (legacy.error) throw new Error(messageFrom(legacy.error));
 }
 
 async function replaceAccess(
@@ -320,11 +459,7 @@ async function replaceAccess(
     );
   if (permissionsResult.error) throw new Error(messageFrom(permissionsResult.error));
 
-  const scopeResult = await admin
-    .from("profiles")
-    .update({ escopo_projetos: projectScope })
-    .eq("id", userId);
-  if (scopeResult.error) throw new Error(messageFrom(scopeResult.error));
+  await updateStoredAccess(admin, userId, projectScope, role, rows);
 
   const projectAccess = await admin
     .from("governanca_projetos_usuarios")
@@ -368,9 +503,30 @@ export async function createGovernanceUser(
 
     const userId = invited.data.user.id;
     try {
+      const initialPermissions = normalizedPermissionRows(
+        role,
+        input.permissions ?? permissionRowsForRole(role),
+      );
       const profile = await admin
-        .from("profiles")
-        .upsert({
+        .from("perfis_acesso")
+        .upsert(
+          {
+            user_id: userId,
+            email,
+            full_name: nome,
+            role: storedRoleFor(role),
+            status: storedStatusFor("active"),
+            suspended_until: null,
+            escopo_projetos: "all",
+            permissions: remotePermissionsForRows(initialPermissions),
+          },
+          { onConflict: "user_id" },
+        );
+      if (profile.error) {
+        if (!isSchemaMissing(profile.error)) {
+          throw new Error(messageFrom(profile.error));
+        }
+        const legacyProfile = await admin.from("profiles").upsert({
           id: userId,
           nome,
           role,
@@ -378,7 +534,8 @@ export async function createGovernanceUser(
           suspenso_ate: null,
           escopo_projetos: "all",
         });
-      if (profile.error) throw new Error(messageFrom(profile.error));
+        if (legacyProfile.error) throw new Error(messageFrom(legacyProfile.error));
+      }
       await replaceAccess(
         admin,
         userId,
@@ -427,16 +584,31 @@ export async function updateGovernanceUser(
     });
     if (authUpdate.error) throw new Error(messageFrom(authUpdate.error));
 
-    const profile = await admin
-      .from("profiles")
+    const canonicalProfile = await admin
+      .from("perfis_acesso")
       .update({
-        nome,
-        role,
-        status: normalizedStatus.status,
-        suspenso_ate: normalizedStatus.suspendedUntil,
+        email,
+        full_name: nome,
+        role: storedRoleFor(role),
+        status: storedStatusFor(normalizedStatus.status),
+        suspended_until: normalizedStatus.suspendedUntil,
       })
-      .eq("id", id);
-    if (profile.error) throw new Error(messageFrom(profile.error));
+      .eq("user_id", id);
+    if (canonicalProfile.error) {
+      if (!isSchemaMissing(canonicalProfile.error)) {
+        throw new Error(messageFrom(canonicalProfile.error));
+      }
+      const legacyProfile = await admin
+        .from("profiles")
+        .update({
+          nome,
+          role,
+          status: normalizedStatus.status,
+          suspenso_ate: normalizedStatus.suspendedUntil,
+        })
+        .eq("id", id);
+      if (legacyProfile.error) throw new Error(messageFrom(legacyProfile.error));
+    }
 
     await replaceAccess(
       admin,
