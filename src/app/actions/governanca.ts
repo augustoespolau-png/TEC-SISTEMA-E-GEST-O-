@@ -76,6 +76,7 @@ const REMOTE_MODULE_KEYS: Record<string, string> = {
   CONFIGURACOES: "CONFIGURAÇÃO",
   IA: "IA",
   CADASTROS: "CADASTROS",
+  "RESÍDUOS": "RESÍDUOS",
 };
 
 export async function loadGovernancePage(
