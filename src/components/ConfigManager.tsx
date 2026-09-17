@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import {
   BUCKET_AUDITORIA,
   caminhoProjetoParede,
+  criarUrlAssinadaOpcional,
   MAX_FOTO_BYTES,
   otimizarFoto,
   segmentoSeguro,
@@ -396,10 +397,12 @@ function ParedesSection({ versaoProjetos }: { versaoProjetos: number }) {
         mime_type?: string;
         tamanho_bytes?: number;
       };
-      const assinado = await supabase.storage
-        .from(BUCKET_AUDITORIA)
-        .createSignedUrl(caminho, 60 * 60);
-      if (assinado.error) throw new Error("Não foi possível preparar a visualização: " + assinado.error.message);
+      const url = await criarUrlAssinadaOpcional(
+        supabase,
+        BUCKET_AUDITORIA,
+        caminho,
+        60 * 60,
+      );
       const caminhoDoUsuario = `produto/${segmentoSeguro(sessao.user.id)}/`;
       const caminhoLegadoDoUsuario = `${segmentoSeguro(sessao.user.id)}/`;
       if (
@@ -419,10 +422,14 @@ function ParedesSection({ versaoProjetos }: { versaoProjetos: number }) {
           tamanho_bytes: resultado.tamanho_bytes ?? pronto.size,
           storage_bucket: resultado.storage_bucket ?? BUCKET_AUDITORIA,
           storage_path: resultado.storage_path ?? caminho,
-          url: assinado.data?.signedUrl ?? null,
+          url,
         },
       }));
-      toast.success(`Projeto da ${item.nome} salvo.`);
+      toast.success(
+        url
+          ? `Projeto da ${item.nome} salvo.`
+          : `Projeto da ${item.nome} salvo. A visualização será preparada ao recarregar.`,
+      );
     } catch (caught) {
       if (enviado && !metadadoSalvo && caminho) {
         await supabase.storage.from(BUCKET_AUDITORIA).remove([caminho]);
