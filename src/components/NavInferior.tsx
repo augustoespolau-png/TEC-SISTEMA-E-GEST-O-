@@ -97,6 +97,13 @@ const ADMIN_ITEM = {
   modulo: "CADASTROS" as GovernanceModule,
 };
 
+const RESIDUOS_ITEM = {
+  href: "/residuos",
+  rotulo: "Resíduos",
+  papeis: ["operador", "consultor", "gestao"] as Role[],
+  modulo: "RESÍDUOS" as GovernanceModule,
+};
+
 export default function NavInferior({
   role,
   permissions,
@@ -110,6 +117,8 @@ export default function NavInferior({
   );
   const cadastrosVisivel =
     ADMIN_ITEM.papeis.includes(role) && canModule(permissions, ADMIN_ITEM.modulo);
+  const residuosVisivel =
+    RESIDUOS_ITEM.papeis.includes(role) && canModule(permissions, RESIDUOS_ITEM.modulo);
   const [aberto, setAberto] = useState(false);
   const moduloAtivo = itens.some((i) => pathname === i.href);
 
@@ -170,6 +179,21 @@ export default function NavInferior({
           {ADMIN_ITEM.rotulo}
         </Link>
       )}
+
+      {residuosVisivel && (
+        <Link
+          href={RESIDUOS_ITEM.href}
+          className={`nav-admin-cadastros ${pathname === RESIDUOS_ITEM.href ? "on" : ""}`}
+          aria-current={pathname === RESIDUOS_ITEM.href ? "page" : undefined}
+        >
+          <Icone>
+            <path d="M5 5h14v14H5z" />
+            <path d="M8 9h8M8 13h5M8 17h4" />
+          </Icone>
+          {RESIDUOS_ITEM.rotulo}
+        </Link>
+      )}
+
     </nav>
   );
 }
