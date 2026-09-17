@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { getAuthContext } from "@/lib/supabase/auth";
+import { getAuthContext, isAccountInactive } from "@/lib/supabase/auth";
 import TabBar from "@/components/TabBar";
 import NavInferior from "@/components/NavInferior";
 import IndicadoresAiSlot from "@/components/ai/IndicadoresAiSlot";
@@ -10,6 +10,8 @@ export default async function AppLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   const contexto = await getAuthContext();
   if (!contexto) redirect("/login");
+
+  if (isAccountInactive(contexto.profile)) redirect("/acesso-negado");
 
   const role = (contexto.profile?.role ?? "consultor") as Role;
   const nome = contexto.profile?.nome || contexto.user.email || "";
@@ -23,12 +25,12 @@ export default async function AppLayout({
      continua na barra de baixo, ao alcance do polegar. */
   return (
     <div className="quadro-app">
-      <TabBar role={role} nome={nome} />
+      <TabBar role={role} nome={nome} permissions={contexto.permissions} />
       <div className="conteudo-app">
         {role === "gestao" && <IndicadoresAiSlot />}
         {children}
       </div>
-      <NavInferior role={role} />
+      <NavInferior role={role} permissions={contexto.permissions} />
     </div>
   );
 }

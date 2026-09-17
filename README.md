@@ -34,3 +34,16 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Governança de acessos
+
+O módulo nativo fica em `/cadastros` e é exclusivo da Gestão. Antes de
+publicar a funcionalidade, aplique `supabase/migrations/050_governanca_acessos.sql`
+no projeto Supabase e configure na Vercel:
+
+- `SUPABASE_SERVICE_ROLE_KEY` como variável somente de servidor;
+- `NEXT_PUBLIC_SITE_URL` com a URL autorizada pelo Supabase Auth para convites
+  e recuperação de senha.
+
+A chave administrativa nunca deve usar o prefixo `NEXT_PUBLIC_` nem ser
+enviada ao navegador.

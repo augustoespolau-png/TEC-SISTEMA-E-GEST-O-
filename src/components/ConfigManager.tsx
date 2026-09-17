@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -68,12 +69,14 @@ export default function ConfigManager() {
       <ConfigSection tabela="tipos_erro" titulo="Tipos de erro" />
 
       <div className="cartao" style={{ gridColumn: "1 / -1" }}>
-        <h2>Usuários</h2>
+        <h2>Governança de acessos</h2>
         <p className="sub">
-          A criação de contas e a troca de senhas são feitas, por enquanto, no
-          painel do Supabase (Authentication → Users). Uma tela de gestão de
-          usuários virá numa próxima versão.
+          Convide usuários, bloqueie ou suspenda contas e aplique permissões
+          por módulo e projeto na tela nativa de Cadastros.
         </p>
+        <Link href="/cadastros" className="btn btn-forte mt-3 inline-flex">
+          Abrir Cadastros e acessos
+        </Link>
       </div>
     </main>
   );

@@ -7,13 +7,23 @@ import { createClient } from "@/lib/supabase/client";
 import LogoTecverde from "@/components/LogoTecverde";
 import BotaoTema from "@/components/BotaoTema";
 import NomeSistema from "@/components/NomeSistema";
+import {
+  canModule,
+  type GovernanceModule,
+  type GovernancePermission,
+} from "@/lib/governanca-types";
 import type { Role } from "@/lib/types";
 
 /* A aba Registrar saiu do ar: a auditoria virou o único caminho de
    entrada de erro, porque ela também diz quantas paredes foram
    conferidas — sem isso o FPY não tem denominador. Como religar está
    no comentário de src/app/(app)/page.tsx. */
-const TABS: { href: string; rotulo: string; papeis: Role[] }[] = [
+const TABS: {
+  href: string;
+  rotulo: string;
+  papeis: Role[];
+  modulo: GovernanceModule;
+}[] = [
   /* O CONSULTOR NÃO ENTRA NA AUDITORIA. Antes ele entrava "só para
      ler" — a tela escondia as ações e o banco recusava a escrita —,
      mas tela de operação com tudo desligado convida a tentar. A
@@ -26,11 +36,13 @@ const TABS: { href: string; rotulo: string; papeis: Role[] }[] = [
     href: "/auditoria",
     rotulo: "Auditoria",
     papeis: ["gestao"],
+    modulo: "AUDITORIA",
   },
   {
     href: "/consultar",
     rotulo: "Consultar",
-    papeis: ["operador", "consultor", "gestao"],
+    papeis: ["consultor", "gestao"],
+    modulo: "CONSULTA",
   },
   {
     href: "/indicadores",
@@ -43,10 +55,27 @@ const TABS: { href: string; rotulo: string; papeis: Role[] }[] = [
        folha "Execucao" daqui — dois botoes levando a leituras da mesma
        coisa so faziam a pessoa escolher errado. A rota continua de pe
        para quem tem o endereco salvo ou uma TV apontada para ela. */
-    papeis: ["consultor", "gestao"],
+    papeis: ["operador", "consultor", "gestao"],
+    modulo: "INDICADORES",
   },
-  { href: "/historico", rotulo: "Histórico", papeis: ["gestao"] },
-  { href: "/configuracoes", rotulo: "Config.", papeis: ["gestao"] },
+  {
+    href: "/historico",
+    rotulo: "Histórico",
+    papeis: ["gestao"],
+    modulo: "HISTORICO",
+  },
+  {
+    href: "/configuracoes",
+    rotulo: "Config.",
+    papeis: ["gestao"],
+    modulo: "CONFIGURACOES",
+  },
+  {
+    href: "/cadastros",
+    rotulo: "Cadastros",
+    papeis: ["gestao"],
+    modulo: "CADASTROS",
+  },
 ];
 
 /* As folhas dos indicadores moram na LATERAL, aninhadas sob a aba
@@ -70,11 +99,21 @@ export function folhasDoPapel(role: Role) {
     : FOLHAS_INDICADORES;
 }
 
-export default function TabBar({ role, nome }: { role: Role; nome: string }) {
+export default function TabBar({
+  role,
+  nome,
+  permissions,
+}: {
+  role: Role;
+  nome: string;
+  permissions: GovernancePermission[];
+}) {
   const pathname = usePathname();
   const busca = useSearchParams();
   const router = useRouter();
-  const abas = TABS.filter((t) => t.papeis.includes(role));
+  const abas = TABS.filter(
+    (t) => t.papeis.includes(role) && canModule(permissions, t.modulo),
+  );
   const folhaAtual = busca.get("folha") ?? "fpy";
   const [weinmannAberto, setWeinmannAberto] = useState(true);
   const moduloAtivo = abas.some((t) => pathname === t.href);

@@ -67,6 +67,9 @@ export interface Profile {
   id: string;
   nome: string;
   role: Role;
+  status?: "active" | "blocked" | "suspended";
+  suspenso_ate?: string | null;
+  escopo_projetos?: "all" | "selected";
 }
 
 export interface ConfigItem {

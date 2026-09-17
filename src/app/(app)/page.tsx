@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { getAuthContext } from "@/lib/supabase/auth";
+import { canModule } from "@/lib/governanca-types";
 
 /*
  * A aba Registrar saiu do ar. Esta rota virou a porta de entrada: manda
@@ -35,11 +36,21 @@ export default async function Entrada() {
   /* Cada papel cai na tela que é a dele: a gestão na auditoria, o
      consultor no indicador (é a única tela dele) e o operador na
      consulta. */
-  redirect(
-    contexto.profile?.role === "gestao"
-      ? "/auditoria"
-      : contexto.profile?.role === "consultor"
-        ? "/indicadores"
-        : "/consultar"
-  );
+  if (contexto.profile?.role === "gestao") redirect("/auditoria");
+  if (
+    contexto.profile?.role === "consultor" &&
+    canModule(contexto.permissions, "INDICADORES")
+  ) {
+    redirect("/indicadores");
+  }
+  if (
+    contexto.profile?.role === "operador" &&
+    canModule(contexto.permissions, "CONSULTA")
+  ) {
+    redirect("/consultar");
+  }
+  if (canModule(contexto.permissions, "INDICADORES")) redirect("/indicadores");
+  if (canModule(contexto.permissions, "CONSULTA")) redirect("/consultar");
+  if (canModule(contexto.permissions, "AUDITORIA")) redirect("/auditoria");
+  redirect("/acesso-negado");
 }

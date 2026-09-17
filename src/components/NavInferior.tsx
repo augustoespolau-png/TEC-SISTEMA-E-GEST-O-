@@ -3,6 +3,11 @@
 import Link from "next/link";
 import { useState } from "react";
 import { usePathname } from "next/navigation";
+import {
+  canModule,
+  type GovernanceModule,
+  type GovernancePermission,
+} from "@/lib/governanca-types";
 import type { Role } from "@/lib/types";
 
 /*
@@ -14,6 +19,7 @@ const ITENS: {
   href: string;
   rotulo: string;
   papeis: Role[];
+  modulo: GovernanceModule;
   icone: React.ReactNode;
 }[] = [
   {
@@ -21,6 +27,7 @@ const ITENS: {
     rotulo: "Auditoria",
     // o operador ficou só com a consulta, a pedido (ver TabBar.tsx)
     papeis: ["gestao"],
+    modulo: "AUDITORIA",
     icone: (
       <Icone>
         <path d="M4 4h13l3 3v13H4z" />
@@ -32,6 +39,7 @@ const ITENS: {
     href: "/consultar",
     rotulo: "Consultar",
     papeis: ["operador", "consultor", "gestao"],
+    modulo: "CONSULTA",
     icone: (
       <Icone>
         <circle cx="11" cy="11" r="6.5" />
@@ -47,6 +55,7 @@ const ITENS: {
        preso na consulta, sem alcançar o painel de jeito nenhum.
        O OPERADOR entra na folha de FPY e só nela (ver TabBar). */
     papeis: ["operador", "consultor", "gestao"],
+    modulo: "INDICADORES",
     icone: (
       <Icone>
         <path d="M3 17.5 9 11l4 4 8-8.5" />
@@ -58,6 +67,7 @@ const ITENS: {
     href: "/historico",
     rotulo: "Histórico",
     papeis: ["gestao"],
+    modulo: "HISTORICO",
     icone: (
       <Icone>
         <path d="M12 8v4.5l3 2" />
@@ -70,6 +80,7 @@ const ITENS: {
     href: "/configuracoes",
     rotulo: "Config.",
     papeis: ["gestao"],
+    modulo: "CONFIGURACOES",
     icone: (
       <Icone>
         <circle cx="12" cy="12" r="3.2" />
@@ -77,11 +88,31 @@ const ITENS: {
       </Icone>
     ),
   },
+  {
+    href: "/cadastros",
+    rotulo: "Cadastros",
+    papeis: ["gestao"],
+    modulo: "CADASTROS",
+    icone: (
+      <Icone>
+        <path d="M4 5.5h16v13H4z" />
+        <path d="M8 9h8M8 13h5M8 17h3" />
+      </Icone>
+    ),
+  },
 ];
 
-export default function NavInferior({ role }: { role: Role }) {
+export default function NavInferior({
+  role,
+  permissions,
+}: {
+  role: Role;
+  permissions: GovernancePermission[];
+}) {
   const pathname = usePathname();
-  const itens = ITENS.filter((i) => i.papeis.includes(role));
+  const itens = ITENS.filter(
+    (i) => i.papeis.includes(role) && canModule(permissions, i.modulo),
+  );
   const [aberto, setAberto] = useState(false);
   const moduloAtivo = itens.some((i) => pathname === i.href);
 
