@@ -3,7 +3,7 @@ import { getAuthContext } from "@/lib/supabase/auth";
 import TabBar from "@/components/TabBar";
 import NavInferior from "@/components/NavInferior";
 import IndicadoresAiSlot from "@/components/ai/IndicadoresAiSlot";
-import type { Role } from "@/lib/types";
+import { isManagement } from "@/lib/access";
 
 export default async function AppLayout({
   children,
@@ -11,24 +11,16 @@ export default async function AppLayout({
   const contexto = await getAuthContext();
   if (!contexto) redirect("/login");
 
-  const role = (contexto.profile?.role ?? "consultor") as Role;
   const nome = contexto.profile?.nome || contexto.user.email || "";
 
-  // largura livre: o Painel ocupa a tela inteira; as demais telas se
-  // centralizam sozinhas (classe .tela). No celular a navegação fica
-  // numa barra fixa embaixo, em todas as telas — inclusive no Painel.
-  /* No PC a navegação virou uma coluna à esquerda: com cinco telas, ler
-     de cima para baixo e mais rápido que varrer uma faixa horizontal, e
-     sobra largura para os paineis. No celular nada muda — a navegação
-     continua na barra de baixo, ao alcance do polegar. */
   return (
     <div className="quadro-app">
-      <TabBar role={role} nome={nome} />
+      <TabBar role={contexto.role} nome={nome} access={contexto.access} />
       <div className="conteudo-app">
-        {role === "gestao" && <IndicadoresAiSlot />}
+        {isManagement(contexto.access) && <IndicadoresAiSlot />}
         {children}
       </div>
-      <NavInferior role={role} />
+      <NavInferior role={contexto.role} access={contexto.access} />
     </div>
   );
 }
