@@ -1,11 +1,11 @@
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
+import type { PerfilAcesso } from "@/lib/permissoes";
 
 /*
  * O layout e a página filha precisam do mesmo usuário/perfil durante a
  * renderização de uma rota. React.cache deduplica essa leitura por request,
- * evitando duas chamadas a auth.getUser() e duas consultas a profiles na
- * entrada inicial do aplicativo.
+ * evitando chamadas repetidas na entrada inicial do aplicativo.
  */
 export const getAuthContext = cache(async () => {
   const supabase = await createClient();
@@ -14,11 +14,22 @@ export const getAuthContext = cache(async () => {
   } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("nome, role")
-    .eq("id", user.id)
-    .maybeSingle();
+  const [{ data: profile }, { data: accessProfile }] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("nome, role")
+      .eq("id", user.id)
+      .maybeSingle(),
+    supabase
+      .from("perfis_acesso")
+      .select("role, status, permissions, suspended_until")
+      .eq("user_id", user.id)
+      .maybeSingle(),
+  ]);
 
-  return { user, profile };
+  return {
+    user,
+    profile,
+    accessProfile: (accessProfile ?? null) as PerfilAcesso | null,
+  };
 });
