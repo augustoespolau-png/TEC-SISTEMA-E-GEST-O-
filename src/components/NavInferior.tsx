@@ -5,11 +5,6 @@ import { useState } from "react";
 import { usePathname } from "next/navigation";
 import type { Role } from "@/lib/types";
 
-/*
- * Navegação de celular: barra fixa na base, ao alcance do polegar.
- * No PC ela some — lá as abas ficam no cabeçalho, junto do logo.
- */
-
 const ITENS: {
   href: string;
   rotulo: string;
@@ -19,7 +14,6 @@ const ITENS: {
   {
     href: "/auditoria",
     rotulo: "Auditoria",
-    // o operador ficou só com a consulta, a pedido (ver TabBar.tsx)
     papeis: ["gestao"],
     icone: (
       <Icone>
@@ -42,10 +36,6 @@ const ITENS: {
   {
     href: "/indicadores",
     rotulo: "Indicadores",
-    /* FPY, desvios e comparativo mensal: leitura de diretoria. O
-       CONSULTOR entra aqui: no celular ele não tinha esta aba e ficava
-       preso na consulta, sem alcançar o painel de jeito nenhum.
-       O OPERADOR entra na folha de FPY e só nela (ver TabBar). */
     papeis: ["operador", "consultor", "gestao"],
     icone: (
       <Icone>
@@ -74,6 +64,18 @@ const ITENS: {
       <Icone>
         <circle cx="12" cy="12" r="3.2" />
         <path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.2 5.2l2.1 2.1M16.7 16.7l2.1 2.1M18.8 5.2l-2.1 2.1M7.3 16.7l-2.1 2.1" />
+      </Icone>
+    ),
+  },
+  {
+    href: "/cadastros",
+    rotulo: "Cadastros",
+    papeis: ["gestao"],
+    icone: (
+      <Icone>
+        <circle cx="9" cy="8" r="3" />
+        <path d="M3.5 20v-1.5A4.5 4.5 0 0 1 8 14h2a4.5 4.5 0 0 1 4.5 4.5V20" />
+        <path d="M17 8v6M14 11h6" />
       </Icone>
     ),
   },
