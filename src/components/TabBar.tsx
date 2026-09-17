@@ -81,6 +81,14 @@ const ADMIN_NAV = {
   modulo: "CADASTROS" as GovernanceModule,
 };
 
+/* Resíduos é um módulo operacional independente, fora do grupo WEINMANN. */
+const RESIDUOS_NAV = {
+  href: "/residuos",
+  rotulo: "Resíduos",
+  papeis: ["operador", "consultor", "gestao"] as Role[],
+  modulo: "RESÍDUOS" as GovernanceModule,
+};
+
 /* As folhas dos indicadores moram na LATERAL, aninhadas sob a aba
    Indicadores: sao cinco destinos que so existem dentro dela, e como
    abas de uma segunda linha disputavam a largura com o topo. A folha
@@ -119,6 +127,8 @@ export default function TabBar({
   );
   const adminVisivel =
     ADMIN_NAV.papeis.includes(role) && canModule(permissions, ADMIN_NAV.modulo);
+  const residuosVisivel =
+    RESIDUOS_NAV.papeis.includes(role) && canModule(permissions, RESIDUOS_NAV.modulo);
   const folhaAtual = busca.get("folha") ?? "fpy";
   const [weinmannAberto, setWeinmannAberto] = useState(true);
   const moduloAtivo = abas.some((t) => pathname === t.href);
@@ -219,6 +229,30 @@ export default function TabBar({
               <path d="M8 9h8M8 13h5M8 17h3" />
             </svg>
             <span>{ADMIN_NAV.rotulo}</span>
+          </Link>
+        )}
+
+        {residuosVisivel && (
+          <Link
+            href={RESIDUOS_NAV.href}
+            className={`aba aba-admin ${pathname === RESIDUOS_NAV.href ? "on" : ""}`}
+            aria-current={pathname === RESIDUOS_NAV.href ? "page" : undefined}
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+            >
+              <path d="M5 5h14v14H5z" />
+              <path d="M8 9h8M8 13h5M8 17h4" />
+            </svg>
+            <span>{RESIDUOS_NAV.rotulo}</span>
           </Link>
         )}
 
