@@ -9,6 +9,34 @@ export const BUCKET_AUDITORIA = "auditoria-arquivos";
 export const MAX_FOTO_BYTES = 20 * 1024 * 1024;
 export const DURACAO_URL_ANEXO = 60 * 60;
 
+/**
+ * URL assinada é apenas visualização. Uma falha momentânea do Storage não
+ * pode desfazer um upload ou o vínculo relacional já confirmado.
+ */
+export async function criarUrlAssinadaOpcional(
+  supabase: SupabaseClient,
+  bucket: string,
+  path: string,
+  expiresIn = DURACAO_URL_ANEXO,
+) {
+  try {
+    const { data, error } = await supabase.storage
+      .from(bucket)
+      .createSignedUrl(path, expiresIn);
+    if (error || !data?.signedUrl) {
+      if (error) console.warn("[anexos] URL de visualização indisponível", error.message);
+      return null;
+    }
+    return data.signedUrl;
+  } catch (error) {
+    console.warn(
+      "[anexos] URL de visualização indisponível",
+      error instanceof Error ? error.message : "erro desconhecido",
+    );
+    return null;
+  }
+}
+
 export function tamanhoLegivel(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
@@ -53,9 +81,10 @@ self.onmessage = async (event) => {
   const workerUrl = URL.createObjectURL(
     new Blob([codigo], { type: "text/javascript" })
   );
-  const worker = new Worker(workerUrl);
+  let worker: Worker | null = null;
 
   try {
+    worker = new Worker(workerUrl);
     return await new Promise<Blob>((resolve, reject) => {
       worker.onmessage = (event: MessageEvent<{ blob?: Blob; erro?: string }>) => {
         if (event.data?.blob) {
@@ -70,7 +99,7 @@ self.onmessage = async (event) => {
   } catch {
     return null;
   } finally {
-    worker.terminate();
+    worker?.terminate();
     URL.revokeObjectURL(workerUrl);
   }
 }
@@ -117,9 +146,17 @@ export async function otimizarFoto(arquivo: File): Promise<File> {
     throw new Error("A foto precisa ter no máximo 20 MB.");
   }
 
-  const blob =
-    (await otimizarFotoEmWorker(arquivo)) ??
-    (await otimizarFotoNoCanvas(arquivo));
+  let blob = await otimizarFotoEmWorker(arquivo);
+  if (!blob) {
+    try {
+      blob = await otimizarFotoNoCanvas(arquivo);
+    } catch (error) {
+      if (["image/jpeg", "image/png", "image/webp"].includes(arquivo.type.toLowerCase())) {
+        return arquivo;
+      }
+      throw error;
+    }
+  }
   const nome = arquivo.name.replace(/\.[^.]+$/, "") || "foto-desvio";
   return new File([blob], `${nome}.jpg`, {
     type: "image/jpeg",
@@ -240,14 +277,21 @@ export async function assinarAnexosEmLote(
   const resultado = new Map<string, Map<string, string>>();
   await Promise.all(
     [...porBucket].map(async ([bucket, caminhos]) => {
-      const { data } = await supabase.storage
-        .from(bucket)
-        .createSignedUrls([...caminhos], expiresIn);
-      for (const arquivo of data ?? []) {
+      try {
+        const { data } = await supabase.storage
+          .from(bucket)
+          .createSignedUrls([...caminhos], expiresIn);
+        for (const arquivo of data ?? []) {
         if (!arquivo.path || !arquivo.signedUrl) continue;
         const urlsDoBucket = resultado.get(bucket) ?? new Map<string, string>();
         urlsDoBucket.set(arquivo.path, arquivo.signedUrl);
-        resultado.set(bucket, urlsDoBucket);
+          resultado.set(bucket, urlsDoBucket);
+        }
+      } catch (error) {
+        console.warn(
+          "[anexos] URLs de visualização indisponíveis",
+          error instanceof Error ? error.message : "erro desconhecido",
+        );
       }
     })
   );
