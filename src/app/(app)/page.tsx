@@ -52,5 +52,6 @@ export default async function Entrada() {
   if (canModule(contexto.permissions, "INDICADORES")) redirect("/indicadores");
   if (canModule(contexto.permissions, "CONSULTA")) redirect("/consultar");
   if (canModule(contexto.permissions, "AUDITORIA")) redirect("/auditoria");
+  if (canModule(contexto.permissions, "RESÍDUOS")) redirect("/residuos");
   redirect("/acesso-negado");
 }
