@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import {
   assinarAnexosEmLote,
   BUCKET_AUDITORIA,
+  criarUrlAssinadaOpcional,
   enviarFotoAuditoria,
   otimizarFoto,
 } from "@/lib/anexos";
@@ -732,19 +733,16 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
         extensao: "jpg",
         arquivo: arquivoOtimizado,
       });
-      const assinatura = await supabase.storage
-        .from(BUCKET_AUDITORIA)
-        .createSignedUrl(caminho, 60 * 60);
-      if (assinatura.error || !assinatura.data?.signedUrl) {
-        throw new Error(
-          "Não foi possível preparar a visualização: " +
-            (assinatura.error?.message ?? "URL assinada indisponível")
-        );
-      }
+      const url = await criarUrlAssinadaOpcional(
+        supabase,
+        BUCKET_AUDITORIA,
+        caminho,
+        60 * 60,
+      );
       return {
         error: null,
         caminho,
-        url: assinatura.data.signedUrl,
+        url,
         anexo: {
           id: anexoId,
           name: arquivoOtimizado.name,
