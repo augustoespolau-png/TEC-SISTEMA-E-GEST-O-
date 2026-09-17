@@ -1,16 +1,13 @@
-import { redirect } from "next/navigation";
-import { getAuthContext } from "@/lib/supabase/auth";
+import { exigirAcesso } from "@/lib/acesso-server";
+import { pode } from "@/lib/permissoes";
 import AuditoriaCasa from "@/components/auditoria/AuditoriaCasa";
-import type { Role } from "@/lib/types";
 
 export default async function AuditoriaPage() {
-  const contexto = await getAuthContext();
-  if (!contexto) redirect("/login");
+  const acesso = await exigirAcesso("AUDITORIA", "ver");
 
-  const papel = (contexto.profile?.role as Role) ?? "operador";
-  /* Quem audita é operador e gestão. O consultor é acesso de leitura
-     de indicador: ele não abre esta tela nem digitando o endereço. */
-  if (papel === "consultor") redirect("/indicadores");
-
-  return <AuditoriaCasa role={papel} />;
+  return (
+    <AuditoriaCasa
+      role={pode(acesso.permissoes, "AUDITORIA", "editar") ? "gestao" : "consultor"}
+    />
+  );
 }
