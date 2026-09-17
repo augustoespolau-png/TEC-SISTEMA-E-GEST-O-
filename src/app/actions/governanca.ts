@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { getAuthContext } from "@/lib/supabase/auth";
+import { getAuthContext, isAccountInactive } from "@/lib/supabase/auth";
 import { createAdminClient, isAdminConfigured } from "@/lib/supabase/admin";
 import {
   GOVERNANCE_MODULES,
@@ -25,6 +25,9 @@ export interface CreateGovernanceUserInput {
   nome: string;
   email: string;
   role: Role;
+  permissions?: GovernancePermission[];
+  project_scope?: ProjectScope;
+  project_ids?: string[];
 }
 
 export interface UpdateGovernanceUserInput {
@@ -93,7 +96,11 @@ async function requireGestao() {
   }
 
   const contexto = await getAuthContext();
-  if (!contexto || contexto.profile?.role !== "gestao") {
+  if (
+    !contexto ||
+    contexto.profile?.role !== "gestao" ||
+    isAccountInactive(contexto.profile)
+  ) {
     throw new Error("Acesso restrito à Gestão.");
   }
 
@@ -127,6 +134,9 @@ function normalizeRole(value: Role) {
 }
 
 function normalizeStatus(status: AccountStatus, suspendedUntil: string | null) {
+  if (status !== "active" && status !== "blocked" && status !== "suspended") {
+    throw new Error("Status de conta inválido.");
+  }
   if (status === "suspended") {
     if (!suspendedUntil) {
       throw new Error("Defina a data final da suspensão.");
@@ -149,12 +159,29 @@ function banDuration(status: AccountStatus, suspendedUntil: string | null) {
   return `${hours}h`;
 }
 
+function normalizeProjectScope(value: unknown): ProjectScope {
+  if (value === "all" || value === "selected") return value;
+  throw new Error("Escopo de projetos inválido.");
+}
+
+function normalizeProjectIds(value: unknown) {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.some((id) => typeof id !== "string")) {
+    throw new Error("Lista de projetos inválida.");
+  }
+  const ids = [...new Set(value.map((id) => id.trim()).filter(Boolean))];
+  if (ids.length > 100) {
+    throw new Error("Selecione no máximo 100 projetos por usuário.");
+  }
+  return ids;
+}
+
 function normalizedPermissionRows(
   role: Role,
   input: GovernancePermission[] | null | undefined,
 ) {
   const received = new Map(
-    (input ?? [])
+    (Array.isArray(input) ? input : [])
       .filter((row) => isGovernanceModule(row.modulo))
       .map((row) => [row.modulo, row]),
   );
@@ -235,6 +262,8 @@ async function replaceAccess(
   projectScope: ProjectScope,
   projectIds: string[],
 ) {
+  const scope = normalizeProjectScope(projectScope);
+  const uniqueIds = normalizeProjectIds(projectIds);
   const rows = normalizedPermissionRows(role, permissions);
   const permissionsResult = await admin
     .from("governanca_permissoes_modulo")
@@ -262,11 +291,7 @@ async function replaceAccess(
     .eq("usuario_id", userId);
   if (projectAccess.error) throw new Error(messageFrom(projectAccess.error));
 
-  if (projectScope === "selected" && projectIds.length > 0) {
-    const uniqueIds = [...new Set(projectIds.map((id) => id.trim()).filter(Boolean))];
-    if (uniqueIds.length > 100) {
-      throw new Error("Selecione no máximo 100 projetos por usuário.");
-    }
+  if (scope === "selected" && uniqueIds.length > 0) {
     const insertProjects = await admin
       .from("governanca_projetos_usuarios")
       .insert(uniqueIds.map((projetoId) => ({ usuario_id: userId, projeto_id: projetoId })));
@@ -284,6 +309,8 @@ export async function createGovernanceUser(
     const nome = normalizeName(input.nome, "Nome");
     const email = normalizeEmail(input.email);
     const role = normalizeRole(input.role);
+    const projectScope = normalizeProjectScope(input.project_scope ?? "all");
+    const projectIds = normalizeProjectIds(input.project_ids);
     const siteUrl =
       process.env.NEXT_PUBLIC_SITE_URL ||
       (process.env.VERCEL_PROJECT_PRODUCTION_URL
@@ -302,16 +329,23 @@ export async function createGovernanceUser(
     try {
       const profile = await admin
         .from("profiles")
-        .update({
+        .upsert({
+          id: userId,
           nome,
           role,
           status: "active",
           suspenso_ate: null,
           escopo_projetos: "all",
-        })
-        .eq("id", userId);
+        });
       if (profile.error) throw new Error(messageFrom(profile.error));
-      await replaceAccess(admin, userId, role, permissionRowsForRole(role), "all", []);
+      await replaceAccess(
+        admin,
+        userId,
+        role,
+        input.permissions ?? permissionRowsForRole(role),
+        projectScope,
+        projectIds,
+      );
     } catch (error) {
       await admin.auth.admin.deleteUser(userId);
       throw error;
@@ -337,6 +371,8 @@ export async function updateGovernanceUser(
     const email = normalizeEmail(input.email);
     const role = normalizeRole(input.role);
     const normalizedStatus = normalizeStatus(input.status, input.suspenso_ate);
+    const projectScope = normalizeProjectScope(input.project_scope);
+    const projectIds = normalizeProjectIds(input.project_ids);
 
     if (id === actorId && (role !== "gestao" || normalizedStatus.status !== "active")) {
       throw new Error("Você não pode retirar o próprio acesso de Gestão.");
@@ -366,13 +402,13 @@ export async function updateGovernanceUser(
       id,
       role,
       input.permissions,
-      input.project_scope,
-      input.project_ids,
+      projectScope,
+      projectIds,
     );
     await audit(admin, actorId, "USUARIO_ATUALIZADO", id, {
       role,
       status: normalizedStatus.status,
-      project_scope: input.project_scope,
+      project_scope: projectScope,
     });
 
     const updated = await readGovernanceUser(admin, id);

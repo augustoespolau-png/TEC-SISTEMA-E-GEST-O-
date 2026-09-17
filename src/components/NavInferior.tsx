@@ -88,19 +88,14 @@ const ITENS: {
       </Icone>
     ),
   },
-  {
-    href: "/cadastros",
-    rotulo: "Cadastros",
-    papeis: ["gestao"],
-    modulo: "CADASTROS",
-    icone: (
-      <Icone>
-        <path d="M4 5.5h16v13H4z" />
-        <path d="M8 9h8M8 13h5M8 17h3" />
-      </Icone>
-    ),
-  },
 ];
+
+const ADMIN_ITEM = {
+  href: "/cadastros",
+  rotulo: "Cadastros",
+  papeis: ["gestao"] as Role[],
+  modulo: "CADASTROS" as GovernanceModule,
+};
 
 export default function NavInferior({
   role,
@@ -113,6 +108,8 @@ export default function NavInferior({
   const itens = ITENS.filter(
     (i) => i.papeis.includes(role) && canModule(permissions, i.modulo),
   );
+  const cadastrosVisivel =
+    ADMIN_ITEM.papeis.includes(role) && canModule(permissions, ADMIN_ITEM.modulo);
   const [aberto, setAberto] = useState(false);
   const moduloAtivo = itens.some((i) => pathname === i.href);
 
@@ -159,6 +156,20 @@ export default function NavInferior({
         </Icone>
         WEINMANN
       </button>
+
+      {cadastrosVisivel && (
+        <Link
+          href={ADMIN_ITEM.href}
+          className={`nav-admin-cadastros ${pathname === ADMIN_ITEM.href ? "on" : ""}`}
+          aria-current={pathname === ADMIN_ITEM.href ? "page" : undefined}
+        >
+          <Icone>
+            <path d="M4 5.5h16v13H4z" />
+            <path d="M8 9h8M8 13h5M8 17h3" />
+          </Icone>
+          {ADMIN_ITEM.rotulo}
+        </Link>
+      )}
     </nav>
   );
 }

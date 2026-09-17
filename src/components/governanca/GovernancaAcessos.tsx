@@ -139,6 +139,7 @@ export default function GovernancaAcessos({
   const restrictedUsers = snapshot.users.filter(
     (user) => user.project_scope === "selected",
   ).length;
+  const kpiValue = (value: number) => (snapshot.configured ? value : "—");
 
   function selectUser(user: GovernanceUser) {
     setCreating(false);
@@ -205,6 +206,9 @@ export default function GovernancaAcessos({
           nome: draft.nome,
           email: draft.email,
           role: draft.role,
+          permissions: draft.permissions,
+          project_scope: draft.project_scope,
+          project_ids: draft.project_ids,
         } satisfies CreateGovernanceUserInput);
     setBusy(null);
     if (!result.ok) {
@@ -293,20 +297,21 @@ export default function GovernancaAcessos({
           </p>
         </div>
         <div className="gov-kpis" aria-label="Resumo da governança">
-          <div><b>{snapshot.users.length}</b><span>nesta página</span></div>
-          <div><b>{activeUsers}</b><span>ativos</span></div>
-          <div><b>{managers}</b><span>gestores</span></div>
-          <div><b>{restrictedUsers}</b><span>com escopo</span></div>
+          <div><b>{kpiValue(snapshot.users.length)}</b><span>nesta página</span></div>
+          <div><b>{kpiValue(activeUsers)}</b><span>ativos</span></div>
+          <div><b>{kpiValue(managers)}</b><span>gestores</span></div>
+          <div><b>{kpiValue(restrictedUsers)}</b><span>com escopo</span></div>
         </div>
       </section>
 
       {snapshot.error && (
         <section className="cartao gov-alert" role="alert">
-          <strong>Governança aguardando configuração</strong>
+          <strong>Ativação do cadastro pendente</strong>
           <p>{snapshot.error}</p>
           <span>
-            Depois de configurar a variável no servidor, aplique a migration
-            <code>050_governanca_acessos.sql</code> e recarregue esta tela.
+            Configure a chave administrativa somente no servidor e aplique a
+            migration <code>050_governanca_acessos.sql</code>. Depois, recarregue
+            esta tela para liberar o CRUD.
           </span>
         </section>
       )}
@@ -334,11 +339,11 @@ export default function GovernancaAcessos({
 
       {!snapshot.configured ? (
         <section className="cartao gov-empty">
-          <h2>Serviço administrativo não habilitado</h2>
+          <h2>Cadastro administrativo ainda não ativado</h2>
           <p>
-            A interface está protegida, mas precisa da chave exclusiva do
-            servidor para acessar o Auth Admin do Supabase. Nenhuma operação é
-            simulada enquanto essa configuração não existir.
+            A interface já está protegida para Gestão. Falta apenas a ativação
+            única do serviço administrativo para que você possa criar contas,
+            equipes e permissões diretamente aqui. Nenhuma operação é simulada.
           </p>
         </section>
       ) : tab === "usuarios" ? (
@@ -515,8 +520,7 @@ function UserEditor({
           <label className="gov-suspension"><span className="rotulo">Suspender até</span><input className="campo" type="datetime-local" value={toDateTimeLocal(draft.suspenso_ate)} onChange={(event) => onChange((current) => current ? { ...current, suspenso_ate: fromDateTimeLocal(event.target.value) } : current)} required /></label>
         )}
 
-        {!creating && (
-          <>
+        <>
             <fieldset className="gov-fieldset">
               <legend>Permissões por módulo</legend>
               <p className="sub">Marque visualizar, editar ou gerenciar. A hierarquia é aplicada automaticamente.</p>
@@ -556,13 +560,12 @@ function UserEditor({
               )}
             </fieldset>
 
-            <fieldset className="gov-fieldset">
+            {!creating && <fieldset className="gov-fieldset">
               <legend>Equipes</legend>
               <p className="sub">A composição das equipes é editada na aba Equipes.</p>
               <div className="gov-team-pills">{teams.filter((team) => team.member_ids.includes(draft.id)).map((team) => <span key={team.id}>{team.nome}</span>)}{teams.every((team) => !team.member_ids.includes(draft.id)) && <span className="sub">Sem equipe vinculada.</span>}</div>
-            </fieldset>
-          </>
-        )}
+            </fieldset>}
+        </>
 
         {creating && <p className="gov-invite-note">O usuário receberá um convite seguro para definir a própria senha. O convite é enviado pelo Supabase Auth.</p>}
 

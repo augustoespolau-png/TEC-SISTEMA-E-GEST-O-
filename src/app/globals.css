@@ -1387,6 +1387,20 @@ table.mapa td {
   background: var(--color-brand);
   color: var(--color-sobre-cor);
 }
+.aba-admin {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--color-line);
+  background: var(--color-papel-2);
+}
+.aba-admin:hover {
+  border-color: var(--color-brand);
+  color: var(--color-brand-forte);
+}
+.aba-admin.on {
+  border-color: var(--color-brand);
+}
 /* As folhas dos indicadores, aninhadas sob a aba Indicadores. Recuo e
    fonte menor dizem "isto e filho do de cima" sem precisar de titulo de
    grupo; acesa, ela usa o tom suave da marca — o cheio ja e da aba mae,
@@ -1452,6 +1466,25 @@ table.mapa td {
   letter-spacing: 0.02em;
 }
 .nav-modulo-weinmann.on {
+  color: var(--color-brand);
+}
+.nav-admin-cadastros {
+  flex: 1;
+  min-height: 58px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 7px 4px;
+  border-left: 1px solid var(--color-line);
+  color: var(--color-ink-3);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.nav-admin-cadastros:hover,
+.nav-admin-cadastros.on {
   color: var(--color-brand);
 }
 .menu-weinmann-mobile {
@@ -3409,6 +3442,12 @@ tr.ind-clicavel[aria-selected="true"] > td {
   .aba {
     padding: 9px 12px;
     font-size: 13px;
+  }
+  .aba-admin {
+    display: flex;
+    flex: 0 0 auto;
+    margin-top: -8px;
+    padding: 10px 12px;
   }
 
   /* as acoes descem para o pe da coluna */

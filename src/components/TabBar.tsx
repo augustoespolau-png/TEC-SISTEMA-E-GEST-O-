@@ -70,13 +70,16 @@ const TABS: {
     papeis: ["gestao"],
     modulo: "CONFIGURACOES",
   },
-  {
-    href: "/cadastros",
-    rotulo: "Cadastros",
-    papeis: ["gestao"],
-    modulo: "CADASTROS",
-  },
 ];
+
+/* Cadastros é Administração: fica fora do agrupamento operacional
+   WEINMANN e aparece como uma entrada própria na coluna lateral. */
+const ADMIN_NAV = {
+  href: "/cadastros",
+  rotulo: "Cadastros",
+  papeis: ["gestao"] as Role[],
+  modulo: "CADASTROS" as GovernanceModule,
+};
 
 /* As folhas dos indicadores moram na LATERAL, aninhadas sob a aba
    Indicadores: sao cinco destinos que so existem dentro dela, e como
@@ -114,6 +117,8 @@ export default function TabBar({
   const abas = TABS.filter(
     (t) => t.papeis.includes(role) && canModule(permissions, t.modulo),
   );
+  const adminVisivel =
+    ADMIN_NAV.papeis.includes(role) && canModule(permissions, ADMIN_NAV.modulo);
   const folhaAtual = busca.get("folha") ?? "fpy";
   const [weinmannAberto, setWeinmannAberto] = useState(true);
   const moduloAtivo = abas.some((t) => pathname === t.href);
@@ -192,6 +197,30 @@ export default function TabBar({
             </div>
           )}
         </nav>
+
+        {adminVisivel && (
+          <Link
+            href={ADMIN_NAV.href}
+            className={`aba aba-admin ${pathname === ADMIN_NAV.href ? "on" : ""}`}
+            aria-current={pathname === ADMIN_NAV.href ? "page" : undefined}
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+            >
+              <path d="M4 5.5h16v13H4z" />
+              <path d="M8 9h8M8 13h5M8 17h3" />
+            </svg>
+            <span>{ADMIN_NAV.rotulo}</span>
+          </Link>
+        )}
 
         {/* .rodape-topo empurra para a direita no celular e para o pe
             da coluna quando isto vira barra lateral no PC */}
