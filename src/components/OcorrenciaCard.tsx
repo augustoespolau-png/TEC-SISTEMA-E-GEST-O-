@@ -11,7 +11,12 @@ import ChipGroup from "@/components/ChipGroup";
 import HistoricoRegistro from "@/components/HistoricoRegistro";
 import { SeloCriticidade, SeloStatus } from "@/components/Selo";
 import SeletorFoto from "@/components/auditoria/SeletorFoto";
-import { BUCKET_AUDITORIA, enviarFotoAuditoria, otimizarFoto } from "@/lib/anexos";
+import {
+  BUCKET_AUDITORIA,
+  criarUrlAssinadaOpcional,
+  enviarFotoAuditoria,
+  otimizarFoto,
+} from "@/lib/anexos";
 import type { AnexoOcorrencia, Ocorrencia, Role, Status } from "@/lib/types";
 import { ROTULO_STATUS } from "@/lib/types";
 
@@ -291,9 +296,12 @@ export default function OcorrenciaCard({
             return;
           }
 
-          const assinado = await supabase.storage
-            .from(BUCKET_AUDITORIA)
-            .createSignedUrl(fotoPendente.path, 60 * 60);
+          const url = await criarUrlAssinadaOpcional(
+            supabase,
+            BUCKET_AUDITORIA,
+            fotoPendente.path,
+            60 * 60,
+          );
           const anexo: AnexoOcorrencia = {
             id: fotoPendente.id,
             tipo: "retrabalho",
@@ -302,7 +310,7 @@ export default function OcorrenciaCard({
             tamanho_bytes: Number(fotoPendente.dados.size),
             storage_bucket: BUCKET_AUDITORIA,
             storage_path: fotoPendente.path,
-            url: assinado.data?.signedUrl ?? null,
+            url,
           };
           confirmado = {
             ...confirmado,
