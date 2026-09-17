@@ -455,7 +455,12 @@ function ResiduoAttachment({ anexo }: { anexo: ResiduoAnexo }) {
     return <span className="residuo-anexo indisponivel"><span className="residuo-anexo-icone">{anexo.tipo === "mtr" ? "MTR" : "IMG"}</span><span><b>{anexo.nome_arquivo}</b><small>Salvo; visualização indisponível. Recarregue a tela.</small></span></span>;
   }
   if (isImage) {
-    return <a className="residuo-anexo imagem" href={anexo.url} target="_blank" rel="noreferrer"><img src={anexo.url} alt={anexo.nome_arquivo} /></a>;
+    return (
+      <a className="residuo-anexo imagem" href={anexo.url} target="_blank" rel="noreferrer">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={anexo.url} alt={anexo.nome_arquivo} />
+      </a>
+    );
   }
   return <a className="residuo-anexo" href={anexo.url} target="_blank" rel="noreferrer"><span className="residuo-anexo-icone">MTR</span><span><b>{anexo.nome_arquivo}</b><small>{anexo.mime_type || "Arquivo"} · {anexo.tamanho_bytes == null ? "" : tamanhoLegivel(anexo.tamanho_bytes)}</small></span></a>;
 }
