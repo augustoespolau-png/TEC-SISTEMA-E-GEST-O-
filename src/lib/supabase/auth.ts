@@ -22,7 +22,7 @@ export const getAuthContext = cache(async () => {
       .maybeSingle(),
     supabase
       .from("perfis_acesso")
-      .select("role, status, permissions, suspended_until")
+      .select("full_name, role, status, permissions, suspended_until")
       .eq("user_id", user.id)
       .maybeSingle(),
   ]);
@@ -30,6 +30,8 @@ export const getAuthContext = cache(async () => {
   return {
     user,
     profile,
-    accessProfile: (accessProfile ?? null) as PerfilAcesso | null,
+    accessProfile: (accessProfile ?? null) as (PerfilAcesso & {
+      full_name?: string | null;
+    }) | null,
   };
 });
