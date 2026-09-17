@@ -4382,3 +4382,240 @@ tr.ind-clicavel[aria-selected="true"] > td {
     grid-row: 2;
   }
 }
+
+
+/* ================================================================
+   RESÍDUOS — módulo independente e responsivo
+   ================================================================ */
+.aba-admin[href="/residuos"].on,
+.nav-admin-cadastros[href="/residuos"].on {
+  background: color-mix(in srgb, var(--color-brand) 20%, transparent);
+  color: var(--color-brand);
+  border-color: color-mix(in srgb, var(--color-brand) 55%, var(--color-line));
+}
+.residuos-tela {
+  max-width: 92rem;
+  padding-bottom: 40px;
+}
+.residuos-hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 22px;
+}
+.residuos-eyebrow {
+  margin: 0;
+  color: var(--color-brand);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+}
+.residuos-title {
+  margin-top: 5px;
+  color: var(--color-ink);
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -.025em;
+}
+.residuos-lead {
+  max-width: 720px;
+  margin-top: 8px;
+  font-size: 13px;
+}
+.residuos-alert {
+  border-color: color-mix(in srgb, var(--color-media) 45%, var(--color-line));
+  background: color-mix(in srgb, var(--color-media) 8%, var(--color-papel));
+}
+.residuos-alert strong { color: var(--color-media); font-size: 13px; }
+.residuos-alert p { margin: 5px 0 10px; color: var(--color-ink-2); font-size: 12px; }
+.residuos-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+.residuos-kpis .cartao {
+  display: grid;
+  gap: 5px;
+  min-height: 100px;
+}
+.residuos-kpis span,
+.residuos-kpis small { color: var(--color-ink-3); font-size: 10.5px; }
+.residuos-kpis b {
+  color: var(--color-ink);
+  font-size: 22px;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+.residuos-kpis b em { color: var(--color-ink-2); font-size: 11px; font-style: normal; font-weight: 500; }
+.residuos-kpi-alerta { color: var(--color-media) !important; }
+.residuos-filtros { margin-top: 10px; }
+.residuos-section-heading,
+.residuos-modal-heading,
+.residuo-subheading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+.residuos-section-heading h2,
+.residuos-vazio h2,
+.residuos-form-modal h2 {
+  color: var(--color-ink);
+  font-size: 15px;
+  font-weight: 700;
+}
+.residuos-page-label { color: var(--color-ink-3); font-size: 11px; white-space: nowrap; }
+.residuos-filter-grid {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.7fr) repeat(4, minmax(110px, 1fr));
+  align-items: end;
+  gap: 10px;
+  margin-top: 16px;
+}
+.residuos-filter-wide { min-width: 0; }
+.residuos-filter-grid .campo,
+.residuo-form-grid .campo {
+  padding: 9px 10px;
+  font-size: 13px;
+}
+.residuos-filter-actions,
+.residuos-modal-actions,
+.residuo-upload-actions,
+.residuo-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.residuos-filter-actions { grid-column: 1 / -1; }
+.residuos-filter-actions .btn { min-width: 120px; }
+.residuos-lista { display: grid; gap: 10px; margin-top: 10px; }
+.residuos-vazio { padding: 28px 20px; text-align: center; }
+.residuos-vazio .sub { max-width: 520px; margin: 6px auto 15px; }
+.residuo-card { padding: 0; overflow: hidden; }
+.residuo-card-topo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px 11px;
+}
+.residuo-card-summary {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--color-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.residuo-card-date { color: var(--color-brand); font-size: 12px; font-weight: 800; white-space: nowrap; }
+.residuo-card-main { display: grid; gap: 3px; min-width: 0; }
+.residuo-card-main b { overflow: hidden; color: var(--color-ink); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.residuo-card-main small { overflow: hidden; color: var(--color-ink-3); font-size: 10.5px; text-overflow: ellipsis; white-space: nowrap; }
+.residuo-status {
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 9.5px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.residuo-status-pendente { background: color-mix(in srgb, var(--color-media) 15%, transparent); color: var(--color-media); }
+.residuo-status-concluido { background: color-mix(in srgb, var(--color-baixa) 15%, transparent); color: var(--color-baixa); }
+.residuo-status-cancelado { background: color-mix(in srgb, var(--color-alta) 13%, transparent); color: var(--color-alta); }
+.residuo-card-arrow { color: var(--color-ink-3); font-size: 17px; }
+.residuo-edit-btn { padding: 5px 9px; font-size: 11px; }
+.residuo-card-facts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-top: 1px solid var(--color-line);
+}
+.residuo-card-facts span { display: grid; gap: 3px; min-width: 0; padding: 10px 16px; border-right: 1px solid var(--color-line); }
+.residuo-card-facts span:last-child { border-right: 0; }
+.residuo-card-facts small { color: var(--color-ink-3); font-size: 10px; }
+.residuo-card-facts b { overflow: hidden; color: var(--color-ink-2); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.residuo-card-detalhes { border-top: 1px solid var(--color-line); padding: 14px 16px 16px; }
+.residuo-detail-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 11px 16px; }
+.residuo-detail-grid > div { display: grid; gap: 3px; min-width: 0; }
+.residuo-detail-grid small { color: var(--color-ink-3); font-size: 10px; }
+.residuo-detail-grid b { overflow: hidden; color: var(--color-ink-2); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.residuo-detail-wide { grid-column: 1 / -1; }
+.residuo-anexos { margin-top: 16px; padding-top: 13px; border-top: 1px solid var(--color-line); }
+.residuo-subheading h3 { color: var(--color-ink); font-size: 12px; font-weight: 700; }
+.residuo-subheading span { color: var(--color-ink-3); font-size: 10.5px; }
+.residuo-anexo-lista { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 8px; margin-top: 10px; }
+.residuo-anexo {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  padding: 8px;
+  color: var(--color-ink-2);
+  text-decoration: none;
+}
+.residuo-anexo:hover { border-color: var(--color-brand); }
+.residuo-anexo > span:last-child { display: grid; gap: 3px; min-width: 0; }
+.residuo-anexo b,
+.residuo-anexo small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.residuo-anexo b { font-size: 11px; }
+.residuo-anexo small { color: var(--color-ink-3); font-size: 10px; }
+.residuo-anexo-icone { display: grid; width: 38px; height: 38px; flex: 0 0 auto; place-items: center; border-radius: 7px; background: var(--color-papel-2); color: var(--color-brand); font-size: 10px; font-weight: 800; }
+.residuo-anexo.imagem { display: grid; grid-template-columns: 48px minmax(0, 1fr); }
+.residuo-anexo.imagem img { width: 48px; height: 48px; border-radius: 6px; object-fit: cover; }
+.residuo-anexo.indisponivel { opacity: .75; }
+.residuo-upload-actions { margin-top: 11px; }
+.residuo-upload { position: relative; overflow: hidden; font-size: 11px; }
+.residuo-upload input { position: absolute; inset: 0; width: 100%; height: 100%; cursor: pointer; opacity: 0; }
+.residuo-upload.disabled { cursor: not-allowed; opacity: .6; }
+.residuo-danger { border-color: color-mix(in srgb, var(--color-alta) 45%, var(--color-line)); color: var(--color-alta); }
+.residuo-card-actions { justify-content: flex-end; margin-top: 15px; }
+.residuos-pagination { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 14px; color: var(--color-ink-3); font-size: 11px; }
+.residuos-modal { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 20px; }
+.residuos-modal-backdrop { position: absolute; inset: 0; background: rgb(0 0 0 / 68%); }
+.residuos-form-modal { position: relative; z-index: 1; width: min(820px, 100%); max-height: min(90vh, 760px); overflow: auto; padding: 20px; }
+.residuos-close { min-width: 34px; padding: 4px 9px; font-size: 19px; line-height: 1; }
+.residuo-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 11px; margin-top: 16px; }
+.residuo-form-grid label { min-width: 0; }
+.residuo-form-wide { grid-column: 1 / -1; }
+.residuos-modal-actions { grid-column: 1 / -1; justify-content: flex-end; margin-top: 4px; }
+@media (max-width: 920px) {
+  .residuos-filter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .residuos-filter-wide { grid-column: 1 / -1; }
+  .residuos-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 620px) {
+  .residuos-tela { padding-inline: 10px; }
+  .residuos-hero { display: grid; padding: 16px; }
+  .residuos-title { font-size: 20px; }
+  .residuos-hero .btn { width: 100%; }
+  .residuos-filter-grid,
+  .residuo-form-grid { grid-template-columns: 1fr; }
+  .residuos-filter-wide,
+  .residuo-form-wide,
+  .residuos-modal-actions { grid-column: auto; }
+  .residuo-card-topo { align-items: stretch; }
+  .residuo-card-summary { grid-template-columns: 1fr auto; gap: 5px 8px; }
+  .residuo-card-date { grid-column: 1; grid-row: 1; }
+  .residuo-card-main { grid-column: 1 / -1; grid-row: 2; }
+  .residuo-status { grid-column: 2; grid-row: 1; }
+  .residuo-card-arrow { display: none; }
+  .residuo-card-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .residuo-card-facts span:nth-child(2) { border-right: 0; }
+  .residuo-detail-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .residuo-detail-wide { grid-column: 1 / -1; }
+  .residuo-edit-btn { align-self: flex-start; }
+  .residuo-anexo-lista { grid-template-columns: 1fr; }
+}
+@media (max-width: 380px) {
+  .residuos-kpis { grid-template-columns: 1fr; }
+  .residuo-detail-grid { grid-template-columns: 1fr; }
+  .residuo-detail-wide { grid-column: auto; }
+}
