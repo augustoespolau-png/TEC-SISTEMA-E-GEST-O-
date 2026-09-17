@@ -277,7 +277,7 @@ export async function loadGovernanceSnapshot(
   if (!isAdminConfigured()) {
     return emptySnapshot(
       page,
-      "Configure SUPABASE_SERVICE_ROLE_KEY no ambiente da Vercel para habilitar o cadastro de contas.",
+      "Configure SUPABASE_SERVICE_ROLE_KEY (ou SUPABASE_SECRET_KEY) no ambiente da Vercel para habilitar o cadastro de contas.",
     );
   }
 

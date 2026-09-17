@@ -44,7 +44,7 @@ publicar a funcionalidade, aplique, nesta ordem, as migrations
 `supabase/migrations/052_cadastros_schema_compatibilidade.sql` no projeto
 Supabase e configure na Vercel:
 
-- `SUPABASE_SERVICE_ROLE_KEY` como variável somente de servidor;
+- `SUPABASE_SERVICE_ROLE_KEY` (ou `SUPABASE_SECRET_KEY`) como variável somente de servidor;
 - `NEXT_PUBLIC_SITE_URL` com a URL autorizada pelo Supabase Auth para convites
   e recuperação de senha.
 

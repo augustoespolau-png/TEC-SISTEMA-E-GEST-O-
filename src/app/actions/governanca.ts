@@ -151,7 +151,7 @@ function remotePermissionsForRows(
 async function requireGestao() {
   if (!isAdminConfigured()) {
     throw new Error(
-      "SUPABASE_SERVICE_ROLE_KEY não está configurada no servidor. A Gestão de contas está desabilitada até essa variável ser cadastrada na Vercel.",
+      "SUPABASE_SERVICE_ROLE_KEY ou SUPABASE_SECRET_KEY não está configurada no servidor. A Gestão de contas está desabilitada até essa variável ser cadastrada na Vercel.",
     );
   }
 
