@@ -36,6 +36,11 @@ export const GOVERNANCE_MODULES = [
     label: "Cadastros",
     description: "Gerir contas, equipes e governança de acesso.",
   },
+  {
+    id: "RESÍDUOS",
+    label: "Resíduos",
+    description: "Registrar trocas de caçamba, MTR e destinação.",
+  },
 ] as const;
 
 export type GovernanceModule = (typeof GOVERNANCE_MODULES)[number]["id"];
