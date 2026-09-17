@@ -1,16 +1,16 @@
 import { redirect } from "next/navigation";
 import { getAuthContext } from "@/lib/supabase/auth";
 import AuditoriaCasa from "@/components/auditoria/AuditoriaCasa";
-import type { Role } from "@/lib/types";
+import { canAccess, roleForModule } from "@/lib/access";
 
 export default async function AuditoriaPage() {
   const contexto = await getAuthContext();
   if (!contexto) redirect("/login");
+  if (!canAccess(contexto.access, "AUDITORIA", "ver")) redirect("/indicadores");
 
-  const papel = (contexto.profile?.role as Role) ?? "operador";
-  /* Quem audita é operador e gestão. O consultor é acesso de leitura
-     de indicador: ele não abre esta tela nem digitando o endereço. */
-  if (papel === "consultor") redirect("/indicadores");
-
-  return <AuditoriaCasa role={papel} />;
+  return (
+    <AuditoriaCasa
+      role={roleForModule(contexto.access, "AUDITORIA", contexto.role)}
+    />
+  );
 }
