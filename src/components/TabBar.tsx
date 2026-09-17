@@ -47,6 +47,7 @@ const TABS: { href: string; rotulo: string; papeis: Role[] }[] = [
   },
   { href: "/historico", rotulo: "Histórico", papeis: ["gestao"] },
   { href: "/configuracoes", rotulo: "Config.", papeis: ["gestao"] },
+  { href: "/cadastros", rotulo: "Cadastros", papeis: ["gestao"] },
 ];
 
 /* As folhas dos indicadores moram na LATERAL, aninhadas sob a aba
@@ -79,8 +80,6 @@ export default function TabBar({ role, nome }: { role: Role; nome: string }) {
   const [weinmannAberto, setWeinmannAberto] = useState(true);
   const moduloAtivo = abas.some((t) => pathname === t.href);
 
-  // o Painel tem cabeçalho próprio, com período e modo TV
-  // o painel tem cabeçalho próprio, com projeto, período e modo TV
   if (pathname === "/painel") return null;
 
   async function sair() {
@@ -98,8 +97,6 @@ export default function TabBar({ role, nome }: { role: Role; nome: string }) {
           <NomeSistema />
         </Link>
 
-        {/* no celular a navegação fica na barra de baixo (NavInferior);
-            a própria classe .abas se esconde abaixo de 1024px */}
         <nav className="abas flex-1">
           <button
             type="button"
@@ -136,8 +133,6 @@ export default function TabBar({ role, nome }: { role: Role; nome: string }) {
                     {t.rotulo}
                   </Link>
                   {t.href === "/indicadores" && pathname === "/indicadores" &&
-                    /* uma folha só não é escolha: para o operador a lista
-                       some, em vez de virar um botão sozinho aceso */
                     folhasDoPapel(role).length > 1 &&
                     folhasDoPapel(role).map((f) => (
                       <Link
@@ -154,8 +149,6 @@ export default function TabBar({ role, nome }: { role: Role; nome: string }) {
           )}
         </nav>
 
-        {/* .rodape-topo empurra para a direita no celular e para o pe
-            da coluna quando isto vira barra lateral no PC */}
         <div className="rodape-topo">
           <span className="hidden text-[11px] text-ink-3 sm:inline">
             {nome}
