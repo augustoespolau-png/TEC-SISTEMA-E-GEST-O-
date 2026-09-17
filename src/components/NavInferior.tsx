@@ -3,24 +3,25 @@
 import Link from "next/link";
 import { useState } from "react";
 import { usePathname } from "next/navigation";
+import {
+  pode,
+  type ModuloAcesso,
+  type PermissoesUsuario,
+} from "@/lib/permissoes";
 import type { Role } from "@/lib/types";
-
-/*
- * Navegação de celular: barra fixa na base, ao alcance do polegar.
- * No PC ela some — lá as abas ficam no cabeçalho, junto do logo.
- */
 
 const ITENS: {
   href: string;
   rotulo: string;
   papeis: Role[];
+  modulo: ModuloAcesso;
   icone: React.ReactNode;
 }[] = [
   {
     href: "/auditoria",
     rotulo: "Auditoria",
-    // o operador ficou só com a consulta, a pedido (ver TabBar.tsx)
     papeis: ["gestao"],
+    modulo: "AUDITORIA",
     icone: (
       <Icone>
         <path d="M4 4h13l3 3v13H4z" />
@@ -32,6 +33,7 @@ const ITENS: {
     href: "/consultar",
     rotulo: "Consultar",
     papeis: ["operador", "consultor", "gestao"],
+    modulo: "AUDITORIA",
     icone: (
       <Icone>
         <circle cx="11" cy="11" r="6.5" />
@@ -42,11 +44,8 @@ const ITENS: {
   {
     href: "/indicadores",
     rotulo: "Indicadores",
-    /* FPY, desvios e comparativo mensal: leitura de diretoria. O
-       CONSULTOR entra aqui: no celular ele não tinha esta aba e ficava
-       preso na consulta, sem alcançar o painel de jeito nenhum.
-       O OPERADOR entra na folha de FPY e só nela (ver TabBar). */
     papeis: ["operador", "consultor", "gestao"],
+    modulo: "INDICADORES",
     icone: (
       <Icone>
         <path d="M3 17.5 9 11l4 4 8-8.5" />
@@ -58,6 +57,7 @@ const ITENS: {
     href: "/historico",
     rotulo: "Histórico",
     papeis: ["gestao"],
+    modulo: "HISTÓRICO",
     icone: (
       <Icone>
         <path d="M12 8v4.5l3 2" />
@@ -70,6 +70,7 @@ const ITENS: {
     href: "/configuracoes",
     rotulo: "Config.",
     papeis: ["gestao"],
+    modulo: "CONFIGURAÇÃO",
     icone: (
       <Icone>
         <circle cx="12" cy="12" r="3.2" />
@@ -77,11 +78,32 @@ const ITENS: {
       </Icone>
     ),
   },
+  {
+    href: "/usuarios",
+    rotulo: "Usuários",
+    papeis: ["gestao"],
+    modulo: "CADASTROS",
+    icone: (
+      <Icone>
+        <circle cx="9" cy="8" r="3" />
+        <path d="M3.5 19c.6-3.4 2.5-5 5.5-5s4.9 1.6 5.5 5" />
+        <path d="M17 8h4M19 6v4" />
+      </Icone>
+    ),
+  },
 ];
 
-export default function NavInferior({ role }: { role: Role }) {
+export default function NavInferior({
+  role,
+  permissoes,
+}: {
+  role: Role;
+  permissoes?: PermissoesUsuario;
+}) {
   const pathname = usePathname();
-  const itens = ITENS.filter((i) => i.papeis.includes(role));
+  const itens = ITENS.filter((i) =>
+    permissoes ? pode(permissoes, i.modulo, "ver") : i.papeis.includes(role)
+  );
   const [aberto, setAberto] = useState(false);
   const moduloAtivo = itens.some((i) => pathname === i.href);
 
