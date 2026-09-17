@@ -1,6 +1,5 @@
--- Módulo de Cadastros e Governança de Acessos
--- Mantém compatibilidade com as permissões existentes e remove a dependência
--- de um e-mail fixo para administrar o sistema.
+-- Módulo de Cadastros e Governança de Acessos.
+-- Evolui o RBAC existente sem duplicar a fonte de verdade de perfis_acesso.
 
 begin;
 
@@ -21,11 +20,8 @@ create table if not exists public.equipes (
   updated_at timestamptz not null default now()
 );
 
-create unique index if not exists equipes_nome_uq
-  on public.equipes (lower(nome));
-
-create index if not exists equipes_ativo_nome_idx
-  on public.equipes (ativo, nome);
+create unique index if not exists equipes_nome_uq on public.equipes (lower(nome));
+create index if not exists equipes_ativo_nome_idx on public.equipes (ativo, nome);
 
 create table if not exists public.equipe_membros (
   equipe_id uuid not null references public.equipes(id) on delete cascade,
@@ -56,38 +52,6 @@ create index if not exists governanca_audit_actor_idx
 create index if not exists governanca_audit_entidade_idx
   on public.governanca_audit_log (entidade, entidade_id, created_at desc);
 
--- A tabela profiles é usada pela UI como papel coarse-grained. Ela já contém
--- um registro único por usuário; formalizamos isso para poder sincronizá-la
--- com perfis_acesso com segurança.
-do $$
-begin
-  if not exists (
-    select 1
-      from pg_constraint
-     where conrelid = 'public.profiles'::regclass
-       and contype = 'p'
-  ) then
-    alter table public.profiles alter column id set not null;
-    alter table public.profiles add constraint profiles_pkey primary key (id);
-  end if;
-end
-$$;
-
-do $$
-begin
-  if not exists (
-    select 1
-      from pg_constraint
-     where conrelid = 'public.profiles'::regclass
-       and conname = 'profiles_id_fkey'
-  ) then
-    alter table public.profiles
-      add constraint profiles_id_fkey
-      foreign key (id) references auth.users(id) on delete cascade;
-  end if;
-end
-$$;
-
 create or replace function public.tecverde_access_profile_active(
   p_status text,
   p_suspended_until timestamptz
@@ -117,17 +81,15 @@ as $$
     select 1
       from public.perfis_acesso p
      where p.user_id = (select auth.uid())
-       and upper(coalesce(p.role, '')) in ('GESTAO', 'ADMINISTRADOR')
+       and upper(coalesce(p.role, '')) in ('GESTAO', 'ADMINISTRADOR', 'ADMIN', 'GESTOR', 'GESTÃO')
        and public.tecverde_access_profile_active(p.status, p.suspended_until)
   );
 $$;
 
-revoke all on function public.tecverde_is_gestao() from public;
+revoke all on function public.tecverde_is_gestao() from public, anon;
 grant execute on function public.tecverde_is_gestao() to authenticated;
 
--- Compatibilidade: centenas de policies/RPCs existentes já chamam
--- tecverde_is_principal(). A implementação passa a significar Gestão,
--- sem hard-code de identidade individual.
+-- Compatibilidade com policies/RPCs legados que já dependem deste helper.
 create or replace function public.tecverde_is_principal()
 returns boolean
 language sql
@@ -137,12 +99,11 @@ as $$
   select public.tecverde_is_gestao();
 $$;
 
-revoke all on function public.tecverde_is_principal() from public;
+revoke all on function public.tecverde_is_principal() from public, anon;
 grant execute on function public.tecverde_is_principal() to authenticated;
 
--- Leitura canônica de permissão usada pela RLS. SECURITY DEFINER é intencional:
--- evita recursão nas policies de perfis_acesso; a função só responde sobre o
--- auth.uid() corrente e não aceita identidade arbitrária como parâmetro.
+-- Fonte canônica de autorização usada pelas RLS. SECURITY DEFINER evita
+-- recursão na própria perfis_acesso; a identidade é sempre auth.uid().
 create or replace function public.tecverde_can(
   p_modulo text,
   p_acao text default 'ver'
@@ -164,16 +125,28 @@ as $$
     );
 $$;
 
-revoke all on function public.tecverde_can(text, text) from public;
+revoke all on function public.tecverde_can(text, text) from public, anon;
 grant execute on function public.tecverde_can(text, text) to authenticated;
 
 create or replace function public.tecverde_permissions_for_role(p_role text)
 returns jsonb
-language sql
+language plpgsql
 immutable
 set search_path = ''
 as $$
-  select case upper(coalesce(p_role, ''))
+declare
+  v_role text := upper(coalesce(p_role, ''));
+  v_permissions jsonb;
+begin
+  if v_role in ('ADMINISTRADOR', 'ADMIN', 'GESTOR', 'GESTÃO', 'GESTAO') then
+    v_role := 'GESTAO';
+  elsif v_role in ('SUPERVISOR', 'CONSULTA', 'LEITURA_GERAL') then
+    v_role := 'LEITURA_GERAL';
+  elsif v_role in ('OPERADOR', 'INSPETOR', 'QUALIDADE') then
+    v_role := 'INSPETOR';
+  end if;
+
+  v_permissions := case v_role
     when 'GESTAO' then jsonb_build_object(
       'AUDITORIA', jsonb_build_object('ver', true, 'editar', true),
       'INDICADORES', jsonb_build_object('ver', true, 'editar', true),
@@ -226,15 +199,34 @@ as $$
       'CONFIGURAÇÃO', jsonb_build_object('ver', false, 'editar', false),
       'CADASTROS', jsonb_build_object('ver', false, 'editar', false)
     )
-    when 'OPERADOR' then public.tecverde_permissions_for_role('INSPETOR')
-    when 'SUPERVISOR' then public.tecverde_permissions_for_role('LEITURA_GERAL')
-    when 'CONSULTA' then public.tecverde_permissions_for_role('LEITURA_GERAL')
     else '{}'::jsonb
   end;
+
+  return v_permissions;
+end;
 $$;
 
-revoke all on function public.tecverde_permissions_for_role(text) from public;
+revoke all on function public.tecverde_permissions_for_role(text) from public, anon;
 grant execute on function public.tecverde_permissions_for_role(text) to authenticated;
+
+-- A aplicação já usa public.profiles como view coarse-grained. Mantemos a
+-- compatibilidade, mas fazemos a view obedecer à RLS da perfis_acesso.
+create or replace view public.profiles
+with (security_invoker = true)
+as
+select
+  p.user_id as id,
+  coalesce(nullif(trim(p.full_name), ''), split_part(p.email, '@', 1)) as nome,
+  case
+    when upper(coalesce(p.role, '')) in ('ADMINISTRADOR', 'ADMIN', 'GESTOR', 'GESTÃO', 'GESTAO') then 'gestao'::text
+    when upper(coalesce(p.role, '')) in ('OPERADOR', 'INSPETOR', 'AUDITOR', 'QUALIDADE') then 'operador'::text
+    else 'consultor'::text
+  end as role
+from public.perfis_acesso p
+where p.user_id is not null
+  and public.tecverde_access_profile_active(p.status, p.suspended_until);
+
+grant select on public.profiles to authenticated;
 
 create or replace function public.tecverde_governanca_touch()
 returns trigger
@@ -250,7 +242,7 @@ begin
 end;
 $$;
 
-revoke all on function public.tecverde_governanca_touch() from public;
+revoke all on function public.tecverde_governanca_touch() from public, anon;
 
 DROP TRIGGER IF EXISTS perfis_acesso_governanca_touch ON public.perfis_acesso;
 create trigger perfis_acesso_governanca_touch
@@ -262,58 +254,6 @@ create trigger equipes_governanca_touch
 before update on public.equipes
 for each row execute function public.tecverde_governanca_touch();
 
-create or replace function public.tecverde_sync_profile_from_access()
-returns trigger
-language plpgsql
-security definer
-set search_path = ''
-as $$
-declare
-  v_role text;
-begin
-  if new.user_id is null then
-    return new;
-  end if;
-
-  v_role := case
-    when upper(coalesce(new.role, '')) in ('GESTAO', 'ADMINISTRADOR') then 'gestao'
-    when upper(coalesce(new.role, '')) in ('LEITURA_GERAL', 'INDICADORES', 'CONSULTA', 'SUPERVISOR') then 'consultor'
-    else 'operador'
-  end;
-
-  insert into public.profiles (id, nome, role)
-  values (new.user_id, coalesce(nullif(new.full_name, ''), new.email), v_role)
-  on conflict (id) do update
-    set nome = excluded.nome,
-        role = excluded.role;
-
-  return new;
-end;
-$$;
-
-revoke all on function public.tecverde_sync_profile_from_access() from public;
-
-DROP TRIGGER IF EXISTS perfis_acesso_sync_profile ON public.perfis_acesso;
-create trigger perfis_acesso_sync_profile
-after insert or update of user_id, full_name, role on public.perfis_acesso
-for each row execute function public.tecverde_sync_profile_from_access();
-
--- Sincroniza os dois perfis existentes sem alterar permissões granulares.
-insert into public.profiles (id, nome, role)
-select
-  p.user_id,
-  coalesce(nullif(p.full_name, ''), p.email),
-  case
-    when upper(coalesce(p.role, '')) in ('GESTAO', 'ADMINISTRADOR') then 'gestao'
-    when upper(coalesce(p.role, '')) in ('LEITURA_GERAL', 'INDICADORES', 'CONSULTA', 'SUPERVISOR') then 'consultor'
-    else 'operador'
-  end
-from public.perfis_acesso p
-where p.user_id is not null
-on conflict (id) do update
-set nome = excluded.nome,
-    role = excluded.role;
-
 create or replace function public.tecverde_governanca_audit_trigger()
 returns trigger
 language plpgsql
@@ -321,15 +261,20 @@ security definer
 set search_path = ''
 as $$
 declare
+  v_row jsonb;
   v_id text;
 begin
-  v_id := case
-    when tg_table_name = 'equipe_membros' then
-      coalesce((to_jsonb(coalesce(new, old)) ->> 'equipe_id'), '') || ':' ||
-      coalesce((to_jsonb(coalesce(new, old)) ->> 'user_id'), '')
-    else
-      to_jsonb(coalesce(new, old)) ->> 'id'
-  end;
+  if tg_op = 'DELETE' then
+    v_row := to_jsonb(old);
+  else
+    v_row := to_jsonb(new);
+  end if;
+
+  if tg_table_name = 'equipe_membros' then
+    v_id := coalesce(v_row ->> 'equipe_id', '') || ':' || coalesce(v_row ->> 'user_id', '');
+  else
+    v_id := coalesce(v_row ->> 'id', v_row ->> 'user_id');
+  end if;
 
   insert into public.governanca_audit_log (
     actor_id, acao, entidade, entidade_id, antes, depois
@@ -342,11 +287,16 @@ begin
     case when tg_op in ('INSERT', 'UPDATE') then to_jsonb(new) else null end
   );
 
-  return coalesce(new, old);
+  return null;
 end;
 $$;
 
-revoke all on function public.tecverde_governanca_audit_trigger() from public;
+revoke all on function public.tecverde_governanca_audit_trigger() from public, anon;
+
+DROP TRIGGER IF EXISTS perfis_acesso_governanca_audit ON public.perfis_acesso;
+create trigger perfis_acesso_governanca_audit
+after insert or update or delete on public.perfis_acesso
+for each row execute function public.tecverde_governanca_audit_trigger();
 
 DROP TRIGGER IF EXISTS equipes_governanca_audit ON public.equipes;
 create trigger equipes_governanca_audit
@@ -388,42 +338,10 @@ begin
 end;
 $$;
 
-revoke all on function public.governanca_registrar_evento(text, text, text, jsonb, jsonb) from public;
+revoke all on function public.governanca_registrar_evento(text, text, text, jsonb, jsonb) from public, anon;
 grant execute on function public.governanca_registrar_evento(text, text, text, jsonb, jsonb) to authenticated;
 
--- RLS do perfil coarse-grained: antes estava sem RLS.
-alter table public.profiles enable row level security;
-
-DROP POLICY IF EXISTS profiles_select_self_or_gestao ON public.profiles;
-create policy profiles_select_self_or_gestao
-on public.profiles
-for select
-to authenticated
-using (id = (select auth.uid()) or public.tecverde_is_gestao());
-
-DROP POLICY IF EXISTS profiles_insert_gestao ON public.profiles;
-create policy profiles_insert_gestao
-on public.profiles
-for insert
-to authenticated
-with check (public.tecverde_is_gestao());
-
-DROP POLICY IF EXISTS profiles_update_gestao ON public.profiles;
-create policy profiles_update_gestao
-on public.profiles
-for update
-to authenticated
-using (public.tecverde_is_gestao())
-with check (public.tecverde_is_gestao());
-
-DROP POLICY IF EXISTS profiles_delete_gestao ON public.profiles;
-create policy profiles_delete_gestao
-on public.profiles
-for delete
-to authenticated
-using (public.tecverde_is_gestao());
-
--- Perfis de acesso: o próprio usuário pode ler o seu; somente Gestão altera.
+-- Perfis de acesso: cada usuário lê o próprio perfil; somente Gestão altera.
 DROP POLICY IF EXISTS "TECVERDE_perfis_select" ON public.perfis_acesso;
 DROP POLICY IF EXISTS "TECVERDE_perfis_insert_admin" ON public.perfis_acesso;
 DROP POLICY IF EXISTS "TECVERDE_perfis_update_admin" ON public.perfis_acesso;
@@ -462,12 +380,14 @@ for delete
 to authenticated
 using (public.tecverde_is_gestao());
 
--- Solicitações seguem a mesma fronteira administrativa, preservando o
--- autoatendimento de leitura/criação da própria solicitação.
 DROP POLICY IF EXISTS "TECVERDE_solicitacoes_select" ON public.solicitacoes_acesso;
 DROP POLICY IF EXISTS "TECVERDE_solicitacoes_insert" ON public.solicitacoes_acesso;
 DROP POLICY IF EXISTS "TECVERDE_solicitacoes_update_admin" ON public.solicitacoes_acesso;
 DROP POLICY IF EXISTS "TECVERDE_solicitacoes_delete_admin" ON public.solicitacoes_acesso;
+DROP POLICY IF EXISTS solicitacoes_select_self_or_gestao ON public.solicitacoes_acesso;
+DROP POLICY IF EXISTS solicitacoes_insert_self_or_gestao ON public.solicitacoes_acesso;
+DROP POLICY IF EXISTS solicitacoes_update_gestao ON public.solicitacoes_acesso;
+DROP POLICY IF EXISTS solicitacoes_delete_gestao ON public.solicitacoes_acesso;
 
 create policy solicitacoes_select_self_or_gestao
 on public.solicitacoes_acesso
