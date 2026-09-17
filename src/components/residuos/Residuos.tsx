@@ -19,6 +19,7 @@ import {
 import {
   BUCKET_AUDITORIA,
   MAX_FOTO_BYTES,
+  mimeArquivo,
   otimizarFoto,
   segmentoSeguro,
   tamanhoLegivel,
@@ -33,10 +34,10 @@ import {
   RESIDUO_CATEGORIAS,
   RESIDUO_STATUS,
   type ResiduoAnexoTipo,
+  type ResiduoAnexo,
   type ResiduoCategoria,
   type ResiduoStatus,
   type ResiduoTroca,
-  type ResiduosFilters,
   type ResiduosSnapshot,
 } from "@/lib/residuos";
 import { createClient } from "@/lib/supabase/client";
@@ -242,22 +243,24 @@ export default function Residuos({
       if (original.size <= 0 || original.size > MAX_FOTO_BYTES) {
         throw new Error("O arquivo precisa ter entre 1 byte e 20 MB.");
       }
-      const isImage = original.type.startsWith("image/");
-      const isPdf = original.type === "application/pdf";
+      const originalMime = mimeArquivo(original);
+      const isImage = originalMime.startsWith("image/");
+      const isPdf = originalMime === "application/pdf";
       if (!isImage && !isPdf) throw new Error("Use uma imagem ou um PDF.");
       if (tipo === "foto" && !isImage) throw new Error("A foto precisa ser uma imagem.");
 
       const ready = isImage ? await otimizarFoto(original) : original;
-      const extension = ready.type === "application/pdf" ? "pdf" : "jpg";
+      const readyMime = mimeArquivo(ready) || originalMime;
+      const extension = readyMime === "application/pdf" ? "pdf" : "jpg";
       const baseName = segmentoSeguro(ready.name.replace(/\.[^.]+$/, ""));
-      const fileName = String(Date.now()) + "_" + crypto.randomUUID() + "_" + baseName + "." + extension;
+      const fileName = crypto.randomUUID() + "_" + baseName + "." + extension;
       path = "residuos/" + segmentoSeguro(item.id) + "/" + tipo + "/" + fileName;
       const supabase = createClient();
       const userResult = await supabase.auth.getUser();
       if (!userResult.data.user) throw new Error("Sua sessão expirou. Entre novamente.");
       const upload = await supabase.storage.from(BUCKET_AUDITORIA).upload(path, ready, {
         cacheControl: "3600",
-        contentType: ready.type,
+        contentType: readyMime,
         upsert: false,
       });
       if (upload.error) throw new Error("Não foi possível enviar o arquivo: " + upload.error.message);
@@ -266,7 +269,7 @@ export default function Residuos({
         troca_id: item.id,
         tipo,
         nome_arquivo: ready.name,
-        mime_type: ready.type,
+        mime_type: readyMime,
         tamanho_bytes: ready.size,
         storage_path: path,
       };
