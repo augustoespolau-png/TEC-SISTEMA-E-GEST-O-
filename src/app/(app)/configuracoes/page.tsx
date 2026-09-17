@@ -1,15 +1,29 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { getAuthContext } from "@/lib/supabase/auth";
+import { exigirAcesso } from "@/lib/acesso-server";
+import { pode } from "@/lib/permissoes";
 import ConfigManager from "@/components/ConfigManager";
 import DiagnosticoSistemaCard from "@/components/config/DiagnosticoSistemaCard";
 import ObrasEmpreendimentosCard from "@/components/config/ObrasEmpreendimentosCard";
 
 export default async function ConfiguracoesPage() {
-  const contexto = await getAuthContext();
-  if (!contexto) redirect("/login");
+  const acesso = await exigirAcesso("CONFIGURAÇÃO", "ver");
+  const podeEditar = pode(acesso.permissoes, "CONFIGURAÇÃO", "editar");
 
-  if (contexto.profile?.role !== "gestao") redirect("/");
+  if (!podeEditar) {
+    return (
+      <main className="tela">
+        <div className="cartao">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-brand">
+            Configurações
+          </p>
+          <h1 className="mt-1 text-base font-semibold text-ink">Acesso somente leitura</h1>
+          <p className="sub mt-2">
+            Você pode acessar este módulo, mas alterações de cadastros técnicos e parâmetros estão desabilitadas para o seu usuário.
+          </p>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <>
@@ -39,7 +53,10 @@ export default async function ConfiguracoesPage() {
         </Link>
         <ObrasEmpreendimentosCard />
       </main>
-      <ConfigManager />
+      <div className="config-sem-aviso-usuarios">
+        <ConfigManager />
+      </div>
+      <style>{`.config-sem-aviso-usuarios > main > .cartao:last-child { display: none; }`}</style>
     </>
   );
 }
