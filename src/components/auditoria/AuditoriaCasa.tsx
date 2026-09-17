@@ -7,6 +7,11 @@ import {
   assinarAnexosEmLote,
   BUCKET_AUDITORIA,
   criarUrlAssinadaOpcional,
+  caminhoAnexoAuditoria,
+  ErroAnexo,
+  mimeArquivo,
+  registrarErroSupabase,
+  textoErroSupabase,
   enviarFotoAuditoria,
   otimizarFoto,
 } from "@/lib/anexos";
@@ -712,17 +717,29 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
 
     const projetoCfg = cfg?.projetos.find((item) => item.nome === auditoriaFoto.projeto);
     const projetoId =
-      projetoCfg?.id?.toString() ??
-      (auditoriaFoto.id.split("|", 1)[0] || auditoriaFoto.projeto);
-    const paredeId =
-      cfg?.paredes.find(
-        (item) => item.projeto_id === projetoCfg?.id && item.nome === parede
-      )?.id?.toString() ?? parede;
+      projetoCfg?.origem_id ||
+      auditoriaFoto.id.split("|", 1)[0] ||
+      auditoriaFoto.projeto;
+    const paredeCfg = cfg?.paredes.find(
+      (item) => item.projeto_id === projetoCfg?.id && item.nome === parede
+    );
+    const paredeId = paredeCfg?.origem_id ?? parede;
 
     let caminho: string | null = null;
     try {
-      /* Compressão + upload começam em paralelo com o RPC que cria o desvio.
-         Assim a foto não adiciona espera ao gesto do inspetor. */
+      /* O caminho é calculado com os IDs canônicos que também aparecem em
+         produto_auditorias/produto_paredes. Isso evita misturar os IDs
+         numéricos do catálogo legado com as linhas relacionais. */
+      const agora = new Date();
+      caminho = caminhoAnexoAuditoria({
+        usuarioId: usuario.id,
+        projetoId,
+        casaId: auditoriaFoto.casa,
+        paredeId,
+        anexoId: anexoUid,
+        extensao: "jpg",
+        agora,
+      });
       const arquivoOtimizado = await otimizarFoto(arquivo);
       caminho = await enviarFotoAuditoria(supabase, {
         usuarioId: usuario.id,
@@ -731,6 +748,8 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
         paredeId,
         anexoId: anexoUid,
         extensao: "jpg",
+        agora,
+        caminho,
         arquivo: arquivoOtimizado,
       });
       const url = await criarUrlAssinadaOpcional(
@@ -746,7 +765,7 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
         anexo: {
           id: anexoId,
           name: arquivoOtimizado.name,
-          type: "image/jpeg",
+          type: mimeArquivo(arquivoOtimizado),
           size: arquivoOtimizado.size,
           path: caminho,
           wallId: paredeId,
@@ -776,18 +795,28 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
       return { error: preparada.error ?? new Error("Foto não preparada.") };
     }
 
-    const { error } = await supabase.rpc("qualidade_adicionar_anexo_fast", {
-      p_auditoria_id: auditoriaFoto.id,
-      p_parede: parede,
-      p_desvio_id: desvioId,
-      p_anexo: {
-        ...preparada.anexo,
-        deviationId: desvioId,
-      },
-    });
+    try {
+      const { error } = await supabase.rpc("qualidade_adicionar_anexo_fast", {
+        p_auditoria_id: auditoriaFoto.id,
+        p_parede: parede,
+        p_desvio_id: desvioId,
+        p_anexo: {
+          ...preparada.anexo,
+          deviationId: desvioId,
+        },
+      });
 
-    if (error) return { error };
-    return { error: null };
+      if (error) {
+        registrarErroSupabase("auditoria/vincular-foto", error);
+        return { error };
+      }
+      return { error: null };
+    } catch (error) {
+      registrarErroSupabase("auditoria/vincular-foto", error);
+      return {
+        error: new ErroAnexo("Não foi possível vincular a foto", error),
+      };
+    }
   }
 
   function adicionarErro(parede: string, novo: NovoErro, dia: string) {
@@ -796,9 +825,6 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
     const auditoriaId = auditoriaAtual.id;
     const supabase = createClient();
     const { anexo, ...dadosErro } = novo;
-    const fotoEmSegundoPlano = anexo
-      ? prepararFotoDoDesvio(supabase, auditoriaAtual, parede, anexo)
-      : null;
     const idOtimista = `optimistic-error-${crypto.randomUUID()}`;
     const tinhaDataAntes = Boolean(datasRef.current[parede]);
     const novasDatas = { ...datasRef.current, [parede]: dia };
@@ -873,15 +899,6 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
         });
         const id = (criacao as { id?: string } | null)?.id;
         if (error || !id) {
-          if (fotoEmSegundoPlano) {
-            void fotoEmSegundoPlano.then((preparada) => {
-              if (preparada.caminho) {
-                return supabase.storage
-                  .from(BUCKET_AUDITORIA)
-                  .remove([preparada.caminho]);
-              }
-            });
-          }
           rollback(
             "Não foi possível sincronizar o erro: " +
               (error?.message ?? "sem identificador retornado")
@@ -919,35 +936,61 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
           setErros(reconciliados);
         })();
 
-        if (!fotoEmSegundoPlano) return;
-        const preparada = await fotoEmSegundoPlano;
-        if (preparada.error) {
-          marcarFoto("ERRO");
-          toast.error(
-            "O erro foi salvo, mas a foto não foi enviada: " +
-              preparada.error.message
+        if (!anexo) return;
+
+        /* A foto só começa depois de o RPC acima confirmar o ID real do
+           desvio. Assim o Storage e a tabela relacional nunca correm em
+           paralelo com a criação do registro. A falha do anexo fica isolada
+           nesta etapa: o desvio já salvo não sofre rollback. */
+        try {
+          const preparada = await prepararFotoDoDesvio(
+            supabase,
+            auditoriaAtual,
+            parede,
+            anexo,
           );
-          return;
+          if (preparada.error) {
+            if (preparada.caminho) {
+              const limpeza = await supabase.storage
+                .from(BUCKET_AUDITORIA)
+                .remove([preparada.caminho]);
+              if (limpeza.error) {
+                registrarErroSupabase("auditoria/limpeza-foto", limpeza.error);
+              }
+            }
+            marcarFoto("ERRO");
+            registrarErroSupabase("auditoria/preparar-foto", preparada.error);
+            toast.error(
+              "O erro foi salvo, mas a foto não foi enviada: " +
+                textoErroSupabase(preparada.error),
+            );
+            return;
         }
 
-        const anexoPreparado = preparada.anexo;
-        const caminhoPreparado = preparada.caminho;
-        if (!anexoPreparado || !caminhoPreparado) {
-          marcarFoto("ERRO");
-          toast.error("O erro foi salvo, mas a foto não ficou pronta para vincular.");
-          return;
-        }
+          const anexoPreparado = preparada.anexo;
+          const caminhoPreparado = preparada.caminho;
+          if (!anexoPreparado || !caminhoPreparado) {
+            marcarFoto("ERRO");
+            const falha = new ErroAnexo(
+              "A foto não ficou pronta para vincular",
+              new Error("o upload não retornou um caminho"),
+            );
+            registrarErroSupabase("auditoria/preparar-foto", falha);
+            toast.error(
+              "O erro foi salvo, mas a foto não foi enviada: " +
+                textoErroSupabase(falha),
+            );
+            return;
+          }
 
-        /* Mantém “Foto enviando…” até o banco confirmar o vínculo. Se a rede
-           oscilar, uma segunda tentativa curta evita transformar um upload
-           válido em foto órfã. */
-        void (async () => {
+          /* O vínculo também é idempotente. Se a rede oscilar depois do
+             upload, repetimos somente o metadado, sem criar outro desvio. */
           let vinculo = await vincularFotoAoDesvio(
             supabase,
             auditoriaAtual,
             parede,
             id,
-            preparada
+            preparada,
           );
           if (vinculo.error) {
             await new Promise((resolve) => window.setTimeout(resolve, 450));
@@ -956,18 +999,21 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
               auditoriaAtual,
               parede,
               id,
-              preparada
+              preparada,
             );
           }
 
           if (vinculo.error) {
             marcarFoto("ERRO");
-            await supabase.storage
+            const limpeza = await supabase.storage
               .from(BUCKET_AUDITORIA)
               .remove([caminhoPreparado]);
+            if (limpeza.error) {
+              registrarErroSupabase("auditoria/limpeza-foto", limpeza.error);
+            }
             toast.error(
               "O erro foi salvo, mas a foto não foi vinculada: " +
-                vinculo.error.message
+                textoErroSupabase(vinculo.error),
             );
             return;
           }
@@ -1004,17 +1050,17 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
             marcarFoto(undefined);
           }
           toast.success("Foto anexada ao desvio.");
-        })();
-      } catch (caught) {
-        if (fotoEmSegundoPlano) {
-          void fotoEmSegundoPlano.then((preparada) => {
-            if (preparada.caminho) {
-              return supabase.storage
-                .from(BUCKET_AUDITORIA)
-                .remove([preparada.caminho]);
-            }
-          });
+        } catch (caught) {
+          /* Nunca desfazemos o desvio por uma falha posterior de Storage ou
+             de rede. O diagnóstico completo fica no console e no toast. */
+          marcarFoto("ERRO");
+          registrarErroSupabase("auditoria/anexo-desvio", caught);
+          toast.error(
+            "O erro foi salvo, mas a foto não foi vinculada: " +
+              textoErroSupabase(caught),
+          );
         }
+      } catch (caught) {
         rollback(
           "Não foi possível sincronizar o erro: " +
             (caught instanceof Error ? caught.message : "falha de conexão")
