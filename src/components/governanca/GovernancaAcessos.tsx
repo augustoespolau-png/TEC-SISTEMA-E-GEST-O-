@@ -1,7 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import { toast } from "sonner";
+import DiagnosticoSistemaCard from "@/components/config/DiagnosticoSistemaCard";
 import {
   createGovernanceTeam,
   createGovernanceUser,
@@ -30,7 +32,7 @@ import {
   type GovernanceUser,
 } from "@/lib/governanca-types";
 
-type Tab = "usuarios" | "equipes";
+type Tab = "usuarios" | "equipes" | "ia";
 
 type UserDraft = Pick<
   GovernanceUser,
@@ -362,9 +364,20 @@ export default function GovernancaAcessos({
         >
           Equipes
         </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === "ia"}
+          className={tab === "ia" ? "on" : ""}
+          onClick={() => setTab("ia")}
+        >
+          IA / Diagnóstico
+        </button>
       </div>
 
-      {!snapshot.configured ? (
+      {tab === "ia" ? (
+        <IAGovernancePanel />
+      ) : !snapshot.configured ? (
         <section className="cartao gov-empty">
           <h2>Cadastro administrativo ainda não ativado</h2>
           <p>
@@ -446,6 +459,36 @@ export default function GovernancaAcessos({
         />
       )}
     </main>
+  );
+}
+
+function IAGovernancePanel() {
+  return (
+    <div className="grid gap-4">
+      <DiagnosticoSistemaCard />
+      <Link
+        href="/ia"
+        className="group rounded-2xl border border-line bg-papel p-5 shadow-sm transition hover:border-brand"
+      >
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-brand">
+              Consulta inteligente
+            </p>
+            <h2 className="mt-1 text-base font-semibold text-ink">AI Suite · Gestão</h2>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-ink-2">
+              Consulte a base em linguagem natural, acompanhe tendências preventivas e gere o relatório executivo semanal com IA.
+            </p>
+          </div>
+          <span className="rounded-full border border-line bg-papel-2 px-2.5 py-1 text-[10px] text-ink-2 transition group-hover:border-brand">
+            Gestão · seguro
+          </span>
+        </div>
+        <div className="mt-4 inline-flex rounded-xl border border-brand bg-brand px-3.5 py-2 text-xs font-medium text-white transition group-hover:bg-brand-forte">
+          Abrir consulta IA
+        </div>
+      </Link>
+    </div>
   );
 }
 

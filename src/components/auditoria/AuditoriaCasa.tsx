@@ -549,12 +549,18 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
     setAbrindo(true);
     const supabase = createClient();
 
-    const { data: existente } = await supabase
+    const { data: existente, error: erroConsulta } = await supabase
       .from("qualidade_auditorias")
       .select("*")
       .eq("projeto", projeto)
       .eq("casa", numero)
       .maybeSingle();
+
+    if (erroConsulta) {
+      setAbrindo(false);
+      toast.error("Não foi possível verificar esta casa: " + erroConsulta.message);
+      return;
+    }
 
     let a = existente as Auditoria | null;
     if (!a) {
@@ -712,11 +718,12 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
         (item) => item.projeto_id === projetoCfg?.id && item.nome === parede
       )?.id?.toString() ?? parede;
 
+    let caminho: string | null = null;
     try {
       /* Compressão + upload começam em paralelo com o RPC que cria o desvio.
          Assim a foto não adiciona espera ao gesto do inspetor. */
       const arquivoOtimizado = await otimizarFoto(arquivo);
-      const caminho = await enviarFotoAuditoria(supabase, {
+      caminho = await enviarFotoAuditoria(supabase, {
         usuarioId: usuario.id,
         projetoId,
         casaId: auditoriaFoto.casa,
@@ -728,10 +735,16 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
       const assinatura = await supabase.storage
         .from(BUCKET_AUDITORIA)
         .createSignedUrl(caminho, 60 * 60);
+      if (assinatura.error || !assinatura.data?.signedUrl) {
+        throw new Error(
+          "Não foi possível preparar a visualização: " +
+            (assinatura.error?.message ?? "URL assinada indisponível")
+        );
+      }
       return {
         error: null,
         caminho,
-        url: assinatura.data?.signedUrl ?? null,
+        url: assinatura.data.signedUrl,
         anexo: {
           id: anexoId,
           name: arquivoOtimizado.name,
@@ -747,7 +760,7 @@ export default function AuditoriaCasa({ role }: { role: Role }) {
           caught instanceof Error
             ? caught
             : new Error("Não foi possível enviar a foto."),
-        caminho: null,
+        caminho,
         url: null,
         anexo: null,
       };

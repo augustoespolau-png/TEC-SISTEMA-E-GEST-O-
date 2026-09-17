@@ -399,8 +399,14 @@ function ParedesSection({ versaoProjetos }: { versaoProjetos: number }) {
       const assinado = await supabase.storage
         .from(BUCKET_AUDITORIA)
         .createSignedUrl(caminho, 60 * 60);
+      if (assinado.error) throw new Error("Não foi possível preparar a visualização: " + assinado.error.message);
       const caminhoDoUsuario = `produto/${segmentoSeguro(sessao.user.id)}/`;
-      if (resultado.old_path?.startsWith(caminhoDoUsuario)) {
+      const caminhoLegadoDoUsuario = `${segmentoSeguro(sessao.user.id)}/`;
+      if (
+        resultado.old_path &&
+        (resultado.old_path.startsWith(caminhoDoUsuario) ||
+          resultado.old_path.startsWith(caminhoLegadoDoUsuario))
+      ) {
         await supabase.storage.from(BUCKET_AUDITORIA).remove([resultado.old_path]);
       }
 
