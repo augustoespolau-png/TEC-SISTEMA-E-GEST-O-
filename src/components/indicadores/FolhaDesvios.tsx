@@ -99,8 +99,8 @@ export default function FolhaDesvios({
           {
             rotulo: "Itens não aplicados",
             valor: nBR(indiceQualidade.naoAplicaveis),
-            pe: "N/A fora da base do IQ",
-            dica: `${nBR(indiceQualidade.naoAplicaveis)} itens foram marcados como Não Aplicável (N/A) nas paredes auditadas do período. Eles são retirados da base válida antes do cálculo do Índice de Qualidade.`,
+            pe: `${nBR(indiceQualidade.totalBruto)} itens inspecionados`,
+            dica: `${nBR(indiceQualidade.naoAplicaveis)} de ${nBR(indiceQualidade.totalBruto)} itens inspecionados foram marcados como Não Aplicável (N/A) nas paredes auditadas do período. Eles são retirados da base válida antes do cálculo do Índice de Qualidade.`,
           },
           {
             rotulo: "Índice de qualidade (IQ)",
