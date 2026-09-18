@@ -94,14 +94,14 @@ const ITENS: {
 
 const ADMIN_ITEM = {
   href: "/cadastros",
-  rotulo: "Cadastros",
+  rotulo: "CADASTROS",
   papeis: ["gestao"] as Role[],
   modulo: "CADASTROS" as GovernanceModule,
 };
 
 const RESIDUOS_ITEM = {
   href: "/residuos",
-  rotulo: "Resíduos",
+  rotulo: "RESÍDUOS",
   papeis: ["operador", "consultor", "gestao"] as Role[],
   modulo: "RESÍDUOS" as GovernanceModule,
 };
@@ -115,7 +115,7 @@ const IA_TEC_ITEM = {
 
 const CADEIA_MADEIRA_ITEM = {
   href: "/cadeia-madeira",
-  rotulo: "Madeira",
+  rotulo: "MADEIRA",
   papeis: ["operador", "consultor", "gestao"] as Role[],
   modulo: "CADEIA_MADEIRA" as GovernanceModule,
 };
