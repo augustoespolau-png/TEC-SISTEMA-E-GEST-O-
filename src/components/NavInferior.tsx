@@ -105,6 +105,13 @@ const RESIDUOS_ITEM = {
   modulo: "RESÍDUOS" as GovernanceModule,
 };
 
+const IA_TEC_ITEM = {
+  href: "/ia",
+  rotulo: "IA-TEC",
+  papeis: ["gestao"] as Role[],
+  modulo: "IA" as GovernanceModule,
+};
+
 const CADEIA_MADEIRA_ITEM = {
   href: "/cadeia-madeira",
   rotulo: "Cadeia da Madeira",
@@ -129,6 +136,8 @@ export default function NavInferior({
     ADMIN_ITEM.papeis.includes(role) && canModule(permissions, ADMIN_ITEM.modulo);
   const residuosVisivel =
     RESIDUOS_ITEM.papeis.includes(role) && canModule(permissions, RESIDUOS_ITEM.modulo);
+  const iaTecVisivel =
+    IA_TEC_ITEM.papeis.includes(role) && canModule(permissions, IA_TEC_ITEM.modulo);
   const cadeiaMadeiraVisivel =
     CADEIA_MADEIRA_ITEM.papeis.includes(role) &&
     canModule(permissions, CADEIA_MADEIRA_ITEM.modulo);
@@ -210,6 +219,21 @@ export default function NavInferior({
             <path d="M8 9h8M8 13h5M8 17h4" />
           </Icone>
           {RESIDUOS_ITEM.rotulo}
+        </Link>
+      )}
+
+      {iaTecVisivel && (
+        <Link
+          href={IA_TEC_ITEM.href}
+          className={`nav-admin-cadastros ${pathname === IA_TEC_ITEM.href ? "on" : ""}`}
+          aria-current={pathname === IA_TEC_ITEM.href ? "page" : undefined}
+        >
+          <Icone>
+            <path d="m12 3-1.2 4.3-4.3 1.2 4.3 1.2L12 14l1.2-4.3 4.3-1.2-4.3-1.2L12 3Z" />
+            <path d="m19 14-.7 2.3-2.3.7 2.3.7.7 2.3.7-2.3 2.3-.7-2.3-.7-.7-2.3Z" />
+            <path d="m5 15-.5 1.5L3 17l1.5.5L5 19l.5-1.5L7 17l-1.5-.5L5 15Z" />
+          </Icone>
+          {IA_TEC_ITEM.rotulo}
         </Link>
       )}
 

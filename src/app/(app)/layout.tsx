@@ -13,7 +13,6 @@ export default async function AppLayout({
   if (isAccountInactive(contexto.profile)) redirect("/acesso-negado");
 
   const role = (contexto.profile?.role ?? "consultor") as Role;
-  const nome = contexto.profile?.nome || contexto.user.email || "";
 
   // largura livre: o Painel ocupa a tela inteira; as demais telas se
   // centralizam sozinhas (classe .tela). No celular a navegação fica
@@ -24,7 +23,7 @@ export default async function AppLayout({
      continua na barra de baixo, ao alcance do polegar. */
   return (
     <div className="quadro-app">
-      <TabBar role={role} nome={nome} permissions={contexto.permissions} />
+      <TabBar role={role} permissions={contexto.permissions} />
       <div className="conteudo-app">
         {children}
       </div>

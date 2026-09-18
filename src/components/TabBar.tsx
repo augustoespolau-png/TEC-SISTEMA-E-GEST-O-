@@ -9,6 +9,7 @@ import BotaoTema from "@/components/BotaoTema";
 import NomeSistema from "@/components/NomeSistema";
 import {
   canModule,
+  roleLabel,
   type GovernanceModule,
   type GovernancePermission,
 } from "@/lib/governanca-types";
@@ -90,6 +91,16 @@ const RESIDUOS_NAV = {
   modulo: "RESÍDUOS" as GovernanceModule,
 };
 
+/* A consulta inteligente é um módulo próprio. Ela não é uma aba de
+   Cadastros: o gestor chega aqui por esta entrada e a rota continua
+   protegida no servidor. */
+const IA_TEC_NAV = {
+  href: "/ia",
+  rotulo: "IA-TEC",
+  papeis: ["gestao"] as Role[],
+  modulo: "IA" as GovernanceModule,
+};
+
 const CADEIA_MADEIRA_NAV = {
   href: "/cadeia-madeira",
   rotulo: "Cadeia da Madeira",
@@ -120,11 +131,9 @@ export function folhasDoPapel(role: Role) {
 
 export default function TabBar({
   role,
-  nome,
   permissions,
 }: {
   role: Role;
-  nome: string;
   permissions: GovernancePermission[];
 }) {
   const pathname = usePathname();
@@ -137,6 +146,8 @@ export default function TabBar({
     ADMIN_NAV.papeis.includes(role) && canModule(permissions, ADMIN_NAV.modulo);
   const residuosVisivel =
     RESIDUOS_NAV.papeis.includes(role) && canModule(permissions, RESIDUOS_NAV.modulo);
+  const iaTecVisivel =
+    IA_TEC_NAV.papeis.includes(role) && canModule(permissions, IA_TEC_NAV.modulo);
   const cadeiaMadeiraVisivel =
     CADEIA_MADEIRA_NAV.papeis.includes(role) &&
     canModule(permissions, CADEIA_MADEIRA_NAV.modulo);
@@ -254,6 +265,31 @@ export default function TabBar({
           </Link>
         )}
 
+        {iaTecVisivel && (
+          <Link
+            href={IA_TEC_NAV.href}
+            className={`aba aba-admin ${pathname === IA_TEC_NAV.href ? "on" : ""}`}
+            aria-current={pathname === IA_TEC_NAV.href ? "page" : undefined}
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+            >
+              <path d="m12 3-1.2 4.3-4.3 1.2 4.3 1.2L12 14l1.2-4.3 4.3-1.2-4.3-1.2L12 3Z" />
+              <path d="m19 14-.7 2.3-2.3.7 2.3.7.7 2.3.7-2.3 2.3-.7-2.3-.7-.7-2.3Z" />
+              <path d="m5 15-.5 1.5L3 17l1.5.5L5 19l.5-1.5L7 17l-1.5-.5L5 15Z" />
+            </svg>
+            <span>{IA_TEC_NAV.rotulo}</span>
+          </Link>
+        )}
+
         {cadeiaMadeiraVisivel && (
           <div className="cadeia-lateral">
             <button
@@ -335,9 +371,18 @@ export default function TabBar({
               <span>{ADMIN_NAV.rotulo}</span>
             </Link>
           )}
-          <span className="hidden text-[11px] text-ink-3 sm:inline">
-            {nome}
-          </span>
+          <div
+            className="perfil-sidebar"
+            aria-label={`Perfil ativo: ${roleLabel(role)}`}
+          >
+            <span className="perfil-avatar" aria-hidden>
+              {role === "gestao" ? "G" : role === "operador" ? "O" : "C"}
+            </span>
+            <span className="perfil-sidebar-copy">
+              <b>Perfil ativo</b>
+              <small>{roleLabel(role)}</small>
+            </span>
+          </div>
           <BotaoTema />
           <button onClick={sair} className="btn">
             Sair

@@ -28,7 +28,7 @@ export const GOVERNANCE_MODULES = [
   },
   {
     id: "IA",
-    label: "AI Suite",
+    label: "IA-TEC",
     description: "Consultar análises internas e relatórios executivos.",
   },
   {
