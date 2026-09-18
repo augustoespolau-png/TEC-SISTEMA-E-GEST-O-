@@ -186,11 +186,7 @@ export default function NavInferior({
         aria-expanded={aberto}
         aria-controls="menu-weinmann-mobile"
       >
-        <Icone>
-          <path d="m12 3 8 4.5-8 4.5-8-4.5L12 3Z" />
-          <path d="m4 12 8 4.5 8-4.5" />
-          <path d="m4 16.5 8 4.5 8-4.5" />
-        </Icone>
+
         WEINMANN
       </button>
 
@@ -208,16 +204,6 @@ export default function NavInferior({
         </Link>
       )}
 
-      {residuosVisivel && (
-        <Link
-          href={RESIDUOS_ITEM.href}
-          className={`nav-admin-cadastros ${pathname === RESIDUOS_ITEM.href ? "on" : ""}`}
-          aria-current={pathname === RESIDUOS_ITEM.href ? "page" : undefined}
-        >
-          {RESIDUOS_ITEM.rotulo}
-        </Link>
-      )}
-
       {iaTecVisivel && (
         <Link
           href={IA_TEC_ITEM.href}
@@ -230,6 +216,16 @@ export default function NavInferior({
             <path d="m5 15-.5 1.5L3 17l1.5.5L5 19l.5-1.5L7 17l-1.5-.5L5 15Z" />
           </Icone>
           {IA_TEC_ITEM.rotulo}
+        </Link>
+      )}
+
+      {residuosVisivel && (
+        <Link
+          href={RESIDUOS_ITEM.href}
+          className={`nav-admin-cadastros ${pathname === RESIDUOS_ITEM.href ? "on" : ""}`}
+          aria-current={pathname === RESIDUOS_ITEM.href ? "page" : undefined}
+        >
+          {RESIDUOS_ITEM.rotulo}
         </Link>
       )}
 

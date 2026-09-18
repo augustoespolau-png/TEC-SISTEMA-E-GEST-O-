@@ -1343,6 +1343,22 @@ table.mapa td {
 .nav-inferior > button:active {
   background: var(--color-papel-2);
 }
+
+/* Escudo inferior: o documento continua rolando por baixo da barra fixa,
+   mas a faixa final da viewport permanece limpa. Isso evita a sensação de
+   duas camadas sobrepostas perto da busca e impede que o último conteúdo
+   fique visualmente misturado com a navegação. O menu expandido continua
+   acima do escudo porque pertence ao stacking context da barra. */
+.quadro-app::after {
+  content: "";
+  position: fixed;
+  inset-inline: 0;
+  bottom: 0;
+  height: calc(104px + env(safe-area-inset-bottom));
+  z-index: 59;
+  background: var(--color-fundo);
+  pointer-events: none;
+}
 @media (min-width: 1024px) {
   .nav-inferior {
     display: none;
