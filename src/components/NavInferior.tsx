@@ -215,8 +215,16 @@ export default function NavInferior({
         type="button"
         className={`nav-modulo-weinmann nav-modulo-padrao ${weinmannAtivo ? "on" : ""}`}
         onClick={() => {
-          const fechar = weinmannAtivo && aberto;
-          const proximo = !fechar;
+          if (!moduloAtivo) {
+            const destinoPadrao = itens[0]?.href;
+            setAberto(false);
+            setCadeiaAberta(false);
+            limparSelecao();
+            if (destinoPadrao) router.push(destinoPadrao);
+            return;
+          }
+
+          const proximo = !aberto;
           if (proximo) selecionarModulo("weinmann");
           else limparSelecao();
           setAberto(proximo);
@@ -302,13 +310,19 @@ export default function NavInferior({
           type="button"
           className={`nav-admin-cadastros nav-cadeia-toggle nav-modulo-padrao ${cadeiaAtiva ? "on" : ""}`}
           onClick={() => {
-            const fechar = cadeiaAtiva && cadeiaAberta;
-            const proximo = !fechar;
+            if (!cadeiaNaRota) {
+              setCadeiaAberta(false);
+              setAberto(false);
+              limparSelecao();
+              router.push(CADEIA_MADEIRA_MODULOS[0].href);
+              return;
+            }
+
+            const proximo = !cadeiaAberta;
             if (proximo) selecionarModulo("cadeia");
             else limparSelecao();
             setCadeiaAberta(proximo);
             setAberto(false);
-            if (proximo && !cadeiaNaRota) router.push(CADEIA_MADEIRA_MODULOS[0].href);
           }}
           aria-expanded={cadeiaAberta}
           aria-current={cadeiaAtiva ? "page" : undefined}
