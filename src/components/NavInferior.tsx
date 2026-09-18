@@ -120,6 +120,9 @@ const CADEIA_MADEIRA_ITEM = {
   modulo: "CADEIA_MADEIRA" as GovernanceModule,
 };
 
+type ModuloNav = "weinmann" | "cadeia" | "ia" | "residuos" | "cadastros";
+type ModuloNavSelecionado = { path: string; modulo: ModuloNav } | null;
+
 export default function NavInferior({
   role,
   permissions,
@@ -144,12 +147,36 @@ export default function NavInferior({
     canModule(permissions, CADEIA_MADEIRA_ITEM.modulo);
   const [aberto, setAberto] = useState(false);
   const [cadeiaAberta, setCadeiaAberta] = useState(false);
+  const [moduloSelecionado, setModuloSelecionado] = useState<ModuloNavSelecionado>(null);
   const moduloAtivo = itens.some((i) => pathname === i.href);
   const cadeiaNaRota = pathname === CADEIA_MADEIRA_ITEM.href;
   const cadeiaModuloParam = busca.get("modulo");
   const cadeiaModuloAtual = cadeiaModuloParam === "recebimento"
     ? "auditoria"
     : cadeiaModuloParam ?? CADEIA_MADEIRA_MODULOS[0].id;
+  const moduloAtual = moduloSelecionado?.path === pathname
+    ? moduloSelecionado.modulo
+    : null;
+  const selecionarModulo = (modulo: ModuloNav) => {
+    setModuloSelecionado({ path: pathname, modulo });
+  };
+  const limparSelecao = () => setModuloSelecionado(null);
+
+  const weinmannAtivo =
+    moduloAtual === "weinmann" ||
+    (moduloAtual === null && moduloAtivo && !cadeiaAberta);
+  const cadeiaAtiva =
+    moduloAtual === "cadeia" ||
+    (moduloAtual === null && cadeiaNaRota && !aberto);
+  const iaTecAtivo =
+    moduloAtual === "ia" ||
+    (moduloAtual === null && pathname === IA_TEC_ITEM.href);
+  const residuosAtivo =
+    moduloAtual === "residuos" ||
+    (moduloAtual === null && pathname === RESIDUOS_ITEM.href);
+  const cadastrosAtivo =
+    moduloAtual === "cadastros" ||
+    (moduloAtual === null && pathname === ADMIN_ITEM.href);
 
   return (
     <nav className="nav-inferior" aria-label="Navegação principal">
@@ -169,7 +196,11 @@ export default function NavInferior({
                 href={i.href}
                 className={ativo ? "on" : ""}
                 aria-current={ativo ? "page" : undefined}
-                onClick={() => setAberto(false)}
+                onClick={() => {
+                  selecionarModulo("weinmann");
+                  setAberto(false);
+                  setCadeiaAberta(false);
+                }}
                 role="menuitem"
               >
                 {i.icone}
@@ -182,20 +213,32 @@ export default function NavInferior({
 
       <button
         type="button"
-        className={`nav-modulo-weinmann ${moduloAtivo || aberto ? "on" : ""}`}
-        onClick={() => setAberto((valor) => !valor)}
+        className={`nav-modulo-weinmann ${weinmannAtivo ? "on" : ""}`}
+        onClick={() => {
+          const fechar = weinmannAtivo && aberto;
+          const proximo = !fechar;
+          if (proximo) selecionarModulo("weinmann");
+          else limparSelecao();
+          setAberto(proximo);
+          setCadeiaAberta(false);
+        }}
         aria-expanded={aberto}
+        aria-current={weinmannAtivo ? "page" : undefined}
         aria-controls="menu-weinmann-mobile"
       >
-
         WEINMANN
       </button>
 
       {cadastrosVisivel && (
         <Link
           href={ADMIN_ITEM.href}
-          className={`nav-admin-cadastros ${pathname === ADMIN_ITEM.href ? "on" : ""}`}
-          aria-current={pathname === ADMIN_ITEM.href ? "page" : undefined}
+          className={`nav-admin-cadastros ${cadastrosAtivo ? "on" : ""}`}
+          aria-current={cadastrosAtivo ? "page" : undefined}
+          onClick={() => {
+            selecionarModulo("cadastros");
+            setAberto(false);
+            setCadeiaAberta(false);
+          }}
         >
           <Icone>
             <path d="M4 5.5h16v13H4z" />
@@ -208,8 +251,13 @@ export default function NavInferior({
       {iaTecVisivel && (
         <Link
           href={IA_TEC_ITEM.href}
-          className={`nav-admin-cadastros ${pathname === IA_TEC_ITEM.href ? "on" : ""}`}
-          aria-current={pathname === IA_TEC_ITEM.href ? "page" : undefined}
+          className={`nav-admin-cadastros ${iaTecAtivo ? "on" : ""}`}
+          aria-current={iaTecAtivo ? "page" : undefined}
+          onClick={() => {
+            selecionarModulo("ia");
+            setAberto(false);
+            setCadeiaAberta(false);
+          }}
         >
           <IaTecIcone />
           {IA_TEC_ITEM.rotulo}
@@ -219,8 +267,13 @@ export default function NavInferior({
       {residuosVisivel && (
         <Link
           href={RESIDUOS_ITEM.href}
-          className={`nav-admin-cadastros ${pathname === RESIDUOS_ITEM.href ? "on" : ""}`}
-          aria-current={pathname === RESIDUOS_ITEM.href ? "page" : undefined}
+          className={`nav-admin-cadastros ${residuosAtivo ? "on" : ""}`}
+          aria-current={residuosAtivo ? "page" : undefined}
+          onClick={() => {
+            selecionarModulo("residuos");
+            setAberto(false);
+            setCadeiaAberta(false);
+          }}
         >
           {RESIDUOS_ITEM.rotulo}
         </Link>
@@ -235,7 +288,11 @@ export default function NavInferior({
               href={item.href}
               className={cadeiaNaRota && cadeiaModuloAtual === item.id ? "on" : ""}
               aria-current={cadeiaNaRota && cadeiaModuloAtual === item.id ? "page" : undefined}
-              onClick={() => setCadeiaAberta(false)}
+              onClick={() => {
+                selecionarModulo("cadeia");
+                setCadeiaAberta(false);
+                setAberto(false);
+              }}
               role="menuitem"
             >
               {item.rotulo}
@@ -247,14 +304,18 @@ export default function NavInferior({
       {cadeiaMadeiraVisivel && (
         <button
           type="button"
-          className={`nav-admin-cadastros nav-cadeia-toggle ${cadeiaNaRota || cadeiaAberta ? "on" : ""}`}
+          className={`nav-admin-cadastros nav-cadeia-toggle ${cadeiaAtiva ? "on" : ""}`}
           onClick={() => {
-            const proximo = !cadeiaAberta;
+            const fechar = cadeiaAtiva && cadeiaAberta;
+            const proximo = !fechar;
+            if (proximo) selecionarModulo("cadeia");
+            else limparSelecao();
             setCadeiaAberta(proximo);
             setAberto(false);
             if (proximo && !cadeiaNaRota) router.push(CADEIA_MADEIRA_MODULOS[0].href);
           }}
           aria-expanded={cadeiaAberta}
+          aria-current={cadeiaAtiva ? "page" : undefined}
           aria-controls="menu-cadeia-mobile"
         >
           {CADEIA_MADEIRA_ITEM.rotulo}

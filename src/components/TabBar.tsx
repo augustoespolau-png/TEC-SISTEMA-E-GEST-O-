@@ -108,6 +108,9 @@ const CADEIA_MADEIRA_NAV = {
   modulo: "CADEIA_MADEIRA" as GovernanceModule,
 };
 
+type ModuloNav = "weinmann" | "cadeia" | "ia" | "residuos" | "cadastros";
+type ModuloNavSelecionado = { path: string; modulo: ModuloNav } | null;
+
 /* As folhas dos indicadores moram na LATERAL, aninhadas sob a aba
    Indicadores: sao cinco destinos que so existem dentro dela, e como
    abas de uma segunda linha disputavam a largura com o topo. A folha
@@ -160,6 +163,30 @@ export default function TabBar({
   const [weinmannAberto, setWeinmannAberto] = useState(!cadeiaNaRota);
   const [cadeiaMadeiraAberta, setCadeiaMadeiraAberta] = useState(cadeiaNaRota);
   const moduloAtivo = abas.some((t) => pathname === t.href);
+  const [moduloSelecionado, setModuloSelecionado] = useState<ModuloNavSelecionado>(null);
+  const moduloAtual = moduloSelecionado?.path === pathname
+    ? moduloSelecionado.modulo
+    : null;
+  const selecionarModulo = (modulo: ModuloNav) => {
+    setModuloSelecionado({ path: pathname, modulo });
+  };
+  const limparSelecao = () => setModuloSelecionado(null);
+
+  const weinmannAtivo =
+    moduloAtual === "weinmann" ||
+    (moduloAtual === null && moduloAtivo && !cadeiaMadeiraAberta);
+  const cadeiaAtiva =
+    moduloAtual === "cadeia" ||
+    (moduloAtual === null && cadeiaNaRota && !weinmannAberto);
+  const iaTecAtivo =
+    moduloAtual === "ia" ||
+    (moduloAtual === null && pathname === IA_TEC_NAV.href);
+  const residuosAtivo =
+    moduloAtual === "residuos" ||
+    (moduloAtual === null && pathname === RESIDUOS_NAV.href);
+  const cadastrosAtivo =
+    moduloAtual === "cadastros" ||
+    (moduloAtual === null && pathname === ADMIN_NAV.href);
 
   // o Painel tem cabeçalho próprio, com período e modo TV
   // o painel tem cabeçalho próprio, com projeto, período e modo TV
@@ -183,9 +210,14 @@ export default function TabBar({
           {iaTecVisivel && (
             <Link
               href={IA_TEC_NAV.href}
-              className={`ia-tec-topo ${pathname === IA_TEC_NAV.href ? "on" : ""}`}
-              aria-current={pathname === IA_TEC_NAV.href ? "page" : undefined}
+              className={`ia-tec-topo ${iaTecAtivo ? "on" : ""}`}
+              aria-current={iaTecAtivo ? "page" : undefined}
               aria-label="Abrir IA-TEC"
+              onClick={() => {
+                selecionarModulo("ia");
+                setWeinmannAberto(false);
+                setCadeiaMadeiraAberta(false);
+              }}
             >
               <IaTecIcone size={15} />
               <span>IA-TEC</span>
@@ -199,13 +231,17 @@ export default function TabBar({
         <nav className="abas flex-1">
           <button
             type="button"
-            className={`modulo-weinmann ${moduloAtivo ? "on" : ""}`}
-            onClick={() => setWeinmannAberto((aberto) => {
-              const proximo = !aberto;
-              if (proximo) setCadeiaMadeiraAberta(false);
-              return proximo;
-            })}
+            className={`modulo-weinmann ${weinmannAtivo ? "on" : ""}`}
+            onClick={() => {
+              const fechar = weinmannAtivo && weinmannAberto;
+              const proximo = !fechar;
+              if (proximo) selecionarModulo("weinmann");
+              else limparSelecao();
+              setWeinmannAberto(proximo);
+              setCadeiaMadeiraAberta(false);
+            }}
             aria-expanded={weinmannAberto}
+            aria-current={weinmannAtivo ? "page" : undefined}
             aria-controls="menu-weinmann"
           >
             <span>WEINMANN</span>
@@ -232,6 +268,11 @@ export default function TabBar({
                   <Link
                     href={t.href}
                     className={`aba ${pathname === t.href ? "on" : ""}`}
+                    onClick={() => {
+                      selecionarModulo("weinmann");
+                      setWeinmannAberto(false);
+                      setCadeiaMadeiraAberta(false);
+                    }}
                   >
                     {t.rotulo}
                   </Link>
@@ -257,8 +298,13 @@ export default function TabBar({
         {residuosVisivel && (
           <Link
             href={RESIDUOS_NAV.href}
-            className={`aba aba-admin ${pathname === RESIDUOS_NAV.href ? "on" : ""}`}
-            aria-current={pathname === RESIDUOS_NAV.href ? "page" : undefined}
+            className={`aba aba-admin ${residuosAtivo ? "on" : ""}`}
+            aria-current={residuosAtivo ? "page" : undefined}
+            onClick={() => {
+              selecionarModulo("residuos");
+              setWeinmannAberto(false);
+              setCadeiaMadeiraAberta(false);
+            }}
           >
             <span>{RESIDUOS_NAV.rotulo}</span>
           </Link>
@@ -268,16 +314,18 @@ export default function TabBar({
           <div className="cadeia-lateral">
             <button
               type="button"
-              className={`aba aba-admin cadeia-lateral-toggle ${cadeiaNaRota ? "on" : ""}`}
+              className={`aba aba-admin cadeia-lateral-toggle ${cadeiaAtiva ? "on" : ""}`}
               onClick={() => {
-                const proximo = !cadeiaMadeiraAberta;
+                const fechar = cadeiaAtiva && cadeiaMadeiraAberta;
+                const proximo = !fechar;
+                if (proximo) selecionarModulo("cadeia");
+                else limparSelecao();
                 setCadeiaMadeiraAberta(proximo);
-                if (proximo) {
-                  setWeinmannAberto(false);
-                  if (!cadeiaNaRota) router.push(CADEIA_MADEIRA_MODULOS[0].href);
-                }
+                setWeinmannAberto(false);
+                if (proximo && !cadeiaNaRota) router.push(CADEIA_MADEIRA_MODULOS[0].href);
               }}
               aria-expanded={cadeiaMadeiraAberta}
+              aria-current={cadeiaAtiva ? "page" : undefined}
               aria-controls="menu-cadeia-madeira"
             >
               <span className="cadeia-lateral-label">
@@ -290,7 +338,12 @@ export default function TabBar({
             {cadeiaMadeiraAberta && (
               <div id="menu-cadeia-madeira" className="menu-cadeia-lateral" role="group" aria-label="Módulos da Cadeia da Madeira">
                 {CADEIA_MADEIRA_MODULOS.map((item) => (
-                  <Link key={item.id} href={item.href} className={`aba aba-filha ${cadeiaNaRota && cadeiaModuloAtual === item.id ? "on" : ""}`}>
+                  <Link
+                    key={item.id}
+                    href={item.href}
+                    className={`aba aba-filha ${cadeiaNaRota && cadeiaModuloAtual === item.id ? "on" : ""}`}
+                    onClick={() => selecionarModulo("cadeia")}
+                  >
                     {item.rotulo}
                   </Link>
                 ))}
@@ -307,8 +360,13 @@ export default function TabBar({
           {adminVisivel && (
             <Link
               href={ADMIN_NAV.href}
-              className={`aba aba-admin cadastros-fixo ${pathname === ADMIN_NAV.href ? "on" : ""}`}
-              aria-current={pathname === ADMIN_NAV.href ? "page" : undefined}
+              className={`aba aba-admin cadastros-fixo ${cadastrosAtivo ? "on" : ""}`}
+              aria-current={cadastrosAtivo ? "page" : undefined}
+              onClick={() => {
+                selecionarModulo("cadastros");
+                setWeinmannAberto(false);
+                setCadeiaMadeiraAberta(false);
+              }}
             >
               <span>{ADMIN_NAV.rotulo}</span>
             </Link>
