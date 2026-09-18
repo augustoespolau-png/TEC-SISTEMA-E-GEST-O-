@@ -169,6 +169,7 @@ export default function TabBar({
           <NomeSistema />
         </Link>
 
+        <div className="topo-navegacao">
         {/* no celular a navegação fica na barra de baixo (NavInferior);
             a própria classe .abas se esconde abaixo de 1024px */}
         <nav className="abas flex-1">
@@ -228,30 +229,6 @@ export default function TabBar({
             </div>
           )}
         </nav>
-
-        {adminVisivel && (
-          <Link
-            href={ADMIN_NAV.href}
-            className={`aba aba-admin ${pathname === ADMIN_NAV.href ? "on" : ""}`}
-            aria-current={pathname === ADMIN_NAV.href ? "page" : undefined}
-          >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden
-            >
-              <path d="M4 5.5h16v13H4z" />
-              <path d="M8 9h8M8 13h5M8 17h3" />
-            </svg>
-            <span>{ADMIN_NAV.rotulo}</span>
-          </Link>
-        )}
 
         {residuosVisivel && (
           <Link
@@ -330,9 +307,34 @@ export default function TabBar({
           </div>
         )}
 
+        </div>
+
         {/* .rodape-topo empurra para a direita no celular e para o pe
             da coluna quando isto vira barra lateral no PC */}
         <div className="rodape-topo">
+          {adminVisivel && (
+            <Link
+              href={ADMIN_NAV.href}
+              className={`aba aba-admin cadastros-fixo ${pathname === ADMIN_NAV.href ? "on" : ""}`}
+              aria-current={pathname === ADMIN_NAV.href ? "page" : undefined}
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden
+              >
+                <path d="M4 5.5h16v13H4z" />
+                <path d="M8 9h8M8 13h5M8 17h3" />
+              </svg>
+              <span>{ADMIN_NAV.rotulo}</span>
+            </Link>
+          )}
           <span className="hidden text-[11px] text-ink-3 sm:inline">
             {nome}
           </span>
