@@ -97,10 +97,10 @@ export default function FolhaDesvios({
             dica: `Desvios que passaram de 48 h sem devolutiva e seguiram para o cliente sem correção. Hoje são ${nBR(r.naoConformidades)}, ${pct(r.naoConformidades, r.erros)}% de tudo o que foi registrado.`,
           },
           {
-            rotulo: "Itens não aplicados",
-            valor: nBR(indiceQualidade.naoAplicaveis),
-            pe: `${nBR(indiceQualidade.totalBruto)} itens inspecionados`,
-            dica: `${nBR(indiceQualidade.naoAplicaveis)} de ${nBR(indiceQualidade.totalBruto)} itens inspecionados foram marcados como Não Aplicável (N/A) nas paredes auditadas do período. Eles são retirados da base válida antes do cálculo do Índice de Qualidade.`,
+            rotulo: "Itens inspecionados",
+            valor: nBR(indiceQualidade.totalBruto),
+            pe: `${nBR(indiceQualidade.naoAplicaveis)} itens não aplicados`,
+            dica: `${nBR(indiceQualidade.totalBruto)} itens foram inspecionados nas paredes auditadas do período. Desses, ${nBR(indiceQualidade.naoAplicaveis)} foram marcados como Não Aplicável (N/A) e retirados da base válida antes do cálculo do Índice de Qualidade.`,
           },
           {
             rotulo: "Índice de qualidade (IQ)",
