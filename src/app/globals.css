@@ -1280,8 +1280,16 @@ table.mapa td {
   align-items: stretch;
   gap: 3px;
   padding: 5px;
-  background: color-mix(in srgb, var(--color-papel) 94%, #000 6%);
-  backdrop-filter: blur(18px) saturate(1.08);
+  /* Superfície totalmente opaca: o conteúdo que rola não pode aparecer
+     por trás da navegação no iOS. O blur anterior deixava cards e números
+     vazando visualmente pela barra durante o gesto de rolagem. */
+  background: var(--color-papel);
+  background-clip: padding-box;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  isolation: isolate;
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
   border: 1px solid color-mix(in srgb, var(--color-line-2) 85%, transparent);
   border-radius: 28px;
   box-shadow:
@@ -1663,8 +1671,11 @@ table.mapa td {
   inset-inline: 0;
   bottom: var(--altura-nav);
   z-index: 40;
-  background: color-mix(in srgb, var(--color-papel) 94%, transparent);
-  backdrop-filter: blur(10px);
+  /* O rodapé fixo também precisa bloquear completamente o conteúdo que
+     passa por baixo dele, inclusive em telas de formulário no celular. */
+  background: var(--color-papel);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
   border-top: 1px solid var(--color-line-2);
 }
 .rodape-linha {
