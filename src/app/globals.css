@@ -4687,7 +4687,7 @@ tr.ind-clicavel[aria-selected="true"] > td {
 .cadeia-kpi-alerta { color: var(--color-media) !important; }
 .cadeia-madeira-tabs {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 6px;
   padding: 6px;
 }
@@ -4882,7 +4882,7 @@ tr.ind-clicavel[aria-selected="true"] > td {
   .cadeia-madeira-hero { display: grid; }
   .cadeia-madeira-hero-meta { width: fit-content; }
   .cadeia-madeira-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .cadeia-madeira-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cadeia-madeira-tabs { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .cadeia-lote-summary { grid-template-columns: minmax(0, 1fr) auto; gap: 7px 12px; }
   .cadeia-lote-data { grid-column: 1; grid-row: 1; }
   .cadeia-lote-principal { grid-column: 1 / -1; grid-row: 2; }

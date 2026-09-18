@@ -63,13 +63,12 @@ import {
 } from "@/lib/cadeiaMadeira";
 import { createClient } from "@/lib/supabase/client";
 
-type AbaCadeia = "fornecedores" | "lotes" | "inspecoes" | "laudos";
+type AbaCadeia = "lotes" | "laudos" | "inspecoes";
 
 const ABAS: Array<{ id: AbaCadeia; label: string; hint: string }> = [
-  { id: "fornecedores", label: "Fornecedores", hint: "Homologação e origem" },
-  { id: "lotes", label: "Recebimento de lotes", hint: "NF, umidade e autoclave" },
-  { id: "inspecoes", label: "Ensaios e inspeções", hint: "Defeitos e resultado" },
-  { id: "laudos", label: "Laudos e certificados", hint: "Validade e aprovação" },
+  { id: "lotes", label: "Recebimento", hint: "NF, umidade e autoclave" },
+  { id: "laudos", label: "Laudos", hint: "Validade e aprovação" },
+  { id: "inspecoes", label: "Ensaios", hint: "Defeitos e resultado" },
 ];
 
 type FornecedorDraft = {
@@ -283,7 +282,7 @@ export default function CadeiaMadeira({
   canManage: boolean;
 }) {
   const [snapshot, setSnapshot] = useState(initialSnapshot);
-  const [aba, setAba] = useState<AbaCadeia>("fornecedores");
+  const [aba, setAba] = useState<AbaCadeia>("lotes");
   const [error, setError] = useState(initialError ?? "");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -598,16 +597,6 @@ export default function CadeiaMadeira({
         ))}
       </section>
 
-      {aba === "fornecedores" && (
-        <FornecedoresPanel
-          fornecedores={snapshot.fornecedores}
-          canEdit={canEdit}
-          onNew={() => setFornecedorDraft(fornecedorVazio())}
-          onEdit={(item) => setFornecedorDraft(fornecedorParaDraft(item))}
-          onToggle={(item) => void alternarFornecedor(item)}
-        />
-      )}
-
       {aba === "lotes" && (
         <LotesPanel
           lotes={snapshot.lotes}
@@ -624,6 +613,9 @@ export default function CadeiaMadeira({
           onOpenReports={(id) => abrirLote(id, "laudos")}
           onSelect={setSelectedLoteId}
           onPage={(page) => void load(page)}
+          onNewFornecedor={() => setFornecedorDraft(fornecedorVazio())}
+          onEditFornecedor={(item) => setFornecedorDraft(fornecedorParaDraft(item))}
+          onToggleFornecedor={(item) => void alternarFornecedor(item)}
         />
       )}
 
@@ -772,6 +764,9 @@ function LotesPanel({
   onOpenReports,
   onSelect,
   onPage,
+  onNewFornecedor,
+  onEditFornecedor,
+  onToggleFornecedor,
 }: {
   lotes: CadeiaLote[];
   fornecedores: CadeiaFornecedor[];
@@ -787,42 +782,55 @@ function LotesPanel({
   onOpenReports: (id: string) => void;
   onSelect: (id: string) => void;
   onPage: (page: number) => void;
+  onNewFornecedor: () => void;
+  onEditFornecedor: (item: CadeiaFornecedor) => void;
+  onToggleFornecedor: (item: CadeiaFornecedor) => void;
 }) {
   return (
-    <section className="cartao cadeia-madeira-section">
-      <SectionHeading title="Recebimento de lotes" description="Registre a carga antes de liberar o material para a produção.">
-        {canEdit && <button type="button" className="btn btn-forte" onClick={onNew} disabled={!fornecedores.some((item) => item.ativo)}>+ Receber lote</button>}
-      </SectionHeading>
-      {!fornecedores.some((item) => item.ativo) && <p className="cadeia-inline-alert">Cadastre e ative um fornecedor antes de registrar um lote.</p>}
-      {lotes.length === 0 ? (
-        <EmptyState title="Nenhum lote recebido" text="Os lotes registrados aparecerão aqui com a medição de umidade e o lote de autoclave." />
-      ) : (
-        <div className="cadeia-lote-lista">
-          {lotes.map((item) => {
-            const umidadeAlta = loteUmidadeAlta(item.teor_umidade_medio);
-            const selecionado = item.id === selectedLoteId;
-            return (
-              <article className={"cadeia-lote-card " + (selecionado ? "selecionado " : "") + (umidadeAlta ? "umidade-alta" : "")} key={item.id}>
-                <button type="button" className="cadeia-lote-summary" onClick={() => onSelect(item.id)} aria-pressed={selecionado}>
-                  <span className="cadeia-lote-data">{dataMadeira(item.data_recebimento)}</span>
-                  <span className="cadeia-lote-principal"><b>NF {item.numero_nota_fiscal}</b><small>{item.fornecedor_nome}</small></span>
-                  <span className="cadeia-lote-umidade"><small>Umidade média</small><b>{item.teor_umidade_medio.toFixed(1)}%</b></span>
-                  <span className={"cadeia-status cadeia-status-" + item.status_liberacao.toLowerCase()}>{rotuloStatusLiberacao(item.status_liberacao)}</span>
-                </button>
-                <div className="cadeia-lote-facts"><span><small>Volume</small><b>{item.volume_m3.toFixed(3)} m³</b></span><span><small>Autoclave</small><b>{item.lote_autoclave}</b></span><span><small>Placa</small><b>{item.placa_veiculo || "—"}</b></span></div>
-                {umidadeAlta && <div className="cadeia-umidade-alerta"><strong>Atenção de engenharia</strong><span>O teor de umidade está acima do limite seguro de {LIMITE_UMIDADE_SEGURA}%.</span></div>}
-                <div className="cadeia-card-actions">
-                  {canEdit && <button type="button" className="btn" onClick={() => onEdit(item)}>Editar lote</button>}
-                  <button type="button" className="btn" onClick={() => onOpenInspections(item.id)}>Inspeções</button>
-                  <button type="button" className="btn" onClick={() => onOpenReports(item.id)}>Laudos</button>
-                </div>
-              </article>
-            );
-          })}
-        </div>
-      )}
-      <Pagination page={page} total={total} hasNextPage={hasNextPage} loading={loading} onPage={onPage} />
-    </section>
+    <>
+      <section className="cartao cadeia-madeira-section">
+        <SectionHeading title="Recebimento de lotes" description="Registre a carga antes de liberar o material para a produção.">
+          {canEdit && <button type="button" className="btn btn-forte" onClick={onNew} disabled={!fornecedores.some((item) => item.ativo)}>+ Receber lote</button>}
+        </SectionHeading>
+        {!fornecedores.some((item) => item.ativo) && <p className="cadeia-inline-alert">Cadastre e ative um fornecedor antes de registrar um lote.</p>}
+        {lotes.length === 0 ? (
+          <EmptyState title="Nenhum lote recebido" text="Os lotes registrados aparecerão aqui com a medição de umidade e o lote de autoclave." />
+        ) : (
+          <div className="cadeia-lote-lista">
+            {lotes.map((item) => {
+              const umidadeAlta = loteUmidadeAlta(item.teor_umidade_medio);
+              const selecionado = item.id === selectedLoteId;
+              return (
+                <article className={"cadeia-lote-card " + (selecionado ? "selecionado " : "") + (umidadeAlta ? "umidade-alta" : "")} key={item.id}>
+                  <button type="button" className="cadeia-lote-summary" onClick={() => onSelect(item.id)} aria-pressed={selecionado}>
+                    <span className="cadeia-lote-data">{dataMadeira(item.data_recebimento)}</span>
+                    <span className="cadeia-lote-principal"><b>NF {item.numero_nota_fiscal}</b><small>{item.fornecedor_nome}</small></span>
+                    <span className="cadeia-lote-umidade"><small>Umidade média</small><b>{item.teor_umidade_medio.toFixed(1)}%</b></span>
+                    <span className={"cadeia-status cadeia-status-" + item.status_liberacao.toLowerCase()}>{rotuloStatusLiberacao(item.status_liberacao)}</span>
+                  </button>
+                  <div className="cadeia-lote-facts"><span><small>Volume</small><b>{item.volume_m3.toFixed(3)} m³</b></span><span><small>Autoclave</small><b>{item.lote_autoclave}</b></span><span><small>Placa</small><b>{item.placa_veiculo || "—"}</b></span></div>
+                  {umidadeAlta && <div className="cadeia-umidade-alerta"><strong>Atenção de engenharia</strong><span>O teor de umidade está acima do limite seguro de {LIMITE_UMIDADE_SEGURA}%.</span></div>}
+                  <div className="cadeia-card-actions">
+                    {canEdit && <button type="button" className="btn" onClick={() => onEdit(item)}>Editar lote</button>}
+                    <button type="button" className="btn" onClick={() => onOpenInspections(item.id)}>Ensaios</button>
+                    <button type="button" className="btn" onClick={() => onOpenReports(item.id)}>Laudos</button>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        )}
+        <Pagination page={page} total={total} hasNextPage={hasNextPage} loading={loading} onPage={onPage} />
+      </section>
+
+      <FornecedoresPanel
+        fornecedores={fornecedores}
+        canEdit={canEdit}
+        onNew={onNewFornecedor}
+        onEdit={onEditFornecedor}
+        onToggle={onToggleFornecedor}
+      />
+    </>
   );
 }
 
