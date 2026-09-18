@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import LogoTecverde from "@/components/LogoTecverde";
 import BotaoTema from "@/components/BotaoTema";
 import NomeSistema from "@/components/NomeSistema";
+import IaTecIcone from "@/components/IaTecIcone";
 import {
   canModule,
   type GovernanceModule,
@@ -186,21 +187,7 @@ export default function TabBar({
               aria-current={pathname === IA_TEC_NAV.href ? "page" : undefined}
               aria-label="Abrir IA-TEC"
             >
-              <svg
-                width="15"
-                height="15"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden
-              >
-                <path d="m12 3-1.2 4.3-4.3 1.2 4.3 1.2L12 14l1.2-4.3 4.3-1.2-4.3-1.2L12 3Z" />
-                <path d="m19 14-.7 2.3-2.3.7 2.3.7.7 2.3.7-2.3 2.3-.7-2.3-.7-.7-2.3Z" />
-                <path d="m5 15-.5 1.5L3 17l1.5.5L5 19l.5-1.5L7 17l-1.5-.5L5 15Z" />
-              </svg>
+              <IaTecIcone size={15} />
               <span>IA-TEC</span>
             </Link>
           )}

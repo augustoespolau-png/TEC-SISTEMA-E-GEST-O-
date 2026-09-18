@@ -1276,10 +1276,10 @@ table.mapa td {
   bottom: calc(8px + env(safe-area-inset-bottom));
   z-index: 60;
   display: flex;
-  min-height: 68px;
+  min-height: 62px;
   align-items: stretch;
-  gap: 3px;
-  padding: 5px;
+  gap: 2px;
+  padding: 4px;
   /* Superfície totalmente opaca: o conteúdo que rola não pode aparecer
      por trás da navegação no iOS. O blur anterior deixava cards e números
      vazando visualmente pela barra durante o gesto de rolagem. */
@@ -1300,17 +1300,17 @@ table.mapa td {
 .nav-inferior > button {
   flex: 1 1 0;
   min-width: 0;
-  min-height: 56px;
+  min-height: 50px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 3px;
-  padding: 4px 3px;
+  gap: 2px;
+  padding: 3px 2px;
   border: 0;
   border-radius: 22px;
   background: transparent;
-  font-size: 10.5px;
+  font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.02em;
   color: var(--color-ink-3);
@@ -1338,6 +1338,13 @@ table.mapa td {
   margin-top: 1px;
   border-radius: 999px;
   background: var(--color-brand);
+}
+/* O WEINMANN usa apenas o estado de superfície; o traço inferior não faz
+   parte deste botão e deixava a leitura visual pesada no celular. */
+.nav-inferior > .nav-modulo-weinmann.on::after,
+.nav-inferior > .nav-modulo-weinmann[aria-expanded="true"]::after {
+  display: none;
+  content: none;
 }
 .nav-inferior > a:active,
 .nav-inferior > button:active {
@@ -3561,8 +3568,23 @@ tr.ind-clicavel[aria-selected="true"] > td {
     bottom: auto;
     flex: 0 0 auto;
     width: calc(100% - 20px);
-    margin: 8px 10px calc(8px + env(safe-area-inset-bottom));
+    margin: 6px 10px calc(6px + env(safe-area-inset-bottom));
   }
+}
+/* Orbe de IA-TEC inspirado no assistente circular da referência enviada:
+   azul luminoso, núcleo profundo e brilho contido para continuar legível
+   nos dois temas sem criar uma faixa ou um cartão adicional. */
+.ia-tec-icone {
+  display: block;
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  overflow: visible;
+  filter: drop-shadow(0 0 3px rgb(29 178 255 / 52%));
+}
+.ia-tec-topo .ia-tec-icone {
+  width: 15px;
+  height: 15px;
 }
 .rodape-topo {
   margin-left: auto;

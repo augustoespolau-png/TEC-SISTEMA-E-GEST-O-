@@ -10,6 +10,7 @@ import {
 } from "@/lib/governanca-types";
 import type { Role } from "@/lib/types";
 import { CADEIA_MADEIRA_MODULOS } from "@/lib/cadeiaMadeira";
+import IaTecIcone from "@/components/IaTecIcone";
 
 /*
  * Navegação de celular: barra fixa na base, ao alcance do polegar.
@@ -210,11 +211,7 @@ export default function NavInferior({
           className={`nav-admin-cadastros ${pathname === IA_TEC_ITEM.href ? "on" : ""}`}
           aria-current={pathname === IA_TEC_ITEM.href ? "page" : undefined}
         >
-          <Icone>
-            <path d="m12 3-1.2 4.3-4.3 1.2 4.3 1.2L12 14l1.2-4.3 4.3-1.2-4.3-1.2L12 3Z" />
-            <path d="m19 14-.7 2.3-2.3.7 2.3.7.7 2.3.7-2.3 2.3-.7-2.3-.7-.7-2.3Z" />
-            <path d="m5 15-.5 1.5L3 17l1.5.5L5 19l.5-1.5L7 17l-1.5-.5L5 15Z" />
-          </Icone>
+          <IaTecIcone />
           {IA_TEC_ITEM.rotulo}
         </Link>
       )}
