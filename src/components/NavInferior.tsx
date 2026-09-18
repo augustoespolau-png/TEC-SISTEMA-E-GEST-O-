@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   canModule,
   type GovernanceModule,
   type GovernancePermission,
 } from "@/lib/governanca-types";
 import type { Role } from "@/lib/types";
+import { CADEIA_MADEIRA_MODULOS } from "@/lib/cadeiaMadeira";
 
 /*
  * Navegação de celular: barra fixa na base, ao alcance do polegar.
@@ -119,6 +120,8 @@ export default function NavInferior({
   permissions: GovernancePermission[];
 }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const busca = useSearchParams();
   const itens = ITENS.filter(
     (i) => i.papeis.includes(role) && canModule(permissions, i.modulo),
   );
@@ -130,7 +133,10 @@ export default function NavInferior({
     CADEIA_MADEIRA_ITEM.papeis.includes(role) &&
     canModule(permissions, CADEIA_MADEIRA_ITEM.modulo);
   const [aberto, setAberto] = useState(false);
+  const [cadeiaAberta, setCadeiaAberta] = useState(false);
   const moduloAtivo = itens.some((i) => pathname === i.href);
+  const cadeiaNaRota = pathname === CADEIA_MADEIRA_ITEM.href;
+  const cadeiaModuloAtual = busca.get("modulo") ?? CADEIA_MADEIRA_MODULOS[0].id;
 
   return (
     <nav className="nav-inferior" aria-label="Navegação principal">
@@ -204,11 +210,36 @@ export default function NavInferior({
         </Link>
       )}
 
+      {cadeiaMadeiraVisivel && cadeiaAberta && (
+        <div id="menu-cadeia-mobile" className="menu-cadeia-mobile" role="menu" aria-label="Módulos da Cadeia da Madeira">
+          <div className="menu-cadeia-mobile-titulo">CADEIA DA MADEIRA</div>
+          {CADEIA_MADEIRA_MODULOS.map((item) => (
+            <Link
+              key={item.id}
+              href={item.href}
+              className={cadeiaNaRota && cadeiaModuloAtual === item.id ? "on" : ""}
+              aria-current={cadeiaNaRota && cadeiaModuloAtual === item.id ? "page" : undefined}
+              onClick={() => setCadeiaAberta(false)}
+              role="menuitem"
+            >
+              {item.rotulo}
+            </Link>
+          ))}
+        </div>
+      )}
+
       {cadeiaMadeiraVisivel && (
-        <Link
-          href={CADEIA_MADEIRA_ITEM.href}
-          className={`nav-admin-cadastros ${pathname === CADEIA_MADEIRA_ITEM.href ? "on" : ""}`}
-          aria-current={pathname === CADEIA_MADEIRA_ITEM.href ? "page" : undefined}
+        <button
+          type="button"
+          className={`nav-admin-cadastros nav-cadeia-toggle ${cadeiaNaRota ? "on" : ""}`}
+          onClick={() => {
+            const proximo = !cadeiaAberta;
+            setCadeiaAberta(proximo);
+            setAberto(false);
+            if (proximo && !cadeiaNaRota) router.push(CADEIA_MADEIRA_MODULOS[0].href);
+          }}
+          aria-expanded={cadeiaAberta}
+          aria-controls="menu-cadeia-mobile"
         >
           <Icone>
             <path d="M12 21V8" />
@@ -216,7 +247,7 @@ export default function NavInferior({
             <path d="M8 8.5 5.5 5 9 5.5 11 2l2 3.5L16.5 5 14 8.5" />
           </Icone>
           {CADEIA_MADEIRA_ITEM.rotulo}
-        </Link>
+        </button>
       )}
 
     </nav>

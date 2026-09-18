@@ -3,6 +3,14 @@ export const CADEIA_MADEIRA_PAGE_SIZE = 20;
 export const LIMITE_UMIDADE_SEGURA = 20;
 export const MAX_DOCUMENTO_CADEIA_BYTES = 20 * 1024 * 1024;
 
+export const CADEIA_MADEIRA_MODULOS = [
+  { id: "recebimento", rotulo: "Recebimento", href: "/cadeia-madeira?modulo=recebimento" },
+  { id: "laudos", rotulo: "Laudos", href: "/cadeia-madeira?modulo=laudos" },
+  { id: "ensaios", rotulo: "Ensaios", href: "/cadeia-madeira?modulo=ensaios" },
+] as const;
+
+export type CadeiaMadeiraModuloId = (typeof CADEIA_MADEIRA_MODULOS)[number]["id"];
+
 export type StatusLiberacaoMadeira = "APROVADO" | "REPROVADO" | "QUARENTENA";
 export type TipoLaudoMadeira =
   | "LAUDO_TECNICO"

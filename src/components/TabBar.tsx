@@ -13,6 +13,7 @@ import {
   type GovernancePermission,
 } from "@/lib/governanca-types";
 import type { Role } from "@/lib/types";
+import { CADEIA_MADEIRA_MODULOS } from "@/lib/cadeiaMadeira";
 
 /* A aba Registrar saiu do ar: a auditoria virou o único caminho de
    entrada de erro, porque ela também diz quantas paredes foram
@@ -140,7 +141,10 @@ export default function TabBar({
     CADEIA_MADEIRA_NAV.papeis.includes(role) &&
     canModule(permissions, CADEIA_MADEIRA_NAV.modulo);
   const folhaAtual = busca.get("folha") ?? "fpy";
-  const [weinmannAberto, setWeinmannAberto] = useState(true);
+  const cadeiaModuloAtual = busca.get("modulo") ?? CADEIA_MADEIRA_MODULOS[0].id;
+  const cadeiaNaRota = pathname === CADEIA_MADEIRA_NAV.href;
+  const [weinmannAberto, setWeinmannAberto] = useState(!cadeiaNaRota);
+  const [cadeiaMadeiraAberta, setCadeiaMadeiraAberta] = useState(cadeiaNaRota);
   const moduloAtivo = abas.some((t) => pathname === t.href);
 
   // o Painel tem cabeçalho próprio, com período e modo TV
@@ -168,7 +172,11 @@ export default function TabBar({
           <button
             type="button"
             className={`modulo-weinmann ${moduloAtivo ? "on" : ""}`}
-            onClick={() => setWeinmannAberto((aberto) => !aberto)}
+            onClick={() => setWeinmannAberto((aberto) => {
+              const proximo = !aberto;
+              if (proximo) setCadeiaMadeiraAberta(false);
+              return proximo;
+            })}
             aria-expanded={weinmannAberto}
             aria-controls="menu-weinmann"
           >
@@ -267,31 +275,56 @@ export default function TabBar({
         )}
 
         {cadeiaMadeiraVisivel && (
-          <Link
-            href={CADEIA_MADEIRA_NAV.href}
-            className={`aba aba-admin ${pathname === CADEIA_MADEIRA_NAV.href ? "on" : ""}`}
-            aria-current={pathname === CADEIA_MADEIRA_NAV.href ? "page" : undefined}
-          >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden
+          <div className="cadeia-lateral">
+            <button
+              type="button"
+              className={`aba aba-admin cadeia-lateral-toggle ${cadeiaNaRota ? "on" : ""}`}
+              onClick={() => {
+                const proximo = !cadeiaMadeiraAberta;
+                setCadeiaMadeiraAberta(proximo);
+                if (proximo) {
+                  setWeinmannAberto(false);
+                  if (!cadeiaNaRota) router.push(CADEIA_MADEIRA_MODULOS[0].href);
+                }
+              }}
+              aria-expanded={cadeiaMadeiraAberta}
+              aria-controls="menu-cadeia-madeira"
             >
-              <path d="M12 21V8" />
-              <path d="m12 13-5-5" />
-              <path d="m12 16 6-6" />
-              <path d="M8.5 21h7" />
-              <path d="M8 8.5 5.5 5 9 5.5 11 2l2 3.5L16.5 5 14 8.5" />
-              <path d="m14 15 3.5-3 1.5 3.5" />
-            </svg>
-            <span>{CADEIA_MADEIRA_NAV.rotulo}</span>
-          </Link>
+              <span className="cadeia-lateral-label">
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden
+                >
+                  <path d="M12 21V8" />
+                  <path d="m12 13-5-5" />
+                  <path d="m12 16 6-6" />
+                  <path d="M8.5 21h7" />
+                  <path d="M8 8.5 5.5 5 9 5.5 11 2l2 3.5L16.5 5 14 8.5" />
+                  <path d="m14 15 3.5-3 1.5 3.5" />
+                </svg>
+                <span>{CADEIA_MADEIRA_NAV.rotulo}</span>
+              </span>
+              <svg className={cadeiaMadeiraAberta ? "aberto" : ""} width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <path d="m6 9 6 6 6-6" />
+              </svg>
+            </button>
+            {cadeiaMadeiraAberta && (
+              <div id="menu-cadeia-madeira" className="menu-cadeia-lateral" role="group" aria-label="Módulos da Cadeia da Madeira">
+                {CADEIA_MADEIRA_MODULOS.map((item) => (
+                  <Link key={item.id} href={item.href} className={`aba aba-filha ${cadeiaNaRota && cadeiaModuloAtual === item.id ? "on" : ""}`}>
+                    {item.rotulo}
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
         )}
 
         {/* .rodape-topo empurra para a direita no celular e para o pe

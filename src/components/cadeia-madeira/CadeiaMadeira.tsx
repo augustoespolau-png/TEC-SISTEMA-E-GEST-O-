@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import Image from "next/image";
+import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import {
   approveCadeiaLaudo,
@@ -63,13 +64,29 @@ import {
 } from "@/lib/cadeiaMadeira";
 import { createClient } from "@/lib/supabase/client";
 
-type AbaCadeia = "lotes" | "laudos" | "inspecoes";
+export type AbaCadeia = "lotes" | "laudos" | "inspecoes";
 
 const ABAS: Array<{ id: AbaCadeia; label: string; hint: string }> = [
   { id: "lotes", label: "Recebimento", hint: "NF, umidade e autoclave" },
   { id: "laudos", label: "Laudos", hint: "Validade e aprovação" },
   { id: "inspecoes", label: "Ensaios", hint: "Defeitos e resultado" },
 ];
+
+const ABA_POR_MODULO: Record<string, AbaCadeia> = {
+  recebimento: "lotes",
+  laudos: "laudos",
+  ensaios: "inspecoes",
+};
+
+const MODULO_POR_ABA: Record<AbaCadeia, string> = {
+  lotes: "recebimento",
+  laudos: "laudos",
+  inspecoes: "ensaios",
+};
+
+function abaPorModulo(modulo: string | null): AbaCadeia {
+  return ABA_POR_MODULO[modulo ?? ""] ?? "lotes";
+}
 
 type FornecedorDraft = {
   id: string;
@@ -281,8 +298,10 @@ export default function CadeiaMadeira({
   canEdit: boolean;
   canManage: boolean;
 }) {
+  const router = useRouter();
+  const busca = useSearchParams();
+  const aba = abaPorModulo(busca.get("modulo"));
   const [snapshot, setSnapshot] = useState(initialSnapshot);
-  const [aba, setAba] = useState<AbaCadeia>("lotes");
   const [error, setError] = useState(initialError ?? "");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -294,6 +313,12 @@ export default function CadeiaMadeira({
   const [tipoLaudo, setTipoLaudo] = useState<TipoLaudoMadeira>("LAUDO_TECNICO");
   const [validadeLaudo, setValidadeLaudo] = useState("");
   const [observacaoLaudo, setObservacaoLaudo] = useState("");
+
+  function selecionarAba(next: AbaCadeia) {
+    const params = new URLSearchParams(busca.toString());
+    params.set("modulo", MODULO_POR_ABA[next]);
+    router.replace(`/cadeia-madeira?${params.toString()}`, { scroll: false });
+  }
 
   const selectedLote = useMemo(
     () => snapshot.lotes.find((item) => item.id === selectedLoteId) ?? null,
@@ -544,7 +569,7 @@ export default function CadeiaMadeira({
 
   function abrirLote(loteId: string, destino: AbaCadeia) {
     setSelectedLoteId(loteId);
-    setAba(destino);
+    selecionarAba(destino);
   }
 
   return (
@@ -589,7 +614,7 @@ export default function CadeiaMadeira({
             role="tab"
             aria-selected={aba === item.id}
             className={aba === item.id ? "on" : ""}
-            onClick={() => setAba(item.id)}
+            onClick={() => selecionarAba(item.id)}
           >
             <b>{item.label}</b>
             <small>{item.hint}</small>
