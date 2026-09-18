@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Roboto } from "next/font/google";
 import { Toaster } from "sonner";
 import { SCRIPT_TEMA } from "@/components/BotaoTema";
+import MobileZoomGuard from "@/components/MobileZoomGuard";
 import "./globals.css";
 
 const roboto = Roboto({
@@ -43,6 +44,7 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: SCRIPT_TEMA }} />
       </head>
       <body className="font-sans">
+        <MobileZoomGuard />
         {children}
         <Toaster position="top-center" richColors />
       </body>
