@@ -9,7 +9,6 @@ import BotaoTema from "@/components/BotaoTema";
 import NomeSistema from "@/components/NomeSistema";
 import {
   canModule,
-  roleLabel,
   type GovernanceModule,
   type GovernancePermission,
 } from "@/lib/governanca-types";
@@ -175,10 +174,37 @@ export default function TabBar({
   return (
     <header className="topo">
       <div className="topo-linha">
-        <Link href="/consultar" className="flex min-w-0 items-center gap-2">
-          <LogoTecverde />
-          <NomeSistema />
-        </Link>
+        <div className="topo-identidade">
+          <Link href="/consultar" className="topo-marca">
+            <LogoTecverde />
+            <NomeSistema />
+          </Link>
+          {iaTecVisivel && (
+            <Link
+              href={IA_TEC_NAV.href}
+              className={`ia-tec-topo ${pathname === IA_TEC_NAV.href ? "on" : ""}`}
+              aria-current={pathname === IA_TEC_NAV.href ? "page" : undefined}
+              aria-label="Abrir IA-TEC"
+            >
+              <svg
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden
+              >
+                <path d="m12 3-1.2 4.3-4.3 1.2 4.3 1.2L12 14l1.2-4.3 4.3-1.2-4.3-1.2L12 3Z" />
+                <path d="m19 14-.7 2.3-2.3.7 2.3.7.7 2.3.7-2.3 2.3-.7-2.3-.7-.7-2.3Z" />
+                <path d="m5 15-.5 1.5L3 17l1.5.5L5 19l.5-1.5L7 17l-1.5-.5L5 15Z" />
+              </svg>
+              <span>IA-TEC</span>
+            </Link>
+          )}
+        </div>
 
         <div className="topo-navegacao">
         {/* no celular a navegação fica na barra de baixo (NavInferior);
@@ -265,31 +291,6 @@ export default function TabBar({
           </Link>
         )}
 
-        {iaTecVisivel && (
-          <Link
-            href={IA_TEC_NAV.href}
-            className={`aba aba-admin ${pathname === IA_TEC_NAV.href ? "on" : ""}`}
-            aria-current={pathname === IA_TEC_NAV.href ? "page" : undefined}
-          >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden
-            >
-              <path d="m12 3-1.2 4.3-4.3 1.2 4.3 1.2L12 14l1.2-4.3 4.3-1.2-4.3-1.2L12 3Z" />
-              <path d="m19 14-.7 2.3-2.3.7 2.3.7.7 2.3.7-2.3 2.3-.7-2.3-.7-.7-2.3Z" />
-              <path d="m5 15-.5 1.5L3 17l1.5.5L5 19l.5-1.5L7 17l-1.5-.5L5 15Z" />
-            </svg>
-            <span>{IA_TEC_NAV.rotulo}</span>
-          </Link>
-        )}
-
         {cadeiaMadeiraVisivel && (
           <div className="cadeia-lateral">
             <button
@@ -345,8 +346,8 @@ export default function TabBar({
 
         </div>
 
-        {/* .rodape-topo empurra para a direita no celular e para o pe
-            da coluna quando isto vira barra lateral no PC */}
+        {/* .rodape-topo empurra as ações para a direita no celular e para o
+            pé da coluna quando isto vira barra lateral no PC. */}
         <div className="rodape-topo">
           {adminVisivel && (
             <Link
@@ -371,18 +372,6 @@ export default function TabBar({
               <span>{ADMIN_NAV.rotulo}</span>
             </Link>
           )}
-          <div
-            className="perfil-sidebar"
-            aria-label={`Perfil ativo: ${roleLabel(role)}`}
-          >
-            <span className="perfil-avatar" aria-hidden>
-              {role === "gestao" ? "G" : role === "operador" ? "O" : "C"}
-            </span>
-            <span className="perfil-sidebar-copy">
-              <b>Perfil ativo</b>
-              <small>{roleLabel(role)}</small>
-            </span>
-          </div>
           <BotaoTema />
           <button onClick={sair} className="btn">
             Sair
