@@ -355,20 +355,6 @@ export default function TabBar({
               className={`aba aba-admin cadastros-fixo ${pathname === ADMIN_NAV.href ? "on" : ""}`}
               aria-current={pathname === ADMIN_NAV.href ? "page" : undefined}
             >
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden
-              >
-                <path d="M4 5.5h16v13H4z" />
-                <path d="M8 9h8M8 13h5M8 17h3" />
-              </svg>
               <span>{ADMIN_NAV.rotulo}</span>
             </Link>
           )}

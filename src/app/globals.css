@@ -62,14 +62,14 @@
    tem token próprio.
    ------------------------------------------------------------------ */
 html[data-tema="escuro"] {
-  --color-fundo: #09090b;
-  --color-papel: #18181b;
-  --color-papel-2: #111113;
+  --color-fundo: #0d1210;
+  --color-papel: #131a16;
+  --color-papel-2: #111713;
   --color-ink: #e8efea;
-  --color-ink-2: #a1a1aa;
-  --color-ink-3: #71717a;
-  --color-line: #27272a;
-  --color-line-2: #3f3f46;
+  --color-ink-2: #a1afa6;
+  --color-ink-3: #718078;
+  --color-line: #22302a;
+  --color-line-2: #2e4036;
 
   --color-sobre-cor: #16241b;
 
@@ -2251,12 +2251,12 @@ table.mapa td {
 }
 .aud-casa {
   display: grid;
-  gap: 4px;
+  gap: 5px;
   align-content: start;
   text-align: left;
   border: 1px solid var(--color-line);
   border-radius: 10px;
-  padding: 10px 12px;
+  padding: 12px 12px;
   background: var(--color-papel-2);
   color: var(--color-ink);
   cursor: pointer;
