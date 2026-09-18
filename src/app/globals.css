@@ -1432,8 +1432,8 @@ table.mapa td {
   display: none;
   align-items: center;
   gap: 8px;
-  border: 1px solid var(--color-line);
-  background: var(--color-papel-2);
+  border: 1px solid var(--color-line-2);
+  background: var(--color-papel);
 }
 .aba-admin:hover {
   border-color: var(--color-brand);
@@ -1485,15 +1485,16 @@ table.mapa td {
 }
 .modulo-weinmann {
   width: 100%;
+  min-height: 54px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
   padding: 9px 12px;
-  border: 1px solid var(--color-line);
+  border: 1px solid var(--color-line-2);
   border-radius: 8px;
   color: var(--color-ink-2);
-  background: var(--color-papel-2);
+  background: var(--color-papel);
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.12em;
@@ -3582,7 +3583,8 @@ tr.ind-clicavel[aria-selected="true"] > td {
   .aba-admin {
     display: flex;
     flex: 0 0 auto;
-    min-height: 42px;
+    height: 54px;
+    min-height: 54px;
     justify-content: flex-start;
     margin-top: 8px;
     padding: 10px 12px;
@@ -3605,13 +3607,17 @@ tr.ind-clicavel[aria-selected="true"] > td {
     gap: 8px;
   }
   .rodape-topo .btn {
+    height: 54px;
+    min-height: 54px;
     width: 100%;
     justify-content: center;
+    border-radius: 10px;
   }
   .rodape-topo .cadastros-fixo {
     display: flex;
     width: 100%;
-    min-height: 36px;
+    height: 54px;
+    min-height: 54px;
     justify-content: flex-start;
     margin-top: 0;
     padding: 8px 12px;
