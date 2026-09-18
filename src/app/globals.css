@@ -1316,17 +1316,26 @@ table.mapa td {
   color: var(--color-ink-3);
   text-align: center;
   white-space: nowrap;
+  transform: translate3d(0, 0, 0) scale(1);
+  transform-style: preserve-3d;
+  will-change: transform;
   transition:
-    color 130ms,
-    background-color 130ms,
-    box-shadow 130ms;
+    color 150ms ease,
+    background-color 180ms ease,
+    box-shadow 220ms ease,
+    transform 220ms cubic-bezier(0.2, 0.75, 0.25, 1);
 }
 .nav-inferior > a.on,
 .nav-inferior > button.on,
 .nav-inferior > button[aria-expanded="true"] {
-  color: var(--color-brand);
-  background: color-mix(in srgb, var(--color-brand) 12%, var(--color-papel-2));
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-brand) 42%, transparent);
+  /* Estado ativo neutro como na referência: o amarelo fica reservado
+     exclusivamente para o indicador inferior. */
+  color: var(--color-ink);
+  background: color-mix(in srgb, var(--color-ink) 14%, var(--color-papel));
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--color-line-2) 88%, transparent),
+    0 4px 10px rgb(0 0 0 / 12%);
+  transform: translate3d(0, -1px, 2px) scale(1.015);
 }
 .nav-inferior > a.on::after,
 .nav-inferior > button.on::after,
@@ -1337,20 +1346,25 @@ table.mapa td {
   height: 3px;
   margin-top: 1px;
   border-radius: 999px;
-  background: var(--color-brand);
-}
-/* O WEINMANN usa apenas o estado de superfície; o traço inferior não faz
-   parte deste botão e deixava a leitura visual pesada no celular. */
-.nav-inferior > .nav-modulo-weinmann.on::after,
-.nav-inferior > .nav-modulo-weinmann[aria-expanded="true"]::after {
-  display: none;
-  content: none;
+  background: #ffd43b;
+  box-shadow: 0 1px 5px rgb(255 212 59 / 35%);
 }
 .nav-inferior > a:active,
 .nav-inferior > button:active {
   background: var(--color-papel-2);
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .nav-inferior > a,
+  .nav-inferior > button {
+    transition: none;
+  }
+  .nav-inferior > a.on,
+  .nav-inferior > button.on,
+  .nav-inferior > button[aria-expanded="true"] {
+    transform: none;
+  }
+}
 
 @media (min-width: 1024px) {
   .nav-inferior {
