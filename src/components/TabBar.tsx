@@ -102,7 +102,7 @@ const IA_TEC_NAV = {
 
 const CADEIA_MADEIRA_NAV = {
   href: "/cadeia-madeira",
-  rotulo: "Cadeia da Madeira",
+  rotulo: "Madeira",
   papeis: ["operador", "consultor", "gestao"] as Role[],
   modulo: "CADEIA_MADEIRA" as GovernanceModule,
 };
@@ -273,20 +273,6 @@ export default function TabBar({
             className={`aba aba-admin ${pathname === RESIDUOS_NAV.href ? "on" : ""}`}
             aria-current={pathname === RESIDUOS_NAV.href ? "page" : undefined}
           >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden
-            >
-              <path d="M5 5h14v14H5z" />
-              <path d="M8 9h8M8 13h5M8 17h4" />
-            </svg>
             <span>{RESIDUOS_NAV.rotulo}</span>
           </Link>
         )}
@@ -308,24 +294,6 @@ export default function TabBar({
               aria-controls="menu-cadeia-madeira"
             >
               <span className="cadeia-lateral-label">
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden
-                >
-                  <path d="M12 21V8" />
-                  <path d="m12 13-5-5" />
-                  <path d="m12 16 6-6" />
-                  <path d="M8.5 21h7" />
-                  <path d="M8 8.5 5.5 5 9 5.5 11 2l2 3.5L16.5 5 14 8.5" />
-                  <path d="m14 15 3.5-3 1.5 3.5" />
-                </svg>
                 <span>{CADEIA_MADEIRA_NAV.rotulo}</span>
               </span>
               <svg className={cadeiaMadeiraAberta ? "aberto" : ""} width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
