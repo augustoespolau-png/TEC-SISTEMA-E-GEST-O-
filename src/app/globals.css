@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 33830)
-Total output lines: 5033
-
 @import "tailwindcss";
 
 /* ==================================================================
@@ -2556,7 +2553,609 @@ table.mapa td {
    numa linha, e as barras ganharam rolagem lateral como rede de
    seguranca: rotulo mais comprido — um intervalo personalizado, uma
    folha nova — desliza de lado em vez de empurrar tudo para baixo.
-   -------------------------------…3830 tokens truncated…ulas empilhavam em coluna, cada uma com a largura toda. */
+   ------------------------------------------------------------------ */
+@media (max-width: 1023.98px) {
+  .ind-topo {
+    padding: 8px 0 6px;
+  }
+  /* TENTEI juntar as abas com o seletor de projeto numa faixa so, o que
+     levaria o topo de 141px para 102. Nao ficou: as abas sobram 80px e
+     duas delas — Comparativos e Execucao — passam a exigir arrastar.
+     Navegacao que se usa o tempo todo nao fica atras de um gesto, entao
+     o seletor manteve a linha dele. */
+
+  /* "Indicadores" sai, como ja saiu no computador: a barra de baixo ja
+     diz em que tela voce esta, e o titulo custava uma linha inteira. */
+  .ind-titulo {
+    display: none;
+  }
+  /* teto no seletor: nome comprido de projeto nao pode empurrar as abas
+     para fora da tela */
+  .ind-projeto {
+    margin-left: 0;
+    max-width: 118px;
+    padding-top: 7px;
+    padding-bottom: 7px;
+  }
+  .ind-periodos,
+  .ind-abas {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    margin-top: 6px;
+  }
+  .ind-periodos::-webkit-scrollbar,
+  .ind-abas::-webkit-scrollbar {
+    display: none;
+  }
+  .ind-periodos button,
+  .ind-abas button {
+    font-size: 12.5px;
+    flex: 0 0 auto;
+  }
+  .ind-periodos button {
+    padding: 6px 8px;
+  }
+  .ind-abas button {
+    padding: 7px 9px;
+    white-space: nowrap;
+  }
+  /* "toda a base" so repete o botao que ja esta aceso ao lado */
+  .ind-resumo {
+    display: none;
+  }
+}
+
+/* As folhas dentro da tela existem SO no celular: no computador elas
+   moram na barra lateral, e ter as duas seria o mesmo menu duas vezes. */
+@media (min-width: 1024px) {
+  .ind-abas-celular {
+    display: none;
+  }
+}
+.ind-abas-celular a {
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--color-ink-2);
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 7px 9px;
+  white-space: nowrap;
+}
+.ind-abas-celular a[aria-selected="true"] {
+  background: var(--color-papel);
+  color: var(--color-ink);
+  border-color: var(--color-line-2);
+}
+
+/* --- grade --- */
+.ind-grade {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(12, 1fr);
+  margin-top: 14px;
+}
+.ind-grade > .cartao {
+  grid-column: span 12;
+  min-width: 0;
+}
+.ind-faixa {
+  grid-column: 1 / -1;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-ink-3);
+  margin: 14px 0 -2px;
+}
+.ind-faixa:first-child {
+  margin-top: 0;
+}
+.ind-aviso {
+  grid-column: 1 / -1;
+  border-left: 3px solid var(--color-media);
+  background: var(--color-papel);
+  padding: 10px 14px;
+  border-radius: 0 8px 8px 0;
+  font-size: 12.5px;
+  color: var(--color-ink-2);
+}
+.ind-aviso b {
+  color: var(--color-ink);
+}
+
+/* --- numero grande --- */
+.ind-grade > .cartao.ind-kpi {
+  grid-column: span 6;
+}
+/* UMA LINHA CADA. O rótulo quebrava em duas ("TOTAL PAREDES /
+   AUDITADAS") e o pé em três, e cada quebra dessas subia a altura da
+   régua INTEIRA — oito células pagam a conta da mais alta. Agora o
+   texto não quebra: se não couber, ele corta com reticências e o texto
+   completo continua na dica. O que de fato resolveu foi encurtar as
+   palavras; isto aqui é a rede de segurança. */
+.ind-rot,
+.ind-pe {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ind-rot {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-ink-3);
+}
+.ind-num {
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  margin-top: 6px;
+}
+.ind-num.t-alta {
+  color: var(--color-alta);
+}
+.ind-num.t-marca {
+  color: var(--color-brand-forte);
+}
+.ind-pe {
+  font-size: 10.5px;
+  color: var(--color-ink-2);
+  margin-top: 3px;
+}
+
+/* --- barra de gravidade --- */
+.ind-pilha {
+  display: flex;
+  height: 30px;
+  border-radius: 6px;
+  overflow: hidden;
+  gap: 2px;
+}
+.ind-pilha > div {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  min-width: 2px;
+}
+.ind-legenda {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 12px;
+}
+.ind-legenda span {
+  font-size: 12px;
+  color: var(--color-ink-2);
+}
+.ind-legenda i {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  display: inline-block;
+  margin-right: 6px;
+  vertical-align: -1px;
+}
+.ind-legenda b {
+  color: var(--color-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- ranking horizontal --- */
+.ind-linhas {
+  display: grid;
+  gap: 9px;
+}
+.ind-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 10px;
+  align-items: center;
+}
+.ind-nome {
+  font-size: 12.5px;
+  min-width: 0;
+}
+.ind-val {
+  font-size: 12.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.ind-val em {
+  font-style: normal;
+  color: var(--color-ink-3);
+  font-weight: 600;
+}
+.ind-trilho {
+  grid-column: 1 / -1;
+  height: 7px;
+  border-radius: 4px;
+  background: var(--color-papel-2);
+  overflow: hidden;
+}
+.ind-trilho > i {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+}
+
+/* --- tabela --- */
+.ind-rolagem {
+  overflow-x: auto;
+}
+.ind-tabela {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 13px;
+}
+.ind-tabela th,
+.ind-tabela td {
+  text-align: right;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--color-line);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.ind-tabela th:first-child,
+.ind-tabela td:first-child {
+  text-align: left;
+}
+.ind-tabela th {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--color-ink-3);
+  border-bottom: 1px solid var(--color-line-2);
+}
+.ind-tabela tbody tr:last-child td {
+  border-bottom: none;
+}
+/* Observacao de NA: e frase escrita por gente, entao pode quebrar em
+   varias linhas — ao contrario das colunas de numero, que ficam numa
+   linha so para as casas decimais se alinharem. */
+.ind-tabela td.na-obs {
+  white-space: normal;
+  min-width: 180px;
+  text-align: left;
+}
+/* ------------------------------------------------------------------
+   JANELA (dialog nativo)
+
+   O <dialog> do navegador ja resolve sozinho o que costuma dar errado
+   em modal feita a mao: prende o foco dentro dela, fecha no Esc, deixa
+   o fundo inerte e sobe acima de qualquer z-index da pagina. Aqui so
+   entra a aparencia.
+   ------------------------------------------------------------------ */
+.janela {
+  border: 1px solid var(--color-line-2);
+  border-radius: 14px;
+  background: var(--color-papel);
+  color: var(--color-ink);
+  padding: 18px 20px 20px;
+  width: min(440px, calc(100vw - 32px));
+  box-shadow: 0 18px 48px rgb(0 0 0 / 0.28);
+}
+.janela::backdrop {
+  background: rgb(0 0 0 / 0.45);
+}
+.janela > h2 {
+  margin-bottom: 4px;
+}
+
+/* Texto que se comporta como link dentro de uma tabela. */
+.ligacao {
+  color: var(--color-info);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.ligacao:hover {
+  color: var(--color-ink);
+}
+/* A linha inteira acende ao passar o ponteiro. Numa tabela de onze
+   colunas o olho perde a linha no meio do caminho, e a leitura de um
+   mes acaba misturada com a do mes de baixo. */
+.ind-tabela tbody tr {
+  transition: background 120ms;
+}
+.ind-tabela tbody tr:hover {
+  background: color-mix(in srgb, var(--color-ink-3) 10%, transparent);
+}
+.ind-pos {
+  color: var(--color-ink-3);
+  font-weight: 700;
+  width: 1%;
+}
+.ind-fraco {
+  color: var(--color-ink-3);
+}
+.ind-melhora {
+  color: var(--color-brand-forte);
+  font-weight: 700;
+}
+.ind-piora {
+  color: var(--color-alta);
+  font-weight: 700;
+}
+
+/* --- escolha de meses --- */
+.ind-escolha {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 10px;
+  align-items: end;
+  flex-wrap: wrap;
+  background: var(--color-papel);
+  border: 1px solid var(--color-line);
+  border-radius: 12px;
+  padding: 12px 16px;
+}
+.ind-campo {
+  display: grid;
+  gap: 4px;
+}
+.ind-campo label {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--color-ink-3);
+}
+.ind-campo .campo {
+  width: auto;
+}
+.ind-seta {
+  color: var(--color-ink-3);
+  padding-bottom: 9px;
+}
+
+/* Caixa de desenho. O piso vem do proprio grafico, pela variavel que o
+   componente escreve: no celular a pagina rola e cada desenho pede a
+   altura de que precisa; no computador o cartao e que manda, e a regra
+   de dentro do @media zera este piso. */
+.ind-caixa-grafico {
+  min-height: var(--alt-padrao, 145px);
+  /* Rola de lado quando o desenho pede mais largura do que o cartao tem
+     — hoje so o FPY por casa, que garante 26px por casa. Os demais sao
+     desenhados exatamente na largura medida, entao nunca acionam a
+     barra. Vale no computador e no celular. */
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+/* FPY por casa: escala e meta fixas a esquerda, casas rolando no meio,
+   media fixa a direita. Quem rola e a faixa do meio, entao a caixa de
+   fora nao pode rolar tambem — senao a pagina ganha duas barras para o
+   mesmo movimento. */
+.ind-caixa-grafico.ind-fpy {
+  display: flex;
+  align-items: flex-start;
+  overflow-x: hidden;
+}
+.ind-caixa-grafico.ind-fpy > svg {
+  flex: 0 0 auto;
+}
+.ind-fpy-rolagem {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+/* ------------------------------------------------------------------
+   MODO TV
+
+   Some tudo que nao e grafico: a barra lateral, o topo do aplicativo, a
+   barra de baixo do celular e a faixa de filtros. O que sobra e a grade
+   de cartoes, esticada na tela inteira, para ser lida de longe.
+
+   E uma classe no <body> porque o que precisa sumir mora FORA da tela
+   de indicadores — a lateral e do layout do aplicativo, nao dela.
+   ------------------------------------------------------------------ */
+body.modo-tv .topo,
+body.modo-tv .nav-inferior,
+body.modo-tv .ind-topo {
+  display: none;
+}
+body.modo-tv .conteudo-app {
+  padding: 0;
+}
+body.modo-tv .ind-tela {
+  padding: 8px 12px 12px;
+}
+/* O BOTAO DE SAIR E VISIVEL, SEMPRE.
+   Ele nasceu discreto — 25% de opacidade ate o ponteiro chegar — e o
+   resultado foi ficar preso: sobre o fundo escuro, um botao de contorno
+   fino a 25% simplesmente nao existe para quem olha. Discricao vale
+   para enfeite; a unica saida de um modo que esconde toda a navegacao
+   nao e enfeite. Fica no alto a direita, onde o olho procura o "fechar",
+   e com preenchimento cheio. */
+.ind-tv-sai {
+  position: fixed;
+  top: 12px;
+  right: 14px;
+  z-index: 200;
+  background: var(--color-brand);
+  border-color: var(--color-brand);
+  color: var(--color-sobre-cor);
+  font-weight: 700;
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.3);
+}
+.ind-tv-sai:hover:not(:disabled) {
+  border-color: var(--color-brand-forte);
+  background: var(--color-brand-forte);
+  color: var(--color-sobre-cor);
+}
+.ind-tv-liga {
+  margin-left: auto;
+  font-size: 12px;
+  padding: 5px 10px;
+}
+/* no celular a tela ja e pequena: o modo TV nao se oferece la */
+@media (max-width: 1023.98px) {
+  .ind-tv-liga {
+    display: none;
+  }
+}
+
+/* pizza e legenda: empilhadas no celular, lado a lado no computador */
+.ind-pizza {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  height: 100%;
+  min-height: 0;
+}
+@media (min-width: 1024px) {
+  .ind-pizza {
+    flex-direction: row;
+    align-items: center;
+    gap: 14px;
+  }
+}
+
+/* --- SVG --- */
+/* 12px, e nao 10: o painel e lido de longe — de pe ao lado da mesa, e
+   no modo TV do outro lado da sala. Os graficos ganharam a largura do
+   eixo Y, que saiu, entao a letra maior nao custa espaco de desenho. */
+.ind-eixo {
+  fill: var(--color-ink-3);
+  font-size: 12px;
+}
+.ind-malha {
+  stroke: var(--color-line);
+  stroke-width: 1;
+}
+.ind-valor-svg {
+  fill: var(--color-ink);
+  font-size: 13px;
+  font-weight: 700;
+}
+/* Alvo de ponteiro de uma coluna. A area sensivel e a FATIA INTEIRA, do
+   chao ao teto do grafico, e nao a barra: numa serie de 71 casas a
+   coluna tem 16px de largura, e uma casa com FPY 4% viraria um alvo de
+   16x6 — impossivel de acertar. Ao passar, a fatia acende de leve e a
+   barra ganha contorno. */
+.ind-alvo rect:first-child {
+  transition: fill 120ms;
+}
+.ind-alvo:hover rect:first-child {
+  fill: color-mix(in srgb, var(--color-ink-3) 12%, transparent);
+}
+.ind-alvo:hover rect + rect {
+  stroke: var(--color-ink);
+  stroke-width: 1;
+}
+/* ------------------------------------------------------------------
+   O CLIQUE QUE RECORTA O PAINEL
+
+   Vale para marca de SVG, linha de ranking e linha de tabela: as três
+   viraram alvo de clique e as três precisam PARECER alvo antes do
+   clique. Sem isso o recorte é um segredo — quem não tentar clicar por
+   acaso nunca descobre que ele existe.
+   ------------------------------------------------------------------ */
+.ind-clicavel {
+  cursor: pointer;
+}
+tr.ind-clicavel:hover > td {
+  background: color-mix(in srgb, var(--color-brand) 9%, transparent);
+}
+/* a linha recortada fica marcada mesmo sem o ponteiro em cima */
+tr.ind-clicavel[aria-selected="true"] > td {
+  background: var(--color-brand-suave);
+  box-shadow: inset 3px 0 0 var(--color-brand);
+}
+.ind-item.ind-clicavel[aria-pressed="true"] {
+  box-shadow: inset 3px 0 0 var(--color-brand);
+  padding-left: 8px;
+}
+.ind-fatia.ind-clicavel {
+  transition: opacity 120ms;
+}
+.ind-fatia.ind-clicavel:hover path,
+.ind-fatia.ind-clicavel:hover circle {
+  stroke: var(--color-ink);
+  stroke-width: 2;
+}
+/* a barra de recortes divide a faixa dos filtros, e não uma linha nova */
+.ind-recortes {
+  margin-top: 6px;
+}
+
+.ind-mini {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 18px;
+  vertical-align: -3px;
+}
+.ind-mini i {
+  width: 6px;
+  border-radius: 1px;
+  display: block;
+  background: var(--color-ink-3);
+  min-height: 1px;
+}
+.ind-vazio {
+  color: var(--color-ink-3);
+  font-size: 13px;
+  padding: 16px 0;
+  text-align: center;
+}
+
+@media (min-width: 640px) {
+  .ind-grade > .cartao.ind-kpi {
+    grid-column: span 3;
+  }
+  .ind-grade > .cartao.ind-meio {
+    grid-column: span 6;
+  }
+}
+@media (min-width: 1024px) {
+  .ind-grade > .cartao.ind-terco {
+    grid-column: span 4;
+  }
+  .ind-grade > .cartao.ind-doisTercos {
+    grid-column: span 8;
+  }
+}
+
+/* Com a aba Indicadores a gestao passa a ter seis itens na barra de
+   baixo. Em 375 px cada um fica com ~62 px, e "Indicadores" so cabe
+   com a fonte um ponto menor. A regra vale a partir do sexto item,
+   entao voltar a cinco nao deixa residuo. */
+.nav-inferior a:nth-last-child(n + 6),
+.nav-inferior a:nth-last-child(n + 6) ~ a {
+  font-size: 9.5px;
+  letter-spacing: 0;
+  padding-inline: 2px;
+}
+
+/* ------------------------------------------------------------------
+   INDICADORES — ajuste de densidade (2a passada)
+
+   O que estava errado: cada SVG ocupava 100% da largura e puxava a
+   altura pela proporcao do viewBox. Num cartao de 1150 px o grafico
+   saia com 367 px de altura e tomava a tela. Agora a altura e escolhida
+   no componente, em pixel, e o desenho e feito na largura medida.
+
+   O resto e respiro: quatro molduras para quatro numeros viraram uma
+   faixa so, e as secoes ganharam um fio no lugar de espaco vazio.
+   ------------------------------------------------------------------ */
+
+/* --- faixa de numeros: um cartao, varios indicadores --- */
+/* Precisa do mesmo peso de .ind-grade > .cartao, que declara
+   display:flex logo abaixo. Com so .ind-faixa-num o flex vencia e as
+   quatro celulas empilhavam em coluna, cada uma com a largura toda. */
 .ind-grade > .cartao.ind-faixa-num {
   grid-column: 1 / -1;
   display: grid;
