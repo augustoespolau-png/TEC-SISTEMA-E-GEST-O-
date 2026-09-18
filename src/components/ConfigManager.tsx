@@ -16,6 +16,7 @@ import { carregarAnexosProjetoParede } from "@/lib/anexosProjetoParede";
 import { mutarQualidade, salvarProjetoParedeAnexo } from "@/lib/qualidadeCompat";
 import LinhaConfig from "@/components/config/LinhaConfig";
 import RegrasQualidade from "@/components/config/RegrasQualidade";
+import DiagnosticoSistemaCard from "@/components/config/DiagnosticoSistemaCard";
 import type { AnexoProjetoParede, ConfigItem, Parede } from "@/lib/types";
 
 type Tabela = "projetos" | "setores" | "tipos_erro";
@@ -59,6 +60,7 @@ export default function ConfigManager() {
       </div>
 
       <RegrasQualidade />
+      <DiagnosticoSistemaCard />
 
       <ConfigSection
         tabela="projetos"
