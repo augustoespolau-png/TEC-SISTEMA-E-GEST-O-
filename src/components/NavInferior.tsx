@@ -213,7 +213,7 @@ export default function NavInferior({
 
       <button
         type="button"
-        className={`nav-modulo-weinmann ${weinmannAtivo ? "on" : ""}`}
+        className={`nav-modulo-weinmann nav-modulo-padrao ${weinmannAtivo ? "on" : ""}`}
         onClick={() => {
           const fechar = weinmannAtivo && aberto;
           const proximo = !fechar;
@@ -232,7 +232,7 @@ export default function NavInferior({
       {cadastrosVisivel && (
         <Link
           href={ADMIN_ITEM.href}
-          className={`nav-admin-cadastros ${cadastrosAtivo ? "on" : ""}`}
+          className={`nav-admin-cadastros nav-modulo-padrao ${cadastrosAtivo ? "on" : ""}`}
           aria-current={cadastrosAtivo ? "page" : undefined}
           onClick={() => {
             selecionarModulo("cadastros");
@@ -240,10 +240,6 @@ export default function NavInferior({
             setCadeiaAberta(false);
           }}
         >
-          <Icone>
-            <path d="M4 5.5h16v13H4z" />
-            <path d="M8 9h8M8 13h5M8 17h3" />
-          </Icone>
           {ADMIN_ITEM.rotulo}
         </Link>
       )}
@@ -251,7 +247,7 @@ export default function NavInferior({
       {iaTecVisivel && (
         <Link
           href={IA_TEC_ITEM.href}
-          className={`nav-admin-cadastros ${iaTecAtivo ? "on" : ""}`}
+          className={`nav-admin-cadastros nav-ia-tec ${iaTecAtivo ? "on" : ""}`}
           aria-current={iaTecAtivo ? "page" : undefined}
           onClick={() => {
             selecionarModulo("ia");
@@ -267,7 +263,7 @@ export default function NavInferior({
       {residuosVisivel && (
         <Link
           href={RESIDUOS_ITEM.href}
-          className={`nav-admin-cadastros ${residuosAtivo ? "on" : ""}`}
+          className={`nav-admin-cadastros nav-modulo-padrao ${residuosAtivo ? "on" : ""}`}
           aria-current={residuosAtivo ? "page" : undefined}
           onClick={() => {
             selecionarModulo("residuos");
@@ -304,7 +300,7 @@ export default function NavInferior({
       {cadeiaMadeiraVisivel && (
         <button
           type="button"
-          className={`nav-admin-cadastros nav-cadeia-toggle ${cadeiaAtiva ? "on" : ""}`}
+          className={`nav-admin-cadastros nav-cadeia-toggle nav-modulo-padrao ${cadeiaAtiva ? "on" : ""}`}
           onClick={() => {
             const fechar = cadeiaAtiva && cadeiaAberta;
             const proximo = !fechar;
