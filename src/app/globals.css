@@ -4900,11 +4900,18 @@ tr.ind-clicavel[aria-selected="true"] > td {
 }
 .cadeia-umidade-alerta strong { font-weight: 800; }
 .cadeia-inline-alert { margin-top: 14px; border: 1px solid color-mix(in srgb, var(--color-media) 35%, var(--color-line)); border-radius: 8px; }
+.cadeia-inline-context { display: grid; gap: 4px; margin-top: 14px; border: 1px solid color-mix(in srgb, var(--color-brand) 32%, var(--color-line)); border-radius: 8px; padding: 10px 12px; background: color-mix(in srgb, var(--color-brand) 6%, transparent); }
+.cadeia-inline-context strong { color: var(--color-brand); font-size: 11px; }
+.cadeia-inline-context span { color: var(--color-ink-2); font-size: 11px; }
 .cadeia-lote-card > .cadeia-card-actions { border-top: 1px solid var(--color-line); padding: 10px 16px; }
 .cadeia-lote-selector { display: grid; max-width: 620px; gap: 6px; margin-top: 16px; }
 .cadeia-inspecao-card,
 .cadeia-laudo-card { padding: 14px 16px; }
 .cadeia-inspecao-head h3 { font-size: 13px; }
+.cadeia-ensaio-contexto { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 13px; }
+.cadeia-ensaio-contexto span { display: grid; gap: 3px; min-width: 0; border: 1px solid var(--color-line); border-radius: 7px; padding: 8px; }
+.cadeia-ensaio-contexto small { color: var(--color-ink-3); font-size: 9.5px; }
+.cadeia-ensaio-contexto b { overflow: hidden; color: var(--color-ink-2); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .cadeia-defeitos { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin-top: 14px; }
 .cadeia-defeito { display: grid; gap: 4px; min-width: 0; border: 1px solid var(--color-line); border-radius: 7px; padding: 8px; }
 .cadeia-defeito.ok { border-color: color-mix(in srgb, var(--color-baixa) 35%, var(--color-line)); }
@@ -4961,7 +4968,7 @@ tr.ind-clicavel[aria-selected="true"] > td {
   .cadeia-madeira-hero { display: grid; }
   .cadeia-madeira-hero-meta { width: fit-content; }
   .cadeia-madeira-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .cadeia-madeira-tabs { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .cadeia-madeira-tabs { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .cadeia-lote-summary { grid-template-columns: minmax(0, 1fr) auto; gap: 7px 12px; }
   .cadeia-lote-data { grid-column: 1; grid-row: 1; }
   .cadeia-lote-principal { grid-column: 1 / -1; grid-row: 2; }
@@ -4986,6 +4993,7 @@ tr.ind-clicavel[aria-selected="true"] > td {
   .cadeia-lote-facts span:nth-child(2) { border-right: 0; }
   .cadeia-lote-facts span:last-child { border-top: 1px solid var(--color-line); }
   .cadeia-defeitos,
+  .cadeia-ensaio-contexto,
   .cadeia-document-fields,
   .cadeia-form-grid,
   .cadeia-defeitos-fieldset { grid-template-columns: 1fr; }

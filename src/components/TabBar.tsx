@@ -141,7 +141,10 @@ export default function TabBar({
     CADEIA_MADEIRA_NAV.papeis.includes(role) &&
     canModule(permissions, CADEIA_MADEIRA_NAV.modulo);
   const folhaAtual = busca.get("folha") ?? "fpy";
-  const cadeiaModuloAtual = busca.get("modulo") ?? CADEIA_MADEIRA_MODULOS[0].id;
+  const cadeiaModuloParam = busca.get("modulo");
+  const cadeiaModuloAtual = cadeiaModuloParam === "recebimento"
+    ? "auditoria"
+    : cadeiaModuloParam ?? CADEIA_MADEIRA_MODULOS[0].id;
   const cadeiaNaRota = pathname === CADEIA_MADEIRA_NAV.href;
   const [weinmannAberto, setWeinmannAberto] = useState(!cadeiaNaRota);
   const [cadeiaMadeiraAberta, setCadeiaMadeiraAberta] = useState(cadeiaNaRota);

@@ -17,8 +17,10 @@ import {
   type CadeiaLaudo,
   type CadeiaLote,
   type CadeiaMadeiraSnapshot,
+  type ComponenteEnsaioMadeira,
   type StatusLiberacaoMadeira,
   type TipoAnexoCadeia,
+  type TipoEnsaioMadeira,
   type TipoLaudoMadeira,
 } from "@/lib/cadeiaMadeira";
 
@@ -57,6 +59,11 @@ export interface CadeiaInspecaoInput {
   id?: string;
   lote_id: string;
   data_inspecao: string;
+  tipo_ensaio: TipoEnsaioMadeira;
+  componente_ensaiado: ComponenteEnsaioMadeira;
+  identificacao_prototipo: string | null;
+  norma_procedimento: string | null;
+  resultado_tecnico: string | null;
   bitola_nominal: string | null;
   dimensional_conforme: boolean;
   empenamento: boolean;
@@ -94,7 +101,7 @@ const CAMPO_FORNECEDOR =
 const CAMPO_LOTE =
   "id, fornecedor_id, numero_nota_fiscal, volume_m3, data_recebimento, placa_veiculo, teor_umidade_medio, lote_autoclave, status_liberacao, observacoes, ativo, created_at, updated_at";
 const CAMPO_INSPECAO =
-  "id, lote_id, data_inspecao, inspetor_id, bitola_nominal, dimensional_conforme, empenamento, fendas_profundas, nos_soltos, manchas_umidade_bolor, resultado, observacoes, created_at, updated_at";
+  "id, lote_id, data_inspecao, inspetor_id, tipo_ensaio, componente_ensaiado, identificacao_prototipo, norma_procedimento, resultado_tecnico, bitola_nominal, dimensional_conforme, empenamento, fendas_profundas, nos_soltos, manchas_umidade_bolor, resultado, observacoes, created_at, updated_at";
 const CAMPO_LAUDO =
   "id, lote_id, tipo, nome_arquivo, mime_type, tamanho_bytes, storage_bucket, storage_path, validade_ate, aprovado, aprovado_por, aprovado_em, observacoes, created_at";
 const CAMPO_ANEXO =
@@ -209,6 +216,34 @@ function status(value: unknown): StatusLiberacaoMadeira {
   return value;
 }
 
+function tipoEnsaio(value: unknown): TipoEnsaioMadeira {
+  if (
+    value !== "RECEBIMENTO_MADEIRA" &&
+    value !== "ESTRUTURAL_PROTOTIPO" &&
+    value !== "DESEMPENHO_PLACA_CIMENTICIA" &&
+    value !== "PAINEL_ESTRUTURAL" &&
+    value !== "MADEIRA_ESTRUTURAL" &&
+    value !== "OUTRO"
+  ) {
+    throw new Error("Tipo de ensaio inválido.");
+  }
+  return value;
+}
+
+function componenteEnsaio(value: unknown): ComponenteEnsaioMadeira {
+  if (
+    value !== "MADEIRA_ESTRUTURAL" &&
+    value !== "PLACA_CIMENTICIA" &&
+    value !== "PAINEL_ESTRUTURAL" &&
+    value !== "PROTOTIPO_COMPLETO" &&
+    value !== "LIGACAO_FIXACAO" &&
+    value !== "OUTRO"
+  ) {
+    throw new Error("Componente ensaiado inválido.");
+  }
+  return value;
+}
+
 function tipoLaudo(value: unknown): TipoLaudoMadeira {
   if (value !== "LAUDO_TECNICO" && value !== "CERTIFICADO_CONFORMIDADE") {
     throw new Error("Tipo de documento inválido.");
@@ -272,6 +307,15 @@ function normalizarInspecao(input: CadeiaInspecaoInput, exigirId = false) {
     id,
     lote_id: uuid(input.lote_id, "Lote"),
     data_inspecao: data(input.data_inspecao, "Data da inspeção"),
+    tipo_ensaio: tipoEnsaio(input.tipo_ensaio),
+    componente_ensaiado: componenteEnsaio(input.componente_ensaiado),
+    identificacao_prototipo: texto(
+      input.identificacao_prototipo,
+      "Identificação do protótipo",
+      240,
+    ),
+    norma_procedimento: texto(input.norma_procedimento, "Norma / procedimento", 240),
+    resultado_tecnico: texto(input.resultado_tecnico, "Resultado técnico", 4000),
     bitola_nominal: texto(input.bitola_nominal, "Bitola nominal", 120),
     dimensional_conforme: booleano(input.dimensional_conforme, "Verificação dimensional"),
     empenamento: booleano(input.empenamento, "Empenamento"),
@@ -397,6 +441,25 @@ function converterInspecao(
     data_inspecao: String(row.data_inspecao ?? ""),
     inspetor_id: (row.inspetor_id as string | null) ?? null,
     inspetor_nome: inspetorNome,
+    tipo_ensaio:
+      row.tipo_ensaio === "ESTRUTURAL_PROTOTIPO" ||
+      row.tipo_ensaio === "DESEMPENHO_PLACA_CIMENTICIA" ||
+      row.tipo_ensaio === "PAINEL_ESTRUTURAL" ||
+      row.tipo_ensaio === "MADEIRA_ESTRUTURAL" ||
+      row.tipo_ensaio === "OUTRO"
+        ? row.tipo_ensaio
+        : "RECEBIMENTO_MADEIRA",
+    componente_ensaiado:
+      row.componente_ensaiado === "PLACA_CIMENTICIA" ||
+      row.componente_ensaiado === "PAINEL_ESTRUTURAL" ||
+      row.componente_ensaiado === "PROTOTIPO_COMPLETO" ||
+      row.componente_ensaiado === "LIGACAO_FIXACAO" ||
+      row.componente_ensaiado === "OUTRO"
+        ? row.componente_ensaiado
+        : "MADEIRA_ESTRUTURAL",
+    identificacao_prototipo: (row.identificacao_prototipo as string | null) ?? null,
+    norma_procedimento: (row.norma_procedimento as string | null) ?? null,
+    resultado_tecnico: (row.resultado_tecnico as string | null) ?? null,
     bitola_nominal: (row.bitola_nominal as string | null) ?? null,
     dimensional_conforme: Boolean(row.dimensional_conforme),
     empenamento: Boolean(row.empenamento),
@@ -793,6 +856,11 @@ export async function updateCadeiaInspecao(
       .from("cadeia_madeira_inspecoes")
       .update({
         data_inspecao: inspecao.data_inspecao,
+        tipo_ensaio: inspecao.tipo_ensaio,
+        componente_ensaiado: inspecao.componente_ensaiado,
+        identificacao_prototipo: inspecao.identificacao_prototipo,
+        norma_procedimento: inspecao.norma_procedimento,
+        resultado_tecnico: inspecao.resultado_tecnico,
         bitola_nominal: inspecao.bitola_nominal,
         dimensional_conforme: inspecao.dimensional_conforme,
         empenamento: inspecao.empenamento,

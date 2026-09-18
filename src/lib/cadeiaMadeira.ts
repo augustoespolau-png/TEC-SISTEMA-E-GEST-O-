@@ -4,14 +4,33 @@ export const LIMITE_UMIDADE_SEGURA = 20;
 export const MAX_DOCUMENTO_CADEIA_BYTES = 20 * 1024 * 1024;
 
 export const CADEIA_MADEIRA_MODULOS = [
-  { id: "recebimento", rotulo: "Recebimento", href: "/cadeia-madeira?modulo=recebimento" },
-  { id: "laudos", rotulo: "Laudos", href: "/cadeia-madeira?modulo=laudos" },
+  {
+    id: "auditoria",
+    rotulo: "Auditoria de recebimento",
+    href: "/cadeia-madeira?modulo=auditoria",
+  },
+  { id: "cadastro", rotulo: "Cadastro", href: "/cadeia-madeira?modulo=cadastro" },
   { id: "ensaios", rotulo: "Ensaios", href: "/cadeia-madeira?modulo=ensaios" },
+  { id: "laudos", rotulo: "Laudos", href: "/cadeia-madeira?modulo=laudos" },
 ] as const;
 
 export type CadeiaMadeiraModuloId = (typeof CADEIA_MADEIRA_MODULOS)[number]["id"];
 
 export type StatusLiberacaoMadeira = "APROVADO" | "REPROVADO" | "QUARENTENA";
+export type TipoEnsaioMadeira =
+  | "RECEBIMENTO_MADEIRA"
+  | "ESTRUTURAL_PROTOTIPO"
+  | "DESEMPENHO_PLACA_CIMENTICIA"
+  | "PAINEL_ESTRUTURAL"
+  | "MADEIRA_ESTRUTURAL"
+  | "OUTRO";
+export type ComponenteEnsaioMadeira =
+  | "MADEIRA_ESTRUTURAL"
+  | "PLACA_CIMENTICIA"
+  | "PAINEL_ESTRUTURAL"
+  | "PROTOTIPO_COMPLETO"
+  | "LIGACAO_FIXACAO"
+  | "OUTRO";
 export type TipoLaudoMadeira =
   | "LAUDO_TECNICO"
   | "CERTIFICADO_CONFORMIDADE";
@@ -32,6 +51,33 @@ export const TIPOS_LAUDO_MADEIRA: Array<{
 }> = [
   { value: "LAUDO_TECNICO", label: "Laudo técnico" },
   { value: "CERTIFICADO_CONFORMIDADE", label: "Certificado de conformidade" },
+];
+
+export const TIPOS_ENSAIO_MADEIRA: Array<{
+  value: TipoEnsaioMadeira;
+  label: string;
+}> = [
+  { value: "RECEBIMENTO_MADEIRA", label: "Recebimento da madeira" },
+  { value: "ESTRUTURAL_PROTOTIPO", label: "Ensaio estrutural de protótipo" },
+  {
+    value: "DESEMPENHO_PLACA_CIMENTICIA",
+    label: "Desempenho da placa cimentícia",
+  },
+  { value: "PAINEL_ESTRUTURAL", label: "Painel estrutural" },
+  { value: "MADEIRA_ESTRUTURAL", label: "Caracterização da madeira" },
+  { value: "OUTRO", label: "Outro ensaio" },
+];
+
+export const COMPONENTES_ENSAIO_MADEIRA: Array<{
+  value: ComponenteEnsaioMadeira;
+  label: string;
+}> = [
+  { value: "MADEIRA_ESTRUTURAL", label: "Madeira estrutural" },
+  { value: "PLACA_CIMENTICIA", label: "Placa cimentícia" },
+  { value: "PAINEL_ESTRUTURAL", label: "Painel estrutural" },
+  { value: "PROTOTIPO_COMPLETO", label: "Protótipo completo" },
+  { value: "LIGACAO_FIXACAO", label: "Ligação / fixação" },
+  { value: "OUTRO", label: "Outro componente" },
 ];
 
 export interface CadeiaFornecedor {
@@ -72,6 +118,11 @@ export interface CadeiaInspecao {
   data_inspecao: string;
   inspetor_id: string | null;
   inspetor_nome: string;
+  tipo_ensaio: TipoEnsaioMadeira;
+  componente_ensaiado: ComponenteEnsaioMadeira;
+  identificacao_prototipo: string | null;
+  norma_procedimento: string | null;
+  resultado_tecnico: string | null;
   bitola_nominal: string | null;
   dimensional_conforme: boolean;
   empenamento: boolean;

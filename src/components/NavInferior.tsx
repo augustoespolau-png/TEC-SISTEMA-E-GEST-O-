@@ -136,7 +136,10 @@ export default function NavInferior({
   const [cadeiaAberta, setCadeiaAberta] = useState(false);
   const moduloAtivo = itens.some((i) => pathname === i.href);
   const cadeiaNaRota = pathname === CADEIA_MADEIRA_ITEM.href;
-  const cadeiaModuloAtual = busca.get("modulo") ?? CADEIA_MADEIRA_MODULOS[0].id;
+  const cadeiaModuloParam = busca.get("modulo");
+  const cadeiaModuloAtual = cadeiaModuloParam === "recebimento"
+    ? "auditoria"
+    : cadeiaModuloParam ?? CADEIA_MADEIRA_MODULOS[0].id;
 
   return (
     <nav className="nav-inferior" aria-label="Navegação principal">
