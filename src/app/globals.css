@@ -1261,7 +1261,7 @@ table.mapa td {
 
 /* altura reservada pela barra de navegação do celular */
 :root {
-  --altura-nav: calc(58px + env(safe-area-inset-bottom));
+  --altura-nav: calc(82px + env(safe-area-inset-bottom));
 }
 @media (min-width: 1024px) {
   :root {
@@ -1272,34 +1272,67 @@ table.mapa td {
 /* navegação inferior — só no celular, ao alcance do polegar */
 .nav-inferior {
   position: fixed;
-  inset-inline: 0;
-  bottom: 0;
+  inset-inline: 10px;
+  bottom: calc(8px + env(safe-area-inset-bottom));
   z-index: 60;
   display: flex;
-  background: color-mix(in srgb, var(--color-papel) 96%, transparent);
-  backdrop-filter: blur(10px);
-  border-top: 1px solid var(--color-line);
-  padding-bottom: env(safe-area-inset-bottom);
+  min-height: 68px;
+  align-items: stretch;
+  gap: 3px;
+  padding: 5px;
+  background: color-mix(in srgb, var(--color-papel) 94%, #000 6%);
+  backdrop-filter: blur(18px) saturate(1.08);
+  border: 1px solid color-mix(in srgb, var(--color-line-2) 85%, transparent);
+  border-radius: 28px;
+  box-shadow:
+    0 14px 32px rgb(0 0 0 / 26%),
+    inset 0 1px 0 rgb(255 255 255 / 5%);
 }
-.nav-inferior a {
-  flex: 1;
-  min-height: 58px;
+.nav-inferior > a,
+.nav-inferior > button {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 56px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 3px;
-  padding: 7px 4px;
+  padding: 4px 3px;
+  border: 0;
+  border-radius: 22px;
+  background: transparent;
   font-size: 10.5px;
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: 0.02em;
   color: var(--color-ink-3);
-  transition: color 130ms;
+  text-align: center;
+  white-space: nowrap;
+  transition:
+    color 130ms,
+    background-color 130ms,
+    box-shadow 130ms;
 }
-.nav-inferior a.on {
+.nav-inferior > a.on,
+.nav-inferior > button.on,
+.nav-inferior > button[aria-expanded="true"] {
   color: var(--color-brand);
+  background: color-mix(in srgb, var(--color-brand) 12%, var(--color-papel-2));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-brand) 42%, transparent);
 }
-.nav-inferior a:active {
+.nav-inferior > a.on::after,
+.nav-inferior > button.on::after,
+.nav-inferior > button[aria-expanded="true"]::after {
+  content: "";
+  flex: 0 0 auto;
+  width: 28px;
+  height: 3px;
+  margin-top: 1px;
+  border-radius: 999px;
+  background: var(--color-brand);
+}
+.nav-inferior > a:active,
+.nav-inferior > button:active {
   background: var(--color-papel-2);
 }
 @media (min-width: 1024px) {
@@ -1527,51 +1560,23 @@ table.mapa td {
   border-left: 1px solid var(--color-line);
 }
 .nav-modulo-weinmann {
-  flex: 1;
-  min-height: 58px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 3px;
-  padding: 7px 4px;
-  color: var(--color-ink-3);
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
+  border: 0;
+  cursor: pointer;
 }
 .nav-modulo-weinmann.on {
   color: var(--color-brand);
 }
 .nav-admin-cadastros {
-  flex: 1;
-  min-height: 58px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 3px;
-  padding: 7px 4px;
-  border-left: 1px solid var(--color-line);
-  color: var(--color-ink-3);
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-}
-.nav-admin-cadastros:hover,
-.nav-admin-cadastros.on {
-  color: var(--color-brand);
+  text-decoration: none;
 }
 .nav-cadeia-toggle {
   border: 0;
-  background: transparent;
-  font: inherit;
   cursor: pointer;
 }
 .menu-weinmann-mobile {
   position: absolute;
   inset-inline: 8px;
-  bottom: calc(58px + env(safe-area-inset-bottom) + 8px);
+  bottom: calc(82px + env(safe-area-inset-bottom));
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 6px;
@@ -1584,7 +1589,7 @@ table.mapa td {
 .menu-cadeia-mobile {
   position: absolute;
   inset-inline: 8px;
-  bottom: calc(58px + env(safe-area-inset-bottom) + 8px);
+  bottom: calc(82px + env(safe-area-inset-bottom));
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 6px;
@@ -3175,17 +3180,6 @@ tr.ind-clicavel[aria-selected="true"] > td {
   .ind-grade > .cartao.ind-doisTercos {
     grid-column: span 8;
   }
-}
-
-/* Com a aba Indicadores a gestao passa a ter seis itens na barra de
-   baixo. Em 375 px cada um fica com ~62 px, e "Indicadores" so cabe
-   com a fonte um ponto menor. A regra vale a partir do sexto item,
-   entao voltar a cinco nao deixa residuo. */
-.nav-inferior a:nth-last-child(n + 6),
-.nav-inferior a:nth-last-child(n + 6) ~ a {
-  font-size: 9.5px;
-  letter-spacing: 0;
-  padding-inline: 2px;
 }
 
 /* ------------------------------------------------------------------

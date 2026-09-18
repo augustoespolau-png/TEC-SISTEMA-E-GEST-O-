@@ -181,7 +181,7 @@ export default function NavInferior({
 
       <button
         type="button"
-        className={`nav-modulo-weinmann ${moduloAtivo ? "on" : ""}`}
+        className={`nav-modulo-weinmann ${moduloAtivo || aberto ? "on" : ""}`}
         onClick={() => setAberto((valor) => !valor)}
         aria-expanded={aberto}
         aria-controls="menu-weinmann-mobile"
@@ -254,7 +254,7 @@ export default function NavInferior({
       {cadeiaMadeiraVisivel && (
         <button
           type="button"
-          className={`nav-admin-cadastros nav-cadeia-toggle ${cadeiaNaRota ? "on" : ""}`}
+          className={`nav-admin-cadastros nav-cadeia-toggle ${cadeiaNaRota || cadeiaAberta ? "on" : ""}`}
           onClick={() => {
             const proximo = !cadeiaAberta;
             setCadeiaAberta(proximo);
