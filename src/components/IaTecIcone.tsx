@@ -44,6 +44,29 @@ export default function IaTecIcone({ size = 24 }: { size?: number }) {
         strokeOpacity="0.74"
         strokeWidth="0.8"
       />
+
+      {/* Anel interno em rotação: mantém o orbe estável e dá movimento
+          apenas dentro dele, sem deslocar o ícone na navegação. */}
+      <g className="ia-tec-giro">
+        <circle
+          cx="12"
+          cy="12"
+          r="8.65"
+          fill="none"
+          stroke="url(#ia-tec-anel)"
+          strokeWidth="0.7"
+          strokeLinecap="round"
+          strokeDasharray="5.2 3.1 1.2 4.4"
+          strokeOpacity="0.86"
+        />
+        <circle
+          cx="12"
+          cy="3.35"
+          r="0.72"
+          fill="#b8f7ff"
+          fillOpacity="0.92"
+        />
+      </g>
       <path
         d="M7.4 12.8c1.45.86 3.02 1.3 4.72 1.3 1.65 0 3.18-.43 4.48-1.28v3.13c-1.15 1.25-2.63 1.88-4.45 1.88-1.86 0-3.45-.64-4.75-1.92Z"
         fill="#0c1a6e"
