@@ -1608,6 +1608,30 @@ table.mapa td {
 .nav-admin-cadastros {
   text-decoration: none;
 }
+
+/* Padronização visual da barra mobile. WEINMANN, Cadastros, Resíduos e
+   Madeira usam exatamente a mesma caixa tipográfica e o mesmo centro
+   vertical. IA-TEC fica fora desta regra de propósito: o orbe, o brilho,
+   o espaçamento e a tipografia dele permanecem intactos. */
+.nav-inferior > .nav-modulo-padrao {
+  position: relative;
+  gap: 0;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: 0.02em;
+}
+
+/* O indicador ativo não participa mais do fluxo desses quatro módulos.
+   Assim ele não empurra o nome para cima e todos permanecem na mesma
+   linha visual, ativos ou inativos. */
+.nav-inferior > .nav-modulo-padrao.on::after,
+.nav-inferior > .nav-modulo-padrao[aria-expanded="true"]::after {
+  position: absolute;
+  bottom: 7px;
+  margin-top: 0;
+}
+
 .nav-cadeia-toggle {
   border: 0;
   cursor: pointer;
