@@ -1432,15 +1432,18 @@ table.mapa td {
   display: none;
   align-items: center;
   gap: 8px;
-  border: 1px solid var(--color-line-2);
-  background: var(--color-papel);
+  border: 1px solid transparent;
+  background: transparent;
 }
 .aba-admin:hover {
-  border-color: var(--color-brand);
+  border-color: transparent;
+  background: var(--color-papel-2);
   color: var(--color-brand-forte);
 }
 .aba-admin.on {
-  border-color: var(--color-brand);
+  border-color: transparent;
+  background: var(--color-brand-suave);
+  color: var(--color-brand-forte);
 }
 .cadeia-lateral { display: none; }
 .cadeia-lateral-toggle {
@@ -3583,18 +3586,18 @@ tr.ind-clicavel[aria-selected="true"] > td {
   .aba-admin {
     display: flex;
     flex: 0 0 auto;
-    height: 54px;
-    min-height: 54px;
+    height: auto;
+    min-height: 40px;
     justify-content: flex-start;
-    margin-top: 8px;
-    padding: 10px 12px;
-    border-radius: 10px;
+    margin-top: 2px;
+    padding: 8px 12px;
+    border-radius: 8px;
   }
   .cadeia-lateral {
     display: flex;
     flex-direction: column;
-    gap: 2px;
-    margin-top: 8px;
+    gap: 0;
+    margin-top: 2px;
   }
   .cadeia-lateral .aba-admin { margin-top: 0; }
 
@@ -3616,26 +3619,12 @@ tr.ind-clicavel[aria-selected="true"] > td {
   .rodape-topo .cadastros-fixo {
     display: flex;
     width: 100%;
-    height: 54px;
-    min-height: 54px;
+    height: auto;
+    min-height: 40px;
     justify-content: flex-start;
     margin-top: 0;
     padding: 8px 12px;
-  }
-
-  /* Os cartões da coluna não precisam ocupar toda a largura útil. Um
-     recuo uniforme deixa a sidebar respirar e mantém todos os controles
-     com a mesma medida visual. */
-  .abas > .modulo-weinmann,
-  .topo-navegacao > .aba-admin,
-  .topo-navegacao > .cadeia-lateral,
-  .rodape-topo > .cadastros-fixo,
-  .rodape-topo > .btn {
-    width: calc(100% - 16px);
-    align-self: center;
-  }
-  .cadeia-lateral .aba-admin {
-    width: 100%;
+    border-radius: 8px;
   }
 
   .conteudo-app {
@@ -4562,7 +4551,7 @@ tr.ind-clicavel[aria-selected="true"] > td {
 .nav-admin-cadastros[href="/residuos"].on {
   background: color-mix(in srgb, var(--color-brand) 20%, transparent);
   color: var(--color-brand);
-  border-color: color-mix(in srgb, var(--color-brand) 55%, var(--color-line));
+  border-color: transparent;
 }
 .residuos-tela {
   max-width: 92rem;
@@ -4799,7 +4788,7 @@ tr.ind-clicavel[aria-selected="true"] > td {
 .nav-admin-cadastros[href="/cadeia-madeira"].on {
   background: color-mix(in srgb, var(--color-brand) 20%, transparent);
   color: var(--color-brand);
-  border-color: color-mix(in srgb, var(--color-brand) 55%, var(--color-line));
+  border-color: transparent;
 }
 .cadeia-madeira-tela {
   max-width: 92rem;
