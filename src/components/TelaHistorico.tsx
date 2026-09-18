@@ -212,7 +212,7 @@ export default function TelaHistorico() {
           </p>
 
           {itens.length === 0 && !buscando && (
-            <div className="cartao py-8 text-center">
+            <div className="cartao py-5 text-center">
               <p className="text-sm text-ink-3">
                 Nenhum evento neste recorte.
               </p>

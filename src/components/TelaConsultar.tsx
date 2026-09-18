@@ -651,7 +651,7 @@ export default function TelaConsultar({ role }: { role: Role }) {
           )}
 
         {filaZerada && (
-          <div className="cartao mb-2.5 py-6 text-center">
+          <div className="cartao mb-2.5 py-4 text-center">
             <p
               className="text-[13.5px] font-bold"
               style={{ color: "var(--color-baixa)" }}
@@ -664,14 +664,14 @@ export default function TelaConsultar({ role }: { role: Role }) {
           </div>
         )}
 
-        {erro && <p className="py-10 text-center text-sm text-alta">{erro}</p>}
+        {erro && <p className="py-6 text-center text-sm text-alta">{erro}</p>}
 
         {!erro && buscando && itens.length === 0 && (
-          <p className="py-10 text-center text-sm text-ink-3">Buscando…</p>
+          <p className="py-6 text-center text-sm text-ink-3">Buscando…</p>
         )}
 
         {!erro && !buscando && itens.length === 0 && !filaZerada && (
-          <div className="cartao py-10 text-center">
+          <div className="cartao py-6 text-center">
             <p className="text-sm text-ink-3">
               {filtros.status.length === 0
                 ? "Nenhuma situação marcada — marque ao menos uma para a lista ter o que mostrar."

@@ -62,14 +62,14 @@
    tem token próprio.
    ------------------------------------------------------------------ */
 html[data-tema="escuro"] {
-  --color-fundo: #0d1210;
-  --color-papel: #131a16;
-  --color-papel-2: #111713;
+  --color-fundo: #09090b;
+  --color-papel: #18181b;
+  --color-papel-2: #111113;
   --color-ink: #e8efea;
-  --color-ink-2: #a1afa6;
-  --color-ink-3: #718078;
-  --color-line: #22302a;
-  --color-line-2: #2e4036;
+  --color-ink-2: #a1a1aa;
+  --color-ink-3: #71717a;
+  --color-line: #27272a;
+  --color-line-2: #3f3f46;
 
   --color-sobre-cor: #16241b;
 
@@ -197,7 +197,7 @@ html:not([data-tema="escuro"]) .logo-tv-escuro {
   background: var(--color-papel);
   border: 1px solid var(--color-line);
   border-radius: 10px;
-  padding: 14px 16px 16px;
+  padding: 12px 14px 14px;
   min-width: 0;
 }
 .cartao > h2,
@@ -215,7 +215,7 @@ html:not([data-tema="escuro"]) .logo-tv-escuro {
   line-height: 1.45;
 }
 .corpo {
-  margin-top: 14px;
+  margin-top: 10px;
 }
 
 /* --- campos --- */
@@ -226,7 +226,7 @@ html:not([data-tema="escuro"]) .logo-tv-escuro {
   text-transform: uppercase;
   font-weight: 600;
   color: var(--color-ink-2);
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 }
 .campo {
   width: 100%;
@@ -238,7 +238,7 @@ html:not([data-tema="escuro"]) .logo-tv-escuro {
   background: var(--color-papel);
   color: var(--color-ink);
   border-radius: 8px;
-  padding: 11px 12px;
+  padding: 9px 10px;
   font: inherit;
   font-size: 16px; /* evita o zoom automático do iOS */
   outline: none;
@@ -1313,9 +1313,9 @@ table.mapa td {
   margin-inline: auto;
   width: 100%;
   max-width: 34rem;
-  padding: 14px 14px calc(28px + var(--altura-nav));
+  padding: 12px 12px calc(24px + var(--altura-nav));
   display: grid;
-  gap: 12px;
+  gap: 10px;
 }
 /* a tela de registro tem o rodapé fixo por cima da navegação */
 .tela-form {
@@ -1324,7 +1324,7 @@ table.mapa td {
 @media (min-width: 1024px) {
   .tela {
     max-width: 76rem;
-    padding: 18px 22px 40px;
+    padding: 14px 18px 30px;
   }
   .tela-form {
     padding-bottom: 110px;
@@ -1491,17 +1491,17 @@ table.mapa td {
 .modulo-weinmann {
   box-sizing: border-box;
   width: 100%;
-  min-height: 54px;
+  min-height: 46px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 9px 12px;
+  padding: 8px 10px;
   border: 1px solid var(--color-line-2);
   border-radius: 8px;
   color: var(--color-ink-2);
   background: var(--color-papel);
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 700;
   letter-spacing: 0.12em;
   text-align: left;
@@ -2237,8 +2237,8 @@ table.mapa td {
   align-items: center;
   justify-content: center;
   gap: 9px;
-  padding: 12px 16px;
-  font-size: 14.5px;
+  padding: 10px 13px;
+  font-size: 13.5px;
 }
 
 /* A FILA DE CASAS. Fichas do mesmo tamanho, em linha, com o número
@@ -2246,17 +2246,17 @@ table.mapa td {
    e "como ela foi" sem ler mais nada. */
 .aud-casas {
   display: grid;
-  gap: 10px;
+  gap: 8px;
   grid-template-columns: repeat(auto-fill, minmax(178px, 1fr));
 }
 .aud-casa {
   display: grid;
-  gap: 5px;
+  gap: 4px;
   align-content: start;
   text-align: left;
   border: 1px solid var(--color-line);
-  border-radius: 12px;
-  padding: 12px 14px;
+  border-radius: 10px;
+  padding: 10px 12px;
   background: var(--color-papel-2);
   color: var(--color-ink);
   cursor: pointer;
@@ -2279,26 +2279,26 @@ table.mapa td {
   gap: 8px;
 }
 .aud-casa-topo b {
-  font-size: 22px;
+  font-size: 20px;
   font-weight: 800;
   line-height: 1;
   font-variant-numeric: tabular-nums;
 }
 .aud-casa-topo em {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 800;
   font-style: normal;
   font-variant-numeric: tabular-nums;
 }
 .aud-casa-pe {
-  font-size: 11.5px;
+  font-size: 11px;
   color: var(--color-ink-3);
 }
 .aud-casa-marcas {
   display: flex;
   flex-wrap: wrap;
   gap: 3px 10px;
-  font-size: 11.5px;
+  font-size: 11px;
   font-weight: 600;
 }
 .aud-casa-marcas i {
@@ -3543,8 +3543,8 @@ tr.ind-clicavel[aria-selected="true"] > td {
     height: 100%;
     max-width: none;
     margin-inline: 0;
-    padding: 16px 12px;
-    gap: 18px;
+    padding: 14px 12px;
+    gap: 14px;
   }
 
   /* a linha da marca acomoda o atalho compacto da IA-TEC sem misturá-lo
@@ -3584,19 +3584,19 @@ tr.ind-clicavel[aria-selected="true"] > td {
     width: 100%;
   }
   .aba {
-    padding: 9px 12px;
+    padding: 8px 10px;
     font-size: 13px;
   }
   .aba-admin {
     display: flex;
     flex: 0 0 auto;
     width: 100%;
-    height: 54px;
-    min-height: 54px;
+    height: 46px;
+    min-height: 46px;
     justify-content: flex-start;
     margin-top: 8px;
-    padding: 10px 12px;
-    border-radius: 10px;
+    padding: 8px 10px;
+    border-radius: 8px;
   }
   .cadeia-lateral {
     display: flex;
@@ -3613,26 +3613,26 @@ tr.ind-clicavel[aria-selected="true"] > td {
     margin-top: auto;
     flex-direction: column;
     align-items: stretch;
-    gap: 8px;
+    gap: 6px;
     width: 100%;
   }
   .rodape-topo .btn {
     box-sizing: border-box;
-    height: 54px;
-    min-height: 54px;
+    height: 46px;
+    min-height: 46px;
     width: 100%;
     justify-content: center;
-    border-radius: 10px;
+    border-radius: 8px;
   }
   .rodape-topo .cadastros-fixo {
     display: flex;
     width: 100%;
-    height: 54px;
-    min-height: 54px;
+    height: 46px;
+    min-height: 46px;
     justify-content: flex-start;
     margin-top: 0;
-    padding: 8px 12px;
-    border-radius: 10px;
+    padding: 8px 10px;
+    border-radius: 8px;
   }
 
   .conteudo-app {
@@ -3641,7 +3641,7 @@ tr.ind-clicavel[aria-selected="true"] > td {
   }
   /* sem a faixa no alto, a tela ganha a largura que sobrou */
   .conteudo-app .tela {
-    max-width: none;
+    max-width: 90rem;
   }
 }
 
@@ -4019,7 +4019,7 @@ tr.ind-clicavel[aria-selected="true"] > td {
   align-items: flex-start;
   justify-content: space-between;
   gap: 24px;
-  padding: 20px 22px;
+  padding: 16px 18px;
 }
 .gov-eyebrow {
   margin: 0;
@@ -4271,10 +4271,10 @@ tr.ind-clicavel[aria-selected="true"] > td {
   font-size: 11px;
 }
 .gov-editor {
-  padding: 18px;
+  padding: 14px;
 }
 .gov-editor-empty {
-  min-height: 220px;
+  min-height: 0;
 }
 .gov-form-grid {
   display: grid;
@@ -4570,7 +4570,7 @@ tr.ind-clicavel[aria-selected="true"] > td {
   align-items: flex-start;
   justify-content: space-between;
   gap: 20px;
-  padding: 22px;
+  padding: 16px 18px;
 }
 .residuos-eyebrow {
   margin: 0;
@@ -4606,7 +4606,7 @@ tr.ind-clicavel[aria-selected="true"] > td {
 .residuos-kpis .cartao {
   display: grid;
   gap: 5px;
-  min-height: 100px;
+  min-height: 0;
 }
 .residuos-kpis span,
 .residuos-kpis small { color: var(--color-ink-3); font-size: 10.5px; }
@@ -4659,14 +4659,14 @@ tr.ind-clicavel[aria-selected="true"] > td {
 .residuos-filter-actions { grid-column: 1 / -1; }
 .residuos-filter-actions .btn { min-width: 120px; }
 .residuos-lista { display: grid; gap: 10px; margin-top: 10px; }
-.residuos-vazio { padding: 28px 20px; text-align: center; }
+.residuos-vazio { padding: 20px 16px; text-align: center; }
 .residuos-vazio .sub { max-width: 520px; margin: 6px auto 15px; }
 .residuo-card { padding: 0; overflow: hidden; }
 .residuo-card-topo {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 14px 16px 11px;
+  padding: 11px 14px 9px;
 }
 .residuo-card-summary {
   display: grid;
@@ -4704,11 +4704,11 @@ tr.ind-clicavel[aria-selected="true"] > td {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   border-top: 1px solid var(--color-line);
 }
-.residuo-card-facts span { display: grid; gap: 3px; min-width: 0; padding: 10px 16px; border-right: 1px solid var(--color-line); }
+.residuo-card-facts span { display: grid; gap: 3px; min-width: 0; padding: 8px 14px; border-right: 1px solid var(--color-line); }
 .residuo-card-facts span:last-child { border-right: 0; }
 .residuo-card-facts small { color: var(--color-ink-3); font-size: 10px; }
 .residuo-card-facts b { overflow: hidden; color: var(--color-ink-2); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
-.residuo-card-detalhes { border-top: 1px solid var(--color-line); padding: 14px 16px 16px; }
+.residuo-card-detalhes { border-top: 1px solid var(--color-line); padding: 12px 14px 14px; }
 .residuo-detail-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 11px 16px; }
 .residuo-detail-grid > div { display: grid; gap: 3px; min-width: 0; }
 .residuo-detail-grid small { color: var(--color-ink-3); font-size: 10px; }
@@ -4807,7 +4807,7 @@ tr.ind-clicavel[aria-selected="true"] > td {
   align-items: flex-start;
   justify-content: space-between;
   gap: 20px;
-  padding: 22px;
+  padding: 16px 18px;
 }
 .cadeia-madeira-eyebrow,
 .cadeia-code {
@@ -4849,7 +4849,7 @@ tr.ind-clicavel[aria-selected="true"] > td {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
 }
-.cadeia-madeira-kpis .cartao { display: grid; gap: 5px; min-height: 100px; }
+.cadeia-madeira-kpis .cartao { display: grid; gap: 5px; min-height: 0; }
 .cadeia-madeira-kpis span,
 .cadeia-madeira-kpis small { color: var(--color-ink-3); font-size: 10.5px; }
 .cadeia-madeira-kpis b { color: var(--color-ink); font-size: 22px; line-height: 1.1; font-variant-numeric: tabular-nums; }
@@ -4858,7 +4858,7 @@ tr.ind-clicavel[aria-selected="true"] > td {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 6px;
-  padding: 6px;
+  padding: 4px;
 }
 .cadeia-madeira-tabs button {
   display: grid;
@@ -4866,7 +4866,7 @@ tr.ind-clicavel[aria-selected="true"] > td {
   min-width: 0;
   border: 1px solid transparent;
   border-radius: 8px;
-  padding: 11px 12px;
+  padding: 9px 10px;
   background: transparent;
   color: var(--color-ink-2);
   font: inherit;
@@ -4882,7 +4882,7 @@ tr.ind-clicavel[aria-selected="true"] > td {
 .cadeia-madeira-tabs button b { font-size: 12px; }
 .cadeia-madeira-tabs button small { color: var(--color-ink-3); font-size: 10px; }
 .cadeia-madeira-tabs button.on small { color: var(--color-ink-2); }
-.cadeia-madeira-section { padding: 18px; }
+.cadeia-madeira-section { padding: 14px; }
 .cadeia-section-heading,
 .cadeia-inspecao-head,
 .cadeia-modal-heading {
@@ -4897,7 +4897,7 @@ tr.ind-clicavel[aria-selected="true"] > td {
 .cadeia-fornecedor-lista,
 .cadeia-lote-lista,
 .cadeia-inspecao-lista,
-.cadeia-laudo-lista { display: grid; gap: 10px; margin-top: 16px; }
+.cadeia-laudo-lista { display: grid; gap: 8px; margin-top: 12px; }
 .cadeia-fornecedor-card,
 .cadeia-lote-card,
 .cadeia-inspecao-card,
@@ -4910,8 +4910,8 @@ tr.ind-clicavel[aria-selected="true"] > td {
   display: grid;
   grid-template-columns: minmax(220px, 1.5fr) minmax(170px, 1fr) minmax(180px, 1fr) auto;
   align-items: center;
-  gap: 16px;
-  padding: 14px 16px;
+  gap: 12px;
+  padding: 11px 13px;
 }
 .cadeia-fornecedor-card.inativo { opacity: .65; }
 .cadeia-fornecedor-main { min-width: 0; }
@@ -4996,7 +4996,7 @@ tr.ind-clicavel[aria-selected="true"] > td {
 .cadeia-lote-card > .cadeia-card-actions { border-top: 1px solid var(--color-line); padding: 10px 16px; }
 .cadeia-lote-selector { display: grid; max-width: 620px; gap: 6px; margin-top: 16px; }
 .cadeia-inspecao-card,
-.cadeia-laudo-card { padding: 14px 16px; }
+.cadeia-laudo-card { padding: 11px 13px; }
 .cadeia-inspecao-head h3 { font-size: 13px; }
 .cadeia-ensaio-contexto { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 13px; }
 .cadeia-ensaio-contexto span { display: grid; gap: 3px; min-width: 0; border: 1px solid var(--color-line); border-radius: 7px; padding: 8px; }
@@ -5027,7 +5027,7 @@ tr.ind-clicavel[aria-selected="true"] > td {
 .cadeia-laudo-main p { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cadeia-laudo-tags { margin-top: 7px; }
 .cadeia-laudo-card.vencido { border-color: color-mix(in srgb, var(--color-media) 45%, var(--color-line)); }
-.cadeia-empty { margin-top: 16px; border: 1px dashed var(--color-line); border-radius: 9px; padding: 28px 20px; text-align: center; }
+.cadeia-empty { margin-top: 12px; border: 1px dashed var(--color-line); border-radius: 9px; padding: 20px 16px; text-align: center; }
 .cadeia-empty h3 { color: var(--color-ink); font-size: 14px; font-weight: 700; }
 .cadeia-empty .sub { max-width: 520px; margin: 6px auto 0; }
 .cadeia-pagination { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 14px; color: var(--color-ink-3); font-size: 11px; }

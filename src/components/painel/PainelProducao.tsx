@@ -479,7 +479,7 @@ export default function PainelProducao({ role }: { role: Role }) {
 
       {erro && (
         <p
-          className="px-6 py-16 text-center text-sm"
+          className="px-4 py-8 text-center text-sm"
           style={{ color: "var(--color-alta)" }}
         >
           {erro}
@@ -488,7 +488,7 @@ export default function PainelProducao({ role }: { role: Role }) {
 
       {!erro && !dados && (
         <p
-          className="px-6 py-16 text-center text-sm"
+          className="px-4 py-8 text-center text-sm"
           style={{ color: "var(--color-ink-3)" }}
         >
           Carregando indicadores…

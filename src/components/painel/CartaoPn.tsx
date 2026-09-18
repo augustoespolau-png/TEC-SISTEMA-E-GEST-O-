@@ -28,7 +28,7 @@ export default function CartaoPn({
 export function SemDados({ children }: { children?: React.ReactNode }) {
   return (
     <p
-      className="py-6 text-center text-[12px]"
+      className="py-4 text-center text-[12px]"
       style={{ color: "var(--color-ink-3)" }}
     >
       {children ?? "Sem registros no período."}

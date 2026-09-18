@@ -124,8 +124,8 @@ export default function AISuite() {
   }
 
   return (
-    <main className="tela py-5 sm:py-7">
-      <header className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+    <main className="tela py-3 sm:py-4">
+      <header className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="mb-1 text-[11px] font-medium uppercase tracking-[0.18em] text-brand">
             Gestão · Lapidação Inteligente
@@ -140,9 +140,9 @@ export default function AISuite() {
         </div>
       </header>
 
-      <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
-        <section className="flex min-h-[560px] flex-col rounded-2xl border border-line bg-papel shadow-sm">
-          <div className="border-b border-line px-4 py-4 sm:px-5">
+      <div className="grid gap-3 xl:grid-cols-[1.15fr_0.85fr]">
+        <section className="flex min-h-0 flex-col rounded-2xl border border-line bg-papel shadow-sm">
+          <div className="border-b border-line px-4 py-3 sm:px-4">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <h2 className="text-sm font-semibold text-ink">Consulta Inteligente</h2>
@@ -183,7 +183,7 @@ export default function AISuite() {
             )}
           </div>
 
-          <div className="border-t border-line p-4 sm:p-5">
+          <div className="border-t border-line p-3 sm:p-4">
             <div className="mb-3 flex flex-wrap gap-2">
               {EXEMPLOS.map((exemplo) => (
                 <button
@@ -217,8 +217,8 @@ export default function AISuite() {
           </div>
         </section>
 
-        <section className="flex min-h-[560px] flex-col rounded-2xl border border-line bg-papel shadow-sm">
-          <div className="border-b border-line px-4 py-4 sm:px-5">
+        <section className="flex min-h-0 flex-col rounded-2xl border border-line bg-papel shadow-sm">
+          <div className="border-b border-line px-4 py-3 sm:px-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h2 className="text-sm font-semibold text-ink">Relatório Executivo Semanal</h2>
@@ -235,7 +235,7 @@ export default function AISuite() {
             </div>
           </div>
 
-          <div className="flex-1 p-4 sm:p-5">
+          <div className="flex-1 p-3 sm:p-4">
             {digest ? (
               <div className="flex h-full flex-col gap-3">
                 <div className="flex items-center justify-between gap-3">
@@ -255,7 +255,7 @@ export default function AISuite() {
                 </pre>
               </div>
             ) : (
-              <div className="flex h-full min-h-[360px] items-center justify-center rounded-xl border border-dashed border-line bg-papel-2 p-6 text-center">
+              <div className="flex min-h-0 items-center justify-center rounded-xl border border-dashed border-line bg-papel-2 p-4 text-center">
                 <div className="max-w-sm">
                   <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full border border-line bg-papel text-lg text-brand">
                     ✦
