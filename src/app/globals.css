@@ -63,13 +63,13 @@
    ------------------------------------------------------------------ */
 html[data-tema="escuro"] {
   --color-fundo: #0d1210;
-  --color-papel: #18181b;
-  --color-papel-2: #111113;
+  --color-papel: #131a16;
+  --color-papel-2: #111713;
   --color-ink: #e8efea;
-  --color-ink-2: #a1a1aa;
-  --color-ink-3: #71717a;
-  --color-line: #27272a;
-  --color-line-2: #3f3f46;
+  --color-ink-2: #a1afa6;
+  --color-ink-3: #718078;
+  --color-line: #22302a;
+  --color-line-2: #2e4036;
 
   --color-sobre-cor: #16241b;
 
@@ -1432,16 +1432,16 @@ table.mapa td {
   display: none;
   align-items: center;
   gap: 8px;
-  border: 1px solid transparent;
-  background: transparent;
+  border: 1px solid var(--color-line-2);
+  background: var(--color-papel);
 }
 .aba-admin:hover {
-  border-color: transparent;
-  background: var(--color-papel-2);
+  border-color: var(--color-brand);
+  background: var(--color-papel);
   color: var(--color-brand-forte);
 }
 .aba-admin.on {
-  border-color: transparent;
+  border-color: var(--color-brand);
   background: var(--color-brand-suave);
   color: var(--color-brand-forte);
 }
@@ -3586,18 +3586,18 @@ tr.ind-clicavel[aria-selected="true"] > td {
   .aba-admin {
     display: flex;
     flex: 0 0 auto;
-    height: auto;
-    min-height: 40px;
+    height: 54px;
+    min-height: 54px;
     justify-content: flex-start;
-    margin-top: 2px;
-    padding: 8px 12px;
-    border-radius: 8px;
+    margin-top: 8px;
+    padding: 10px 12px;
+    border-radius: 10px;
   }
   .cadeia-lateral {
     display: flex;
     flex-direction: column;
-    gap: 0;
-    margin-top: 2px;
+    gap: 2px;
+    margin-top: 8px;
   }
   .cadeia-lateral .aba-admin { margin-top: 0; }
 
@@ -3619,12 +3619,12 @@ tr.ind-clicavel[aria-selected="true"] > td {
   .rodape-topo .cadastros-fixo {
     display: flex;
     width: 100%;
-    height: auto;
-    min-height: 40px;
+    height: 54px;
+    min-height: 54px;
     justify-content: flex-start;
     margin-top: 0;
     padding: 8px 12px;
-    border-radius: 8px;
+    border-radius: 10px;
   }
 
   .conteudo-app {
@@ -4551,7 +4551,7 @@ tr.ind-clicavel[aria-selected="true"] > td {
 .nav-admin-cadastros[href="/residuos"].on {
   background: color-mix(in srgb, var(--color-brand) 20%, transparent);
   color: var(--color-brand);
-  border-color: transparent;
+  border-color: var(--color-brand);
 }
 .residuos-tela {
   max-width: 92rem;
@@ -4788,7 +4788,7 @@ tr.ind-clicavel[aria-selected="true"] > td {
 .nav-admin-cadastros[href="/cadeia-madeira"].on {
   background: color-mix(in srgb, var(--color-brand) 20%, transparent);
   color: var(--color-brand);
-  border-color: transparent;
+  border-color: var(--color-brand);
 }
 .cadeia-madeira-tela {
   max-width: 92rem;
