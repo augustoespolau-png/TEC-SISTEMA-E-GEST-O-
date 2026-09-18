@@ -1292,9 +1292,9 @@ table.mapa td {
   -webkit-transform: translateZ(0);
   border: 1px solid color-mix(in srgb, var(--color-line-2) 85%, transparent);
   border-radius: 28px;
-  box-shadow:
-    0 14px 32px rgb(0 0 0 / 26%),
-    inset 0 1px 0 rgb(255 255 255 / 5%);
+  /* A borda já separa a barra; uma sombra externa grande criava um halo
+     cinza/preto que parecia um segundo card durante a rolagem. */
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 5%);
 }
 .nav-inferior > a,
 .nav-inferior > button {
@@ -3539,6 +3539,9 @@ tr.ind-clicavel[aria-selected="true"] > td {
     height: 100dvh;
     min-height: 100dvh;
     overflow: hidden;
+    /* A área ocupada pela navegação usa a mesma superfície da própria
+       barra; o cinza fica restrito ao conteúdo que realmente rola. */
+    background: var(--color-papel);
   }
 
   .topo {
@@ -3551,6 +3554,7 @@ tr.ind-clicavel[aria-selected="true"] > td {
     flex: 1 1 auto;
     min-height: 0;
     min-width: 0;
+    background: var(--color-fundo);
     overflow-x: hidden;
     overflow-y: auto;
     overscroll-behavior: contain;
