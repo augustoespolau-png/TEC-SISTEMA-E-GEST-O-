@@ -3623,6 +3623,21 @@ tr.ind-clicavel[aria-selected="true"] > td {
     padding: 8px 12px;
   }
 
+  /* Os cartões da coluna não precisam ocupar toda a largura útil. Um
+     recuo uniforme deixa a sidebar respirar e mantém todos os controles
+     com a mesma medida visual. */
+  .abas > .modulo-weinmann,
+  .topo-navegacao > .aba-admin,
+  .topo-navegacao > .cadeia-lateral,
+  .rodape-topo > .cadastros-fixo,
+  .rodape-topo > .btn {
+    width: calc(100% - 16px);
+    align-self: center;
+  }
+  .cadeia-lateral .aba-admin {
+    width: 100%;
+  }
+
   .conteudo-app {
     flex: 1 1 auto;
     min-width: 0;
