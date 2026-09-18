@@ -89,6 +89,13 @@ const RESIDUOS_NAV = {
   modulo: "RESÍDUOS" as GovernanceModule,
 };
 
+const CADEIA_MADEIRA_NAV = {
+  href: "/cadeia-madeira",
+  rotulo: "Cadeia da Madeira",
+  papeis: ["operador", "consultor", "gestao"] as Role[],
+  modulo: "CADEIA_MADEIRA" as GovernanceModule,
+};
+
 /* As folhas dos indicadores moram na LATERAL, aninhadas sob a aba
    Indicadores: sao cinco destinos que so existem dentro dela, e como
    abas de uma segunda linha disputavam a largura com o topo. A folha
@@ -129,6 +136,9 @@ export default function TabBar({
     ADMIN_NAV.papeis.includes(role) && canModule(permissions, ADMIN_NAV.modulo);
   const residuosVisivel =
     RESIDUOS_NAV.papeis.includes(role) && canModule(permissions, RESIDUOS_NAV.modulo);
+  const cadeiaMadeiraVisivel =
+    CADEIA_MADEIRA_NAV.papeis.includes(role) &&
+    canModule(permissions, CADEIA_MADEIRA_NAV.modulo);
   const folhaAtual = busca.get("folha") ?? "fpy";
   const [weinmannAberto, setWeinmannAberto] = useState(true);
   const moduloAtivo = abas.some((t) => pathname === t.href);
@@ -253,6 +263,34 @@ export default function TabBar({
               <path d="M8 9h8M8 13h5M8 17h4" />
             </svg>
             <span>{RESIDUOS_NAV.rotulo}</span>
+          </Link>
+        )}
+
+        {cadeiaMadeiraVisivel && (
+          <Link
+            href={CADEIA_MADEIRA_NAV.href}
+            className={`aba aba-admin ${pathname === CADEIA_MADEIRA_NAV.href ? "on" : ""}`}
+            aria-current={pathname === CADEIA_MADEIRA_NAV.href ? "page" : undefined}
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+            >
+              <path d="M12 21V8" />
+              <path d="m12 13-5-5" />
+              <path d="m12 16 6-6" />
+              <path d="M8.5 21h7" />
+              <path d="M8 8.5 5.5 5 9 5.5 11 2l2 3.5L16.5 5 14 8.5" />
+              <path d="m14 15 3.5-3 1.5 3.5" />
+            </svg>
+            <span>{CADEIA_MADEIRA_NAV.rotulo}</span>
           </Link>
         )}
 

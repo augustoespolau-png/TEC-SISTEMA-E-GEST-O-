@@ -104,6 +104,13 @@ const RESIDUOS_ITEM = {
   modulo: "RESÍDUOS" as GovernanceModule,
 };
 
+const CADEIA_MADEIRA_ITEM = {
+  href: "/cadeia-madeira",
+  rotulo: "Cadeia da Madeira",
+  papeis: ["operador", "consultor", "gestao"] as Role[],
+  modulo: "CADEIA_MADEIRA" as GovernanceModule,
+};
+
 export default function NavInferior({
   role,
   permissions,
@@ -119,6 +126,9 @@ export default function NavInferior({
     ADMIN_ITEM.papeis.includes(role) && canModule(permissions, ADMIN_ITEM.modulo);
   const residuosVisivel =
     RESIDUOS_ITEM.papeis.includes(role) && canModule(permissions, RESIDUOS_ITEM.modulo);
+  const cadeiaMadeiraVisivel =
+    CADEIA_MADEIRA_ITEM.papeis.includes(role) &&
+    canModule(permissions, CADEIA_MADEIRA_ITEM.modulo);
   const [aberto, setAberto] = useState(false);
   const moduloAtivo = itens.some((i) => pathname === i.href);
 
@@ -191,6 +201,21 @@ export default function NavInferior({
             <path d="M8 9h8M8 13h5M8 17h4" />
           </Icone>
           {RESIDUOS_ITEM.rotulo}
+        </Link>
+      )}
+
+      {cadeiaMadeiraVisivel && (
+        <Link
+          href={CADEIA_MADEIRA_ITEM.href}
+          className={`nav-admin-cadastros ${pathname === CADEIA_MADEIRA_ITEM.href ? "on" : ""}`}
+          aria-current={pathname === CADEIA_MADEIRA_ITEM.href ? "page" : undefined}
+        >
+          <Icone>
+            <path d="M12 21V8" />
+            <path d="m12 13-5-5M12 16l6-6M8.5 21h7" />
+            <path d="M8 8.5 5.5 5 9 5.5 11 2l2 3.5L16.5 5 14 8.5" />
+          </Icone>
+          {CADEIA_MADEIRA_ITEM.rotulo}
         </Link>
       )}
 

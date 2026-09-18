@@ -41,6 +41,11 @@ export const GOVERNANCE_MODULES = [
     label: "Resíduos",
     description: "Registrar trocas de caçamba, MTR e destinação.",
   },
+  {
+    id: "CADEIA_MADEIRA",
+    label: "Cadeia da Madeira",
+    description: "Controlar fornecedores, lotes, inspeções e laudos de madeira estrutural.",
+  },
 ] as const;
 
 export type GovernanceModule = (typeof GOVERNANCE_MODULES)[number]["id"];
@@ -177,7 +182,10 @@ export function permissionRowsForRole(role: Role): GovernancePermission[] {
 
     const podeVisualizar =
       (role === "consultor" || role === "operador") &&
-      (id === "CONSULTA" || id === "INDICADORES" || id === "AUDITORIA");
+      (id === "CONSULTA" ||
+        id === "INDICADORES" ||
+        id === "AUDITORIA" ||
+        id === "CADEIA_MADEIRA");
 
     const podeEditar = role === "operador" && id === "AUDITORIA";
 
