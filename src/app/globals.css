@@ -5221,3 +5221,15 @@ tr.ind-clicavel[aria-selected="true"] > td {
   .cadeia-anexo-actions { grid-column: 1 / -1; justify-content: flex-start; }
   .cadeia-anexo-actions .btn { flex: 1; }
 }
+
+/* No mobile, nenhum módulo ativo volta ao verde: estes seletores mais
+   específicos pertencem às telas de Resíduos e Madeira e não devem
+   sobrescrever o estado neutro da barra inferior. */
+@media (max-width: 1023.98px) {
+  .nav-inferior > a.nav-admin-cadastros.on,
+  .nav-inferior > button.nav-admin-cadastros.on {
+    color: var(--color-ink);
+    background: color-mix(in srgb, var(--color-ink) 14%, var(--color-papel));
+    border-color: color-mix(in srgb, var(--color-line-2) 88%, transparent);
+  }
+}
