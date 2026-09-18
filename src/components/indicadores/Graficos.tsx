@@ -466,10 +466,10 @@ export function LinhaFpyTempo({
            pontos há n−1 vãos quando o primeiro e o último tocam a borda */
         const passo = pontos.length > 1 ? larg / (pontos.length - 1) : larg;
         const fonte = fonteDoValor(passo);
-        /* Marcadores pequenos deixam a linha respirar e mantêm a leitura
-           profissional em séries semanais mais longas. O piso garante que
-           o ponto continue fácil de localizar no toque. */
-        const raio = Math.max(2.5, Math.min(3.7, passo * 0.13));
+        /* O traço e os marcadores ficam discretos para a série semanal:
+           a tendência é protagonista, sem transformar cada ponto em uma
+           coluna visual. O piso ainda mantém o toque confortável. */
+        const raio = Math.max(2.25, Math.min(3.2, passo * 0.11));
 
         /* A MARGEM DE CIMA SAI DO RÓTULO, e não de um número fixo.
            Era 16, e o "100" de um dia perfeito nasce colado no topo do
@@ -567,7 +567,7 @@ export function LinhaFpyTempo({
               d={caminho}
               fill="none"
               stroke="var(--color-brand)"
-              strokeWidth={1.7}
+              strokeWidth={1.45}
               strokeLinejoin="round"
               strokeLinecap="round"
               pointerEvents="none"
@@ -654,7 +654,7 @@ export function LinhaFpyTempo({
                       cx={x(i)} cy={y(p.fpy)} r={raio}
                       fill={cor}
                       stroke="var(--color-papel)"
-                      strokeWidth={1.25}
+                      strokeWidth={1}
                       pointerEvents="none"
                     />
                   )}
