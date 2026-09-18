@@ -3650,14 +3650,31 @@ tr.ind-clicavel[aria-selected="true"] > td {
   will-change: transform;
 }
 
+/* A esfera central também gira, em sentido oposto e um pouco mais rápido.
+   A diferença de velocidade cria profundidade sem mexer no tamanho ou
+   na posição do botão IA-TEC. */
+.ia-tec-nucleo-giro {
+  transform-box: view-box;
+  transform-origin: 12px 12px;
+  animation: ia-tec-rotacao-nucleo 5.4s linear infinite reverse;
+  will-change: transform;
+}
+
 @keyframes ia-tec-rotacao-interna {
   to {
     transform: rotate(360deg);
   }
 }
 
+@keyframes ia-tec-rotacao-nucleo {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .ia-tec-giro {
+  .ia-tec-giro,
+  .ia-tec-nucleo-giro {
     animation: none;
   }
 }
