@@ -160,8 +160,8 @@ export default function TabBar({
     ? "auditoria"
     : cadeiaModuloParam ?? CADEIA_MADEIRA_MODULOS[0].id;
   const cadeiaNaRota = pathname === CADEIA_MADEIRA_NAV.href;
-  const [weinmannAberto, setWeinmannAberto] = useState(!cadeiaNaRota);
-  const [cadeiaMadeiraAberta, setCadeiaMadeiraAberta] = useState(cadeiaNaRota);
+  const [weinmannAberto, setWeinmannAberto] = useState(false);
+  const [cadeiaMadeiraAberta, setCadeiaMadeiraAberta] = useState(false);
   const moduloAtivo = abas.some((t) => pathname === t.href);
   const [moduloSelecionado, setModuloSelecionado] = useState<ModuloNavSelecionado>(null);
   const moduloAtual = moduloSelecionado?.path === pathname
@@ -233,8 +233,16 @@ export default function TabBar({
             type="button"
             className={`modulo-weinmann ${weinmannAtivo ? "on" : ""}`}
             onClick={() => {
-              const fechar = weinmannAtivo && weinmannAberto;
-              const proximo = !fechar;
+              if (!moduloAtivo) {
+                const destinoPadrao = abas[0]?.href;
+                setWeinmannAberto(false);
+                setCadeiaMadeiraAberta(false);
+                limparSelecao();
+                if (destinoPadrao) router.push(destinoPadrao);
+                return;
+              }
+
+              const proximo = !weinmannAberto;
               if (proximo) selecionarModulo("weinmann");
               else limparSelecao();
               setWeinmannAberto(proximo);
@@ -316,13 +324,19 @@ export default function TabBar({
               type="button"
               className={`aba aba-admin cadeia-lateral-toggle ${cadeiaAtiva ? "on" : ""}`}
               onClick={() => {
-                const fechar = cadeiaAtiva && cadeiaMadeiraAberta;
-                const proximo = !fechar;
+                if (!cadeiaNaRota) {
+                  setCadeiaMadeiraAberta(false);
+                  setWeinmannAberto(false);
+                  limparSelecao();
+                  router.push(CADEIA_MADEIRA_MODULOS[0].href);
+                  return;
+                }
+
+                const proximo = !cadeiaMadeiraAberta;
                 if (proximo) selecionarModulo("cadeia");
                 else limparSelecao();
                 setCadeiaMadeiraAberta(proximo);
                 setWeinmannAberto(false);
-                if (proximo && !cadeiaNaRota) router.push(CADEIA_MADEIRA_MODULOS[0].href);
               }}
               aria-expanded={cadeiaMadeiraAberta}
               aria-current={cadeiaAtiva ? "page" : undefined}
