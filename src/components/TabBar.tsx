@@ -95,7 +95,7 @@ const RESIDUOS_NAV = {
    Cadastros: o gestor chega aqui por esta entrada e a rota continua
    protegida no servidor. */
 const IA_TEC_NAV = {
-  href: "/ia",
+  href: "/ia-tec",
   rotulo: "IA-TEC",
   papeis: ["gestao"] as Role[],
   modulo: "IA" as GovernanceModule,
