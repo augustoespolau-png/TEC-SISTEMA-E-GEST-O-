@@ -5066,6 +5066,57 @@ tr.ind-clicavel[aria-selected="true"] > td {
 .cadeia-madeira-tabs button small { color: var(--color-ink-3); font-size: 10px; }
 .cadeia-madeira-tabs button.on small { color: var(--color-ink-2); }
 .cadeia-madeira-section { padding: 14px; }
+
+.cadeia-recebimento-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+  margin-bottom: 12px;
+}
+.cadeia-recebimento-kpi {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+  border: 1px solid var(--color-line);
+  border-radius: 9px;
+  padding: 11px 12px;
+  background: var(--color-papel-2);
+}
+.cadeia-recebimento-kpi > span,
+.cadeia-recebimento-kpi > small {
+  color: var(--color-ink-3);
+  font-size: 10px;
+}
+.cadeia-recebimento-kpi > span {
+  font-weight: 700;
+}
+.cadeia-recebimento-kpi > b {
+  color: var(--color-ink);
+  font-size: 22px;
+  font-weight: 750;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.cadeia-recebimento-kpi.conforme {
+  border-color: color-mix(in srgb, var(--color-baixa) 38%, var(--color-line));
+}
+.cadeia-recebimento-kpi.conforme > b {
+  color: var(--color-baixa);
+}
+.cadeia-recebimento-kpi.nao-conforme {
+  border-color: color-mix(in srgb, var(--color-alta) 38%, var(--color-line));
+}
+.cadeia-recebimento-kpi.nao-conforme > b {
+  color: var(--color-alta);
+}
+.cadeia-recebimento-kpi.quarentena {
+  border-color: color-mix(in srgb, var(--color-media) 38%, var(--color-line));
+}
+.cadeia-recebimento-kpi.quarentena > b {
+  color: var(--color-media);
+}
+
 .cadeia-section-heading,
 .cadeia-inspecao-head,
 .cadeia-modal-heading {
@@ -5544,6 +5595,10 @@ tr.ind-clicavel[aria-selected="true"] > td {
   .cadeia-fornecedor-contact,
   .cadeia-fornecedor-card > .cadeia-card-actions { grid-column: auto; grid-row: auto; }
   .cadeia-card-actions { justify-content: flex-start; }
+  .cadeia-recebimento-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cadeia-recebimento-kpi { padding: 10px; }
+  .cadeia-recebimento-kpi > b { font-size: 20px; }
+
   .cadeia-lote-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .cadeia-lote-facts span:nth-child(even) { border-right: 0; }
   .cadeia-lote-facts span:nth-child(n+3) { border-top: 1px solid var(--color-line); }
