@@ -17,6 +17,42 @@ export const CADEIA_MADEIRA_MODULOS = [
 export type CadeiaMadeiraModuloId = (typeof CADEIA_MADEIRA_MODULOS)[number]["id"];
 
 export type StatusLiberacaoMadeira = "APROVADO" | "REPROVADO" | "QUARENTENA";
+
+export const CHECKLIST_RECEBIMENTO_MADEIRA = [
+  { id: "quantidade", label: "Quantidade conforme NF" },
+  { id: "dimensoes", label: "Dimensões conforme especificação" },
+  { id: "lote", label: "Lote identificado" },
+  { id: "embalagem", label: "Fardo / embalagem íntegra" },
+  { id: "mofo", label: "Sem presença de mofo" },
+  { id: "empenamento", label: "Sem empenamento" },
+  { id: "rachaduras", label: "Sem rachaduras" },
+  { id: "contaminacao", label: "Sem contaminação" },
+  { id: "umidade", label: "Umidade conforme" },
+  { id: "documentacao", label: "Documentação conforme" },
+] as const;
+
+export type ChecklistRecebimentoMadeiraId =
+  (typeof CHECKLIST_RECEBIMENTO_MADEIRA)[number]["id"];
+
+export type ChecklistRecebimentoMadeira = Record<
+  ChecklistRecebimentoMadeiraId,
+  boolean
+>;
+
+export function checklistRecebimentoVazio(): ChecklistRecebimentoMadeira {
+  return {
+    quantidade: false,
+    dimensoes: false,
+    lote: false,
+    embalagem: false,
+    mofo: false,
+    empenamento: false,
+    rachaduras: false,
+    contaminacao: false,
+    umidade: false,
+    documentacao: false,
+  };
+}
 export type TipoEnsaioMadeira =
   | "RECEBIMENTO_MADEIRA"
   | "ESTRUTURAL_PROTOTIPO"
@@ -105,6 +141,7 @@ export interface CadeiaLote {
   placa_veiculo: string | null;
   teor_umidade_medio: number;
   lote_autoclave: string;
+  checklist: ChecklistRecebimentoMadeira;
   status_liberacao: StatusLiberacaoMadeira;
   observacoes: string | null;
   ativo: boolean;
