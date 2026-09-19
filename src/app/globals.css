@@ -5256,6 +5256,50 @@ tr.ind-clicavel[aria-selected="true"] > td {
   .cadeia-madeira-hero-meta { width: 100%; }
   .cadeia-madeira-tabs { display: flex; overflow-x: auto; }
   .cadeia-madeira-tabs button { min-width: 165px; }
+
+  /* Modal da Madeira no celular: fica acima do cabeçalho do app e respeita
+     as áreas seguras do iPhone. O título e o X permanecem visíveis mesmo
+     quando o formulário é rolado. */
+  .cadeia-modal {
+    z-index: 120;
+    place-items: stretch;
+    padding:
+      max(10px, env(safe-area-inset-top))
+      8px
+      max(10px, env(safe-area-inset-bottom));
+  }
+  .cadeia-modal-card {
+    width: 100%;
+    max-height: calc(
+      100dvh - max(20px, env(safe-area-inset-top)) -
+      max(20px, env(safe-area-inset-bottom))
+    );
+    margin: auto;
+    padding: 16px;
+    overscroll-behavior: contain;
+  }
+  .cadeia-modal-heading {
+    position: sticky;
+    top: -16px;
+    z-index: 4;
+    align-items: center;
+    margin: -16px -16px 0;
+    padding: 14px 14px 11px 16px;
+    border-bottom: 1px solid var(--color-line);
+    background: var(--color-papel);
+  }
+  .cadeia-close {
+    display: grid;
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    flex: 0 0 40px;
+    place-items: center;
+    padding: 0;
+    border-radius: 9px;
+    font-size: 24px;
+    line-height: 1;
+  }
   .cadeia-section-heading { display: grid; }
   .cadeia-section-heading > .btn { width: 100%; }
   .cadeia-fornecedor-card { grid-template-columns: 1fr; gap: 12px; }
