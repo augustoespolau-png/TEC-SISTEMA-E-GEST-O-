@@ -46,9 +46,10 @@ import {
   bytesMadeira,
   dataHoraMadeira,
   dataMadeira,
-  LIMITE_UMIDADE_SEGURA,
+  UMIDADE_MADEIRA_MINIMA,
+  UMIDADE_MADEIRA_MAXIMA,
   checklistRecebimentoVazio,
-  loteUmidadeAlta,
+  loteUmidadeForaPadrao,
   rotuloStatusLiberacao,
   rotuloTipoAnexo,
   rotuloTipoLaudo,
@@ -1017,8 +1018,8 @@ function LotesPanel({
             <span>Em quarentena</span>
             <b>{resumo.lotes_quarentena}</b>
             <small>
-              {resumo.lotes_umidade_alta > 0
-                ? `${resumo.lotes_umidade_alta} com umidade acima de ${LIMITE_UMIDADE_SEGURA}%`
+              {resumo.lotes_umidade_fora_padrao > 0
+                ? `${resumo.lotes_umidade_fora_padrao} fora da faixa de ${UMIDADE_MADEIRA_MINIMA}% a ${UMIDADE_MADEIRA_MAXIMA}%`
                 : "aguardando decisão"}
             </small>
           </article>
@@ -1035,10 +1036,10 @@ function LotesPanel({
         ) : (
           <div className="cadeia-lote-lista">
             {lotes.map((item) => {
-              const umidadeAlta = loteUmidadeAlta(item.teor_umidade_medio);
+              const umidadeForaPadrao = loteUmidadeForaPadrao(item.teor_umidade_medio);
               const selecionado = item.id === selectedLoteId;
               return (
-                <article className={"cadeia-lote-card " + (selecionado ? "selecionado " : "") + (umidadeAlta ? "umidade-alta" : "")} key={item.id}>
+                <article className={"cadeia-lote-card " + (selecionado ? "selecionado " : "") + (umidadeForaPadrao ? "umidade-alta" : "")} key={item.id}>
                   <button type="button" className="cadeia-lote-summary" onClick={() => onSelect(item.id)} aria-pressed={selecionado}>
                     <span className="cadeia-lote-data">{dataMadeira(item.data_recebimento)}</span>
                     <span className="cadeia-lote-principal"><b>NF {item.numero_nota_fiscal}</b><small>{item.fornecedor_nome}</small></span>
@@ -1052,7 +1053,7 @@ function LotesPanel({
                     <span><small>Autoclave</small><b>{item.lote_autoclave}</b></span>
                     <span><small>Placa</small><b>{item.placa_veiculo || "—"}</b></span>
                   </div>
-                  {umidadeAlta && <div className="cadeia-umidade-alerta"><strong>Atenção de engenharia</strong><span>O teor de umidade está acima do limite seguro de {LIMITE_UMIDADE_SEGURA}%.</span></div>}
+                  {umidadeForaPadrao && <div className="cadeia-umidade-alerta"><strong>Atenção de engenharia</strong><span>Umidade fora do padrão de {UMIDADE_MADEIRA_MINIMA}% a {UMIDADE_MADEIRA_MAXIMA}%.</span></div>}
                   <div className="cadeia-card-actions">
                     {canEdit && <button type="button" className="btn" onClick={() => onEdit(item)}>Editar lote</button>}
                     <button type="button" className="btn" onClick={() => onOpenInspections(item.id)}>Ensaios</button>
@@ -1503,7 +1504,9 @@ function LoteForm({
               <input
                 className={
                   "campo " +
-                  (Number(draft.teor_umidade_medio) > LIMITE_UMIDADE_SEGURA
+                  ((Number(draft.teor_umidade_medio) < UMIDADE_MADEIRA_MINIMA ||
+                    Number(draft.teor_umidade_medio) > UMIDADE_MADEIRA_MAXIMA) &&
+                  draft.teor_umidade_medio !== ""
                     ? "cadeia-campo-alerta"
                     : "")
                 }
@@ -1518,7 +1521,7 @@ function LoteForm({
                 required
               />
               <small className="cadeia-field-help">
-                Acima de {LIMITE_UMIDADE_SEGURA}% gera alerta de engenharia.
+                Padrão Tecverde: {UMIDADE_MADEIRA_MINIMA}% a {UMIDADE_MADEIRA_MAXIMA}%. Fora dessa faixa gera alerta de engenharia.
               </small>
             </label>
 
