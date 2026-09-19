@@ -1,6 +1,7 @@
 export const BUCKET_CADEIA_MADEIRA = "cadeia-madeira";
 export const CADEIA_MADEIRA_PAGE_SIZE = 20;
-export const LIMITE_UMIDADE_SEGURA = 20;
+export const UMIDADE_MADEIRA_MINIMA = 12;
+export const UMIDADE_MADEIRA_MAXIMA = 16;
 export const MAX_DOCUMENTO_CADEIA_BYTES = 20 * 1024 * 1024;
 
 export const CADEIA_MADEIRA_MODULOS = [
@@ -228,7 +229,7 @@ export interface CadeiaMadeiraResumo {
   lotes_aprovados: number;
   lotes_reprovados: number;
   lotes_quarentena: number;
-  lotes_umidade_alta: number;
+  lotes_umidade_fora_padrao: number;
   laudos_pendentes: number;
 }
 
@@ -278,8 +279,8 @@ export function bytesMadeira(value: number) {
   return `${(value / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export function loteUmidadeAlta(value: number) {
-  return value > LIMITE_UMIDADE_SEGURA;
+export function loteUmidadeForaPadrao(value: number) {
+  return value < UMIDADE_MADEIRA_MINIMA || value > UMIDADE_MADEIRA_MAXIMA;
 }
 
 export function snapshotCadeiaVazio(): CadeiaMadeiraSnapshot {
@@ -299,7 +300,7 @@ export function snapshotCadeiaVazio(): CadeiaMadeiraSnapshot {
       lotes_aprovados: 0,
       lotes_reprovados: 0,
       lotes_quarentena: 0,
-      lotes_umidade_alta: 0,
+      lotes_umidade_fora_padrao: 0,
       laudos_pendentes: 0,
     },
   };
