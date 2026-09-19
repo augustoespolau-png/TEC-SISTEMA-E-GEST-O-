@@ -9,6 +9,8 @@ import { createClient } from "@/lib/supabase/server";
 import {
   BUCKET_CADEIA_MADEIRA,
   CADEIA_MADEIRA_PAGE_SIZE,
+  CHECKLIST_RECEBIMENTO_MADEIRA,
+  checklistRecebimentoVazio,
   LIMITE_UMIDADE_SEGURA,
   MAX_DOCUMENTO_CADEIA_BYTES,
   type CadeiaAnexo,
@@ -17,6 +19,7 @@ import {
   type CadeiaLaudo,
   type CadeiaLote,
   type CadeiaMadeiraSnapshot,
+  type ChecklistRecebimentoMadeira,
   type ComponenteEnsaioMadeira,
   type StatusLiberacaoMadeira,
   type TipoAnexoCadeia,
@@ -50,6 +53,7 @@ export interface CadeiaLoteInput {
   placa_veiculo: string | null;
   teor_umidade_medio: number | string;
   lote_autoclave: string;
+  checklist: ChecklistRecebimentoMadeira;
   status_liberacao: StatusLiberacaoMadeira;
   observacoes: string | null;
   ativo: boolean;
@@ -99,7 +103,7 @@ export interface CadeiaAnexoInput {
 const CAMPO_FORNECEDOR =
   "id, razao_social, cnpj, homologacao_ativa, certificacao_origem, contato_tecnico_nome, contato_tecnico_email, contato_tecnico_telefone, historico_avaliacao, ativo, created_at, updated_at";
 const CAMPO_LOTE =
-  "id, fornecedor_id, numero_nota_fiscal, volume_m3, data_recebimento, placa_veiculo, teor_umidade_medio, lote_autoclave, status_liberacao, observacoes, ativo, created_at, updated_at";
+  "id, fornecedor_id, numero_nota_fiscal, volume_m3, data_recebimento, placa_veiculo, teor_umidade_medio, lote_autoclave, checklist, status_liberacao, observacoes, ativo, created_at, updated_at";
 const CAMPO_INSPECAO =
   "id, lote_id, data_inspecao, inspetor_id, tipo_ensaio, componente_ensaiado, identificacao_prototipo, norma_procedimento, resultado_tecnico, bitola_nominal, dimensional_conforme, empenamento, fendas_profundas, nos_soltos, manchas_umidade_bolor, resultado, observacoes, created_at, updated_at";
 const CAMPO_LAUDO =
@@ -191,6 +195,37 @@ function numero(value: unknown, label: string, max: number) {
 function booleano(value: unknown, label: string) {
   if (typeof value !== "boolean") throw new Error(label + " inválido.");
   return value;
+}
+
+function normalizarChecklistRecebimento(value: unknown): ChecklistRecebimentoMadeira {
+  if (
+    value !== null &&
+    value !== undefined &&
+    (typeof value !== "object" || Array.isArray(value))
+  ) {
+    throw new Error("Checklist da auditoria inválido.");
+  }
+
+  const source = (value ?? {}) as Record<string, unknown>;
+  const allowed = new Set<string>(
+    CHECKLIST_RECEBIMENTO_MADEIRA.map((item) => item.id),
+  );
+  for (const key of Object.keys(source)) {
+    if (!allowed.has(key)) {
+      throw new Error("Checklist da auditoria contém um item não reconhecido.");
+    }
+  }
+
+  const checklist = checklistRecebimentoVazio();
+  for (const item of CHECKLIST_RECEBIMENTO_MADEIRA) {
+    const raw = source[item.id];
+    if (raw === undefined) continue;
+    if (typeof raw !== "boolean") {
+      throw new Error(`Checklist: ${item.label} inválido.`);
+    }
+    checklist[item.id] = raw;
+  }
+  return checklist;
 }
 
 function cnpj(value: unknown) {
@@ -294,6 +329,7 @@ function normalizarLote(input: CadeiaLoteInput, exigirId = false) {
     placa_veiculo: texto(input.placa_veiculo, "Placa do veículo", 20),
     teor_umidade_medio: umidade,
     lote_autoclave: texto(input.lote_autoclave, "Lote de autoclave", 120, true),
+    checklist: normalizarChecklistRecebimento(input.checklist),
     status_liberacao: status(input.status_liberacao),
     observacoes: texto(input.observacoes, "Observações", 5000),
     ativo: booleano(input.ativo, "Status do lote"),
@@ -419,6 +455,7 @@ function converterLote(
     placa_veiculo: (row.placa_veiculo as string | null) ?? null,
     teor_umidade_medio: Number(row.teor_umidade_medio ?? 0),
     lote_autoclave: String(row.lote_autoclave ?? ""),
+    checklist: normalizarChecklistRecebimento(row.checklist),
     status_liberacao:
       statusValue === "APROVADO" || statusValue === "REPROVADO"
         ? statusValue
@@ -799,6 +836,7 @@ export async function updateCadeiaLote(
         placa_veiculo: lote.placa_veiculo,
         teor_umidade_medio: lote.teor_umidade_medio,
         lote_autoclave: lote.lote_autoclave,
+        checklist: lote.checklist,
         status_liberacao: lote.status_liberacao,
         observacoes: lote.observacoes,
         ativo: lote.ativo,
