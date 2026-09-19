@@ -129,22 +129,17 @@ export async function POST(request: Request) {
     process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim() ||
     process.env.GEMINI_API_KEY?.trim();
 
-  if (!apiKey) {
-    return Response.json(
-      {
-        ok: false,
-        error:
-          "O Gemini ainda não está configurado no servidor. Defina GOOGLE_GENERATIVE_AI_API_KEY na Vercel.",
-      },
-      { status: 503, headers: SEM_CACHE },
-    );
-  }
+  const directModelId =
+    process.env.GEMINI_MODEL?.trim() || "gemini-2.5-flash";
+  const gatewayModelId = "google/gemini-2.5-flash";
+  const providerMode = apiKey ? "google-direct" : "vercel-ai-gateway";
 
-  const google = createGoogleGenerativeAI({ apiKey });
-  const modelId = process.env.GEMINI_MODEL?.trim() || "gemini-2.5-flash";
+  const model = apiKey
+    ? createGoogleGenerativeAI({ apiKey })(directModelId)
+    : gatewayModelId;
 
   const result = streamText({
-    model: google(modelId),
+    model,
     system: SYSTEM_PROMPT,
     messages,
     temperature: 0.25,
@@ -205,8 +200,8 @@ export async function POST(request: Request) {
   return result.toTextStreamResponse({
     headers: {
       ...SEM_CACHE,
-      "X-IA-TEC-Provider": "google-gemini",
-      "X-IA-TEC-Model": modelId,
+      "X-IA-TEC-Provider": providerMode,
+      "X-IA-TEC-Model": apiKey ? directModelId : gatewayModelId,
     },
   });
 }
