@@ -225,6 +225,8 @@ export interface CadeiaAnexo {
 export interface CadeiaMadeiraResumo {
   fornecedores_ativos: number;
   lotes_total: number;
+  lotes_aprovados: number;
+  lotes_reprovados: number;
   lotes_quarentena: number;
   lotes_umidade_alta: number;
   laudos_pendentes: number;
@@ -294,6 +296,8 @@ export function snapshotCadeiaVazio(): CadeiaMadeiraSnapshot {
     resumo: {
       fornecedores_ativos: 0,
       lotes_total: 0,
+      lotes_aprovados: 0,
+      lotes_reprovados: 0,
       lotes_quarentena: 0,
       lotes_umidade_alta: 0,
       laudos_pendentes: 0,
