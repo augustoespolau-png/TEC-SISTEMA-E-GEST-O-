@@ -749,6 +749,8 @@ export async function loadCadeiaMadeiraSnapshot(
     const [
       fornecedoresResult,
       lotesResult,
+      aprovadosResult,
+      reprovadosResult,
       quarentenaResult,
       umidadeResult,
       pendentesResult,
@@ -761,6 +763,16 @@ export async function loadCadeiaMadeiraSnapshot(
         .order("data_recebimento", { ascending: false })
         .order("created_at", { ascending: false })
         .range(from, from + CADEIA_MADEIRA_PAGE_SIZE - 1),
+      supabase
+        .from("cadeia_madeira_lotes")
+        .select("id", { count: "exact", head: true })
+        .eq("ativo", true)
+        .eq("status_liberacao", "APROVADO"),
+      supabase
+        .from("cadeia_madeira_lotes")
+        .select("id", { count: "exact", head: true })
+        .eq("ativo", true)
+        .eq("status_liberacao", "REPROVADO"),
       supabase
         .from("cadeia_madeira_lotes")
         .select("id", { count: "exact", head: true })
@@ -778,6 +790,8 @@ export async function loadCadeiaMadeiraSnapshot(
     ]);
     if (fornecedoresResult.error) throw new Error(errorText(fornecedoresResult.error));
     if (lotesResult.error) throw new Error(errorText(lotesResult.error));
+    if (aprovadosResult.error) throw new Error(errorText(aprovadosResult.error));
+    if (reprovadosResult.error) throw new Error(errorText(reprovadosResult.error));
     if (quarentenaResult.error) throw new Error(errorText(quarentenaResult.error));
     if (umidadeResult.error) throw new Error(errorText(umidadeResult.error));
     if (pendentesResult.error) throw new Error(errorText(pendentesResult.error));
@@ -807,6 +821,8 @@ export async function loadCadeiaMadeiraSnapshot(
         resumo: {
           fornecedores_ativos: fornecedoresRows.filter((row) => Boolean(row.ativo)).length,
           lotes_total: totalLotes,
+          lotes_aprovados: Number(aprovadosResult.count ?? 0),
+          lotes_reprovados: Number(reprovadosResult.count ?? 0),
           lotes_quarentena: Number(quarentenaResult.count ?? 0),
           lotes_umidade_alta: Number(umidadeResult.count ?? 0),
           laudos_pendentes: Number(pendentesResult.count ?? 0),
