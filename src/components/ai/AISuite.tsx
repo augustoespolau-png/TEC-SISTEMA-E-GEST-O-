@@ -1,275 +1,371 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import {
+  FormEvent,
+  KeyboardEvent,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+import IaTecIcone from "@/components/IaTecIcone";
 
-type Mensagem = {
+type ChatMessage = {
   id: string;
-  papel: "gestor" | "assistente";
-  texto: string;
-  motor?: string;
+  role: "user" | "assistant";
+  content: string;
+  error?: boolean;
 };
 
-const EXEMPLOS = [
-  "Quais casas tiveram mais desvios na última semana?",
+const SUGESTOES = [
   "Qual o FPY consolidado do projeto C4A?",
-  "Quais tipos de desvio mais se repetiram nos últimos 30 dias?",
-  "Como está a tendência semanal de qualidade?",
+  "Como está a casa 153 do projeto C4A?",
+  "Mostre o panorama de resíduos e MTRs dos últimos 30 dias.",
+  "Há lotes de madeira fora do padrão de umidade?",
+  "Explique como montar um plano de ação 5W2H para qualidade.",
 ];
 
+function idMensagem(prefixo: string) {
+  return `${prefixo}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
 export default function AISuite() {
-  const [pergunta, setPergunta] = useState("");
-  const [enviando, setEnviando] = useState(false);
-  const [mensagens, setMensagens] = useState<Mensagem[]>([
-    {
-      id: "boas-vindas",
-      papel: "assistente",
-      texto:
-        "Consulte FPY, desvios, casas, equipes/setores, tendências e o Health-Check em linguagem natural. A consulta é executada somente por RPCs allowlisted — nenhum SQL livre gerado por IA é executado.",
-      motor: "seguro",
-    },
-  ]);
-  const [gerandoDigest, setGerandoDigest] = useState(false);
-  const [digest, setDigest] = useState("");
-  const [motorDigest, setMotorDigest] = useState("");
-  const [copiado, setCopiado] = useState(false);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [input, setInput] = useState("");
+  const [sending, setSending] = useState(false);
+  const [receivedFirstChunk, setReceivedFirstChunk] = useState(false);
+  const [erroGeral, setErroGeral] = useState("");
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
-  async function perguntar(textoForcado?: string) {
-    const question = (textoForcado ?? pergunta).trim();
-    if (!question || enviando) return;
+  useEffect(() => {
+    const area = scrollRef.current;
+    if (!area) return;
+    area.scrollTo({
+      top: area.scrollHeight,
+      behavior: messages.length > 2 ? "smooth" : "auto",
+    });
+  }, [messages, sending, receivedFirstChunk]);
 
-    const id = `${Date.now()}`;
-    setMensagens((atuais) => [
-      ...atuais,
-      { id: `${id}-q`, papel: "gestor", texto: question },
+  useEffect(() => {
+    textareaRef.current?.focus();
+  }, []);
+
+  async function enviar(textoForcado?: string) {
+    const question = (textoForcado ?? input).trim();
+    if (!question || sending) return;
+
+    const userMessage: ChatMessage = {
+      id: idMensagem("user"),
+      role: "user",
+      content: question,
+    };
+    const assistantId = idMensagem("assistant");
+
+    const historico = [...messages, userMessage]
+      .filter((message) => !message.error && message.content.trim())
+      .slice(-24)
+      .map((message) => ({
+        role: message.role,
+        content: message.content,
+      }));
+
+    setMessages((current) => [
+      ...current,
+      userMessage,
+      { id: assistantId, role: "assistant", content: "" },
     ]);
-    setPergunta("");
-    setEnviando(true);
+    setInput("");
+    setErroGeral("");
+    setSending(true);
+    setReceivedFirstChunk(false);
 
     try {
-      const resposta = await fetch("/api/ai/query", {
+      const response = await fetch("/api/ai/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question }),
+        body: JSON.stringify({ messages: historico }),
       });
-      const data = (await resposta.json()) as {
-        ok?: boolean;
-        answer?: string;
-        erro?: string;
-        motor?: string;
-      };
-      if (!resposta.ok || !data.ok) throw new Error(data.erro || "Falha na consulta.");
 
-      setMensagens((atuais) => [
-        ...atuais,
-        {
-          id: `${id}-a`,
-          papel: "assistente",
-          texto: data.answer || "Consulta concluída sem conteúdo.",
-          motor: data.motor,
-        },
-      ]);
-    } catch (error) {
-      setMensagens((atuais) => [
-        ...atuais,
-        {
-          id: `${id}-e`,
-          papel: "assistente",
-          texto:
-            "A consulta inteligente não ficou disponível agora. O restante do sistema continua operando normalmente. " +
-            (error instanceof Error ? error.message : ""),
-          motor: "fallback",
-        },
-      ]);
-    } finally {
-      setEnviando(false);
-    }
-  }
+      if (!response.ok) {
+        let message = "Não foi possível consultar o IA-TEC.";
+        const contentType = response.headers.get("content-type") ?? "";
+        if (contentType.includes("application/json")) {
+          const body = (await response.json()) as { error?: string };
+          if (body.error) message = body.error;
+        } else {
+          const text = await response.text();
+          if (text.trim()) message = text.trim();
+        }
+        throw new Error(message);
+      }
 
-  async function aoEnviar(event: FormEvent) {
-    event.preventDefault();
-    await perguntar();
-  }
+      if (!response.body) {
+        throw new Error("O servidor não iniciou o streaming da resposta.");
+      }
 
-  async function gerarDigest() {
-    if (gerandoDigest) return;
-    setGerandoDigest(true);
-    setCopiado(false);
-    try {
-      const resposta = await fetch("/api/ai/digest", { method: "POST" });
-      const data = (await resposta.json()) as {
-        ok?: boolean;
-        texto?: string;
-        erro?: string;
-        motor?: string;
-      };
-      if (!resposta.ok || !data.ok) throw new Error(data.erro || "Falha ao gerar relatório.");
-      setDigest(data.texto || "");
-      setMotorDigest(data.motor || "");
-    } catch (error) {
-      setDigest(
-        "Não foi possível gerar o digest neste momento. O painel e as rotinas operacionais não foram afetados.\n\n" +
-          (error instanceof Error ? error.message : "")
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let accumulated = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        if (!chunk) continue;
+
+        accumulated += chunk;
+        setReceivedFirstChunk(true);
+        setMessages((current) =>
+          current.map((message) =>
+            message.id === assistantId
+              ? { ...message, content: accumulated }
+              : message,
+          ),
+        );
+      }
+
+      accumulated += decoder.decode();
+
+      if (!accumulated.trim()) {
+        throw new Error(
+          "O Gemini encerrou a resposta sem texto. Tente reformular a pergunta.",
+        );
+      }
+
+      setMessages((current) =>
+        current.map((message) =>
+          message.id === assistantId
+            ? { ...message, content: accumulated.trimEnd() }
+            : message,
+        ),
       );
-      setMotorDigest("indisponível");
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "O agente ficou indisponível neste momento.";
+
+      setMessages((current) =>
+        current.map((item) =>
+          item.id === assistantId
+            ? {
+                ...item,
+                content:
+                  "Não consegui concluir essa resposta. " +
+                  message,
+                error: true,
+              }
+            : item,
+        ),
+      );
+      setErroGeral(message);
     } finally {
-      setGerandoDigest(false);
+      setSending(false);
+      setReceivedFirstChunk(false);
+      window.setTimeout(() => textareaRef.current?.focus(), 50);
     }
   }
 
-  async function copiarDigest() {
-    if (!digest) return;
-    await navigator.clipboard.writeText(digest);
-    setCopiado(true);
-    window.setTimeout(() => setCopiado(false), 1800);
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await enviar();
   }
+
+  function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      void enviar();
+    }
+  }
+
+  function novaConversa() {
+    if (sending) return;
+    setMessages([]);
+    setInput("");
+    setErroGeral("");
+    textareaRef.current?.focus();
+  }
+
+  const vazio = messages.length === 0;
 
   return (
-    <main className="tela py-3 sm:py-4">
-      <header className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="mb-1 text-[11px] font-medium uppercase tracking-[0.18em] text-brand">
-            Gestão · Lapidação Inteligente
-          </p>
-          <h1 className="text-xl font-semibold text-ink sm:text-2xl">AI Suite</h1>
-          <p className="mt-1 max-w-3xl text-sm text-ink-2">
-            Analytics em linguagem natural, tendências preventivas e relatório executivo com motor híbrido resiliente.
-          </p>
-        </div>
-        <div className="w-fit rounded-full border border-line bg-papel-2 px-3 py-1.5 text-[11px] text-ink-2">
-          Gestão only · RPC allowlist · sem SQL livre
-        </div>
-      </header>
-
-      <div className="grid gap-3 xl:grid-cols-[1.15fr_0.85fr]">
-        <section className="flex min-h-0 flex-col rounded-2xl border border-line bg-papel shadow-sm">
-          <div className="border-b border-line px-4 py-3 sm:px-4">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <h2 className="text-sm font-semibold text-ink">Consulta Inteligente</h2>
-                <p className="mt-0.5 text-xs text-ink-3">Pergunte como falaria com um analista de qualidade.</p>
-              </div>
-              <span className="rounded-full bg-brand-suave px-2.5 py-1 text-[10px] font-medium text-brand-forte">
-                Text-to-RPC seguro
-              </span>
+    <main className="tela ia-agent-page">
+      <section className="ia-agent-shell" aria-label="IA-TEC">
+        <header className="ia-agent-header">
+          <div className="ia-agent-title">
+            <div className="ia-agent-orbe" aria-hidden>
+              <IaTecIcone size={30} />
+            </div>
+            <div>
+              <div className="ia-agent-kicker">IA-TEC · AGENTE CONVERSACIONAL</div>
+              <h1>Como posso ajudar?</h1>
+              <p>
+                Conhecimento geral + dados do sistema em tempo real por ferramentas seguras.
+              </p>
             </div>
           </div>
 
-          <div className="flex-1 space-y-3 overflow-y-auto px-4 py-4 sm:px-5" aria-live="polite">
-            {mensagens.map((mensagem) => (
-              <div
-                key={mensagem.id}
-                className={`flex ${mensagem.papel === "gestor" ? "justify-end" : "justify-start"}`}
-              >
-                <div
-                  className={`max-w-[92%] rounded-2xl border px-3.5 py-3 text-sm leading-6 sm:max-w-[82%] ${
-                    mensagem.papel === "gestor"
-                      ? "border-brand bg-brand-suave text-ink"
-                      : "border-line bg-papel-2 text-ink"
-                  }`}
+          <div className="ia-agent-header-actions">
+            <span className="ia-agent-provider">
+              <i aria-hidden />
+              Gemini
+            </span>
+            <button
+              type="button"
+              className="ia-agent-new"
+              onClick={novaConversa}
+              disabled={sending || vazio}
+            >
+              Nova conversa
+            </button>
+          </div>
+        </header>
+
+        <div className="ia-agent-stream" ref={scrollRef} aria-live="polite">
+          {vazio ? (
+            <div className="ia-agent-empty">
+              <div className="ia-agent-empty-orbe" aria-hidden>
+                <IaTecIcone size={48} />
+              </div>
+              <h2>Converse naturalmente com o IA-TEC</h2>
+              <p>
+                Pergunte sobre FPY, uma casa, resíduos, MTRs ou lotes de madeira.
+                Para outros assuntos, o agente responde com o conhecimento do Gemini.
+              </p>
+
+              <div className="ia-agent-suggestions">
+                {SUGESTOES.map((sugestao) => (
+                  <button
+                    key={sugestao}
+                    type="button"
+                    onClick={() => void enviar(sugestao)}
+                    disabled={sending}
+                  >
+                    <span>{sugestao}</span>
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden
+                    >
+                      <path d="M5 12h14" />
+                      <path d="m13 6 6 6-6 6" />
+                    </svg>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="ia-agent-messages">
+              {messages.map((message) => (
+                <article
+                  key={message.id}
+                  className={
+                    "ia-agent-message " +
+                    (message.role === "user" ? "user" : "assistant") +
+                    (message.error ? " error" : "")
+                  }
                 >
-                  <div className="whitespace-pre-wrap">{mensagem.texto}</div>
-                  {mensagem.papel === "assistente" && mensagem.motor && (
-                    <div className="mt-2 text-[10px] uppercase tracking-wide text-ink-3">
-                      motor: {mensagem.motor === "openai" ? "OpenAI" : mensagem.motor}
+                  {message.role === "assistant" && (
+                    <div className="ia-agent-avatar" aria-hidden>
+                      <IaTecIcone size={24} />
                     </div>
                   )}
-                </div>
-              </div>
-            ))}
-            {enviando && (
-              <div className="w-fit rounded-2xl border border-line bg-papel-2 px-3.5 py-3 text-sm text-ink-3">
-                Analisando intenção e agregados…
-              </div>
-            )}
-          </div>
 
-          <div className="border-t border-line p-3 sm:p-4">
-            <div className="mb-3 flex flex-wrap gap-2">
-              {EXEMPLOS.map((exemplo) => (
-                <button
-                  key={exemplo}
-                  type="button"
-                  onClick={() => void perguntar(exemplo)}
-                  disabled={enviando}
-                  className="rounded-full border border-line bg-papel-2 px-3 py-1.5 text-left text-[11px] text-ink-2 transition hover:border-brand hover:text-ink disabled:opacity-50"
-                >
-                  {exemplo}
-                </button>
+                  <div className="ia-agent-message-body">
+                    <div className="ia-agent-message-label">
+                      {message.role === "user" ? "Você" : "IA-TEC"}
+                    </div>
+
+                    {message.role === "assistant" &&
+                    !message.content &&
+                    sending ? (
+                      <div className="ia-agent-thinking">
+                        <span />
+                        <span />
+                        <span />
+                        <em>
+                          {receivedFirstChunk
+                            ? "Respondendo"
+                            : "Pensando e consultando ferramentas"}
+                        </em>
+                      </div>
+                    ) : (
+                      <div className="ia-agent-message-text">
+                        {message.content}
+                        {sending &&
+                          message.role === "assistant" &&
+                          message.id === messages.at(-1)?.id &&
+                          message.content && (
+                            <span className="ia-agent-caret" aria-hidden />
+                          )}
+                      </div>
+                    )}
+                  </div>
+                </article>
               ))}
             </div>
-            <form onSubmit={aoEnviar} className="flex gap-2">
-              <input
-                value={pergunta}
-                onChange={(event) => setPergunta(event.target.value)}
-                maxLength={600}
-                placeholder="Ex.: quais casas concentraram mais desvios nos últimos 7 dias?"
-                className="min-w-0 flex-1 rounded-xl border border-line bg-papel px-3.5 py-2.5 text-sm text-ink outline-none transition placeholder:text-ink-3 focus:border-brand"
-                aria-label="Pergunta para a AI Suite"
-              />
-              <button
-                type="submit"
-                disabled={enviando || pergunta.trim().length < 3}
-                className="rounded-xl border border-brand bg-brand px-4 py-2.5 text-sm font-medium text-white transition hover:border-brand-forte hover:bg-brand-forte disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Consultar
-              </button>
-            </form>
-          </div>
-        </section>
+          )}
+        </div>
 
-        <section className="flex min-h-0 flex-col rounded-2xl border border-line bg-papel shadow-sm">
-          <div className="border-b border-line px-4 py-3 sm:px-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h2 className="text-sm font-semibold text-ink">Relatório Executivo Semanal</h2>
-                <p className="mt-0.5 text-xs text-ink-3">FPY, desvios, recorrências e Health-Check.</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => void gerarDigest()}
-                disabled={gerandoDigest}
-                className="rounded-xl border border-brand bg-brand px-3.5 py-2 text-xs font-medium text-white transition hover:bg-brand-forte disabled:opacity-50"
-              >
-                {gerandoDigest ? "Gerando…" : "Gerar Relatório Executivo com IA"}
-              </button>
+        <div className="ia-agent-composer-wrap">
+          {erroGeral && (
+            <div className="ia-agent-error" role="status">
+              {erroGeral}
             </div>
-          </div>
+          )}
 
-          <div className="flex-1 p-3 sm:p-4">
-            {digest ? (
-              <div className="flex h-full flex-col gap-3">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-[10px] uppercase tracking-wide text-ink-3">
-                    motor: {motorDigest === "openai" ? "OpenAI" : motorDigest}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => void copiarDigest()}
-                    className="rounded-lg border border-line px-2.5 py-1.5 text-[11px] text-ink-2 transition hover:border-brand hover:text-ink"
-                  >
-                    {copiado ? "Copiado" : "Copiar para ata/e-mail"}
-                  </button>
-                </div>
-                <pre className="min-h-0 flex-1 whitespace-pre-wrap rounded-xl border border-line bg-papel-2 p-4 font-sans text-xs leading-6 text-ink sm:text-sm">
-                  {digest}
-                </pre>
-              </div>
-            ) : (
-              <div className="flex min-h-0 items-center justify-center rounded-xl border border-dashed border-line bg-papel-2 p-4 text-center">
-                <div className="max-w-sm">
-                  <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full border border-line bg-papel text-lg text-brand">
-                    ✦
-                  </div>
-                  <p className="text-sm font-medium text-ink">Digest pronto sob demanda</p>
-                  <p className="mt-1 text-xs leading-5 text-ink-3">
-                    O relatório usa apenas dados agregados da semana e o último Health-Check. Se a OpenAI estiver indisponível, o motor determinístico produz a versão de contingência.
-                  </p>
-                </div>
-              </div>
-            )}
+          <form className="ia-agent-composer" onSubmit={onSubmit}>
+            <textarea
+              ref={textareaRef}
+              value={input}
+              onChange={(event) => setInput(event.target.value.slice(0, 4000))}
+              onKeyDown={onKeyDown}
+              rows={1}
+              maxLength={4000}
+              placeholder="Pergunte qualquer coisa ao IA-TEC…"
+              aria-label="Mensagem para o IA-TEC"
+              disabled={sending}
+            />
+            <button
+              type="submit"
+              className="ia-agent-send"
+              disabled={sending || input.trim().length === 0}
+              aria-label="Enviar mensagem"
+            >
+              {sending ? (
+                <span className="ia-agent-stop-dot" />
+              ) : (
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden
+                >
+                  <path d="m5 12 14-7-4 14-3-6-7-1Z" />
+                  <path d="m12 13 7-8" />
+                </svg>
+              )}
+            </button>
+          </form>
+
+          <div className="ia-agent-footnote">
+            <span>Enter envia · Shift + Enter quebra linha</span>
+            <span>Dados internos somente via ferramentas autenticadas</span>
           </div>
-        </section>
-      </div>
+        </div>
+      </section>
     </main>
   );
 }
