@@ -19,16 +19,16 @@ export type CadeiaMadeiraModuloId = (typeof CADEIA_MADEIRA_MODULOS)[number]["id"
 export type StatusLiberacaoMadeira = "APROVADO" | "REPROVADO" | "QUARENTENA";
 
 export const CHECKLIST_RECEBIMENTO_MADEIRA = [
-  { id: "quantidade", label: "Quantidade conforme NF" },
-  { id: "dimensoes", label: "Dimensões conforme especificação" },
-  { id: "lote", label: "Lote identificado" },
-  { id: "embalagem", label: "Fardo / embalagem íntegra" },
-  { id: "mofo", label: "Sem presença de mofo" },
-  { id: "empenamento", label: "Sem empenamento" },
-  { id: "rachaduras", label: "Sem rachaduras" },
-  { id: "contaminacao", label: "Sem contaminação" },
-  { id: "umidade", label: "Umidade conforme" },
-  { id: "documentacao", label: "Documentação conforme" },
+  { id: "quantidade", label: "Quantidade conforme NF", grupo: "Conferência" },
+  { id: "lote", label: "Lote identificado", grupo: "Rastreabilidade" },
+  { id: "dimensoes", label: "Dimensões conforme especificação", grupo: "Dimensão" },
+  { id: "embalagem", label: "Embalagem íntegra", grupo: "Embalagem" },
+  { id: "mofo", label: "Sem presença de mofo", grupo: "Conservação" },
+  { id: "empenamento", label: "Sem empenamento", grupo: "Integridade" },
+  { id: "rachaduras", label: "Sem rachaduras", grupo: "Integridade" },
+  { id: "contaminacao", label: "Sem contaminação", grupo: "Limpeza" },
+  { id: "identificacao", label: "Identificação conforme pedido", grupo: "Identificação" },
+  { id: "conservacao", label: "Bom estado de conservação", grupo: "Conservação" },
 ] as const;
 
 export type ChecklistRecebimentoMadeiraId =
@@ -39,18 +39,26 @@ export type ChecklistRecebimentoMadeira = Record<
   boolean
 >;
 
+export type ApresentacaoMaterialMadeira = "AVULSA" | "FARDOS";
+
+export interface DistribuicaoFardoMadeira {
+  fardos: number;
+  pecas_por_fardo: number;
+  total_pecas: number;
+}
+
 export function checklistRecebimentoVazio(): ChecklistRecebimentoMadeira {
   return {
     quantidade: false,
-    dimensoes: false,
     lote: false,
+    dimensoes: false,
     embalagem: false,
     mofo: false,
     empenamento: false,
     rachaduras: false,
     contaminacao: false,
-    umidade: false,
-    documentacao: false,
+    identificacao: false,
+    conservacao: false,
   };
 }
 export type TipoEnsaioMadeira =
@@ -138,7 +146,16 @@ export interface CadeiaLote {
   numero_nota_fiscal: string;
   volume_m3: number;
   data_recebimento: string;
+  responsavel_recebimento: string | null;
+  transportadora: string | null;
   placa_veiculo: string | null;
+  tipo_madeira: string | null;
+  especie: string | null;
+  origem: string | null;
+  quantidade_pecas: number;
+  apresentacao_material: ApresentacaoMaterialMadeira;
+  total_fardos: number;
+  distribuicao_fardos: DistribuicaoFardoMadeira[];
   teor_umidade_medio: number;
   lote_autoclave: string;
   checklist: ChecklistRecebimentoMadeira;
