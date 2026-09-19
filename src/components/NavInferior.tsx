@@ -292,7 +292,11 @@ export default function NavInferior({
               href={item.href}
               className={cadeiaNaRota && cadeiaModuloAtual === item.id ? "on" : ""}
               aria-current={cadeiaNaRota && cadeiaModuloAtual === item.id ? "page" : undefined}
-              onClick={() => {
+              onClick={(event) => {
+                if (cadeiaNaRota) {
+                  event.preventDefault();
+                  window.history.pushState(null, "", item.href);
+                }
                 selecionarModulo("cadeia");
                 setCadeiaAberta(false);
                 setAberto(false);
