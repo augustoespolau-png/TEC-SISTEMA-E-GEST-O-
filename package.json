@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "eslint \"src/components/ai/AISuite.tsx\" --rule \"react-hooks/purity:off\" --rule \"react-hooks/refs:off\" --rule \"react-hooks/set-state-in-effect:off\" && next build",
+    "build": "eslint \"src/components/ai/AISuite.tsx\" --fix && eslint \"src/components/ai/AISuite.tsx\" && next build",
     "start": "next start",
     "lint": "eslint"
   },
