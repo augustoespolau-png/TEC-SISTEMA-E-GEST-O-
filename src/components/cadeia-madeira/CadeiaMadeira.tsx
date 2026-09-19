@@ -61,6 +61,7 @@ import {
   type CadeiaInspecao,
   type CadeiaLaudo,
   type CadeiaLote,
+  type CadeiaMadeiraResumo,
   type CadeiaMadeiraSnapshot,
   type ChecklistRecebimentoMadeira,
   type ApresentacaoMaterialMadeira,
@@ -783,6 +784,7 @@ export default function CadeiaMadeira({
         <LotesPanel
           lotes={snapshot.lotes}
           fornecedores={snapshot.fornecedores}
+          resumo={snapshot.resumo}
           selectedLoteId={selectedLoteId}
           canEdit={canEdit}
           loading={loading}
@@ -956,6 +958,7 @@ function FornecedoresPanel({
 function LotesPanel({
   lotes,
   fornecedores,
+  resumo,
   selectedLoteId,
   canEdit,
   loading,
@@ -972,6 +975,7 @@ function LotesPanel({
 }: {
   lotes: CadeiaLote[];
   fornecedores: CadeiaFornecedor[];
+  resumo: CadeiaMadeiraResumo;
   selectedLoteId: string;
   canEdit: boolean;
   loading: boolean;
@@ -992,6 +996,34 @@ function LotesPanel({
         <SectionHeading title="Auditoria de recebimento" description="Registre e audite cada carga antes de liberar a madeira para a produção.">
           {canEdit && <button type="button" className="btn btn-forte" onClick={onNew} disabled={!fornecedores.some((item) => item.ativo)}>+ Novo recebimento</button>}
         </SectionHeading>
+
+        <div className="cadeia-recebimento-kpis" aria-label="Resumo dos recebimentos">
+          <article className="cadeia-recebimento-kpi">
+            <span>Total de recebimentos</span>
+            <b>{resumo.lotes_total}</b>
+            <small>cargas registradas</small>
+          </article>
+          <article className="cadeia-recebimento-kpi conforme">
+            <span>Conformes</span>
+            <b>{resumo.lotes_aprovados}</b>
+            <small>liberados</small>
+          </article>
+          <article className="cadeia-recebimento-kpi nao-conforme">
+            <span>Não conformes</span>
+            <b>{resumo.lotes_reprovados}</b>
+            <small>reprovados</small>
+          </article>
+          <article className="cadeia-recebimento-kpi quarentena">
+            <span>Em quarentena</span>
+            <b>{resumo.lotes_quarentena}</b>
+            <small>
+              {resumo.lotes_umidade_alta > 0
+                ? `${resumo.lotes_umidade_alta} com umidade acima de ${LIMITE_UMIDADE_SEGURA}%`
+                : "aguardando decisão"}
+            </small>
+          </article>
+        </div>
+
         {!fornecedores.some((item) => item.ativo) && (
           <div className="cadeia-inline-alert">
             <span>Cadastre e ative um fornecedor antes de registrar um recebimento.</span>
