@@ -1,6 +1,7 @@
 "use server";
 
 import { obterContextoGestao } from "@/lib/ai/auth";
+import { createClient } from "@/lib/supabase/server";
 import {
   UMIDADE_MADEIRA_MAXIMA,
   UMIDADE_MADEIRA_MINIMA,
@@ -46,8 +47,10 @@ function erroSeguro(error: unknown) {
   return message || "Não foi possível consultar os dados do sistema.";
 }
 
+type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
+
 async function projetoCanonico(
-  supabase: Awaited<ReturnType<typeof import("@/lib/supabase/server").createClient>>,
+  supabase: SupabaseServerClient,
   projetoInput: string,
 ) {
   const projeto = textoSeguro(projetoInput, "Projeto", 100);
