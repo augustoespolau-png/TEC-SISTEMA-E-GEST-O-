@@ -11,7 +11,8 @@ import {
   CADEIA_MADEIRA_PAGE_SIZE,
   CHECKLIST_RECEBIMENTO_MADEIRA,
   checklistRecebimentoVazio,
-  LIMITE_UMIDADE_SEGURA,
+  UMIDADE_MADEIRA_MINIMA,
+  UMIDADE_MADEIRA_MAXIMA,
   MAX_DOCUMENTO_CADEIA_BYTES,
   type CadeiaAnexo,
   type CadeiaFornecedor,
@@ -752,7 +753,7 @@ export async function loadCadeiaMadeiraSnapshot(
       aprovadosResult,
       reprovadosResult,
       quarentenaResult,
-      umidadeResult,
+      umidadeForaPadraoResult,
       pendentesResult,
     ] = await Promise.all([
       supabase.from("cadeia_madeira_fornecedores").select(CAMPO_FORNECEDOR).order("razao_social"),
@@ -782,7 +783,9 @@ export async function loadCadeiaMadeiraSnapshot(
         .from("cadeia_madeira_lotes")
         .select("id", { count: "exact", head: true })
         .eq("ativo", true)
-        .gt("teor_umidade_medio", LIMITE_UMIDADE_SEGURA),
+        .or(
+          `teor_umidade_medio.lt.${UMIDADE_MADEIRA_MINIMA},teor_umidade_medio.gt.${UMIDADE_MADEIRA_MAXIMA}`,
+        ),
       supabase
         .from("cadeia_madeira_laudos")
         .select("id", { count: "exact", head: true })
@@ -793,7 +796,7 @@ export async function loadCadeiaMadeiraSnapshot(
     if (aprovadosResult.error) throw new Error(errorText(aprovadosResult.error));
     if (reprovadosResult.error) throw new Error(errorText(reprovadosResult.error));
     if (quarentenaResult.error) throw new Error(errorText(quarentenaResult.error));
-    if (umidadeResult.error) throw new Error(errorText(umidadeResult.error));
+    if (umidadeForaPadraoResult.error) throw new Error(errorText(umidadeForaPadraoResult.error));
     if (pendentesResult.error) throw new Error(errorText(pendentesResult.error));
 
     const fornecedoresRows = (fornecedoresResult.data ?? []) as Array<Record<string, unknown>>;
@@ -824,7 +827,7 @@ export async function loadCadeiaMadeiraSnapshot(
           lotes_aprovados: Number(aprovadosResult.count ?? 0),
           lotes_reprovados: Number(reprovadosResult.count ?? 0),
           lotes_quarentena: Number(quarentenaResult.count ?? 0),
-          lotes_umidade_alta: Number(umidadeResult.count ?? 0),
+          lotes_umidade_fora_padrao: Number(umidadeForaPadraoResult.count ?? 0),
           laudos_pendentes: Number(pendentesResult.count ?? 0),
         },
       },
