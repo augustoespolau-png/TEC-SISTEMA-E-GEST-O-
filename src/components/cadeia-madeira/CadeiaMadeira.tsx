@@ -41,11 +41,13 @@ import {
 } from "@/lib/anexos";
 import {
   BUCKET_CADEIA_MADEIRA,
+  CHECKLIST_RECEBIMENTO_MADEIRA,
   MAX_DOCUMENTO_CADEIA_BYTES,
   bytesMadeira,
   dataHoraMadeira,
   dataMadeira,
   LIMITE_UMIDADE_SEGURA,
+  checklistRecebimentoVazio,
   loteUmidadeAlta,
   rotuloStatusLiberacao,
   rotuloTipoAnexo,
@@ -60,6 +62,7 @@ import {
   type CadeiaLaudo,
   type CadeiaLote,
   type CadeiaMadeiraSnapshot,
+  type ChecklistRecebimentoMadeira,
   type ComponenteEnsaioMadeira,
   type StatusLiberacaoMadeira,
   type TipoAnexoCadeia,
@@ -118,6 +121,7 @@ type LoteDraft = {
   placa_veiculo: string;
   teor_umidade_medio: string;
   lote_autoclave: string;
+  checklist: ChecklistRecebimentoMadeira;
   status_liberacao: StatusLiberacaoMadeira;
   observacoes: string;
   ativo: boolean;
@@ -188,6 +192,7 @@ function loteVazio(fornecedorId = ""): LoteDraft {
     placa_veiculo: "",
     teor_umidade_medio: "",
     lote_autoclave: "",
+    checklist: checklistRecebimentoVazio(),
     status_liberacao: "QUARENTENA",
     observacoes: "",
     ativo: true,
@@ -204,6 +209,7 @@ function loteParaDraft(item: CadeiaLote): LoteDraft {
     placa_veiculo: item.placa_veiculo ?? "",
     teor_umidade_medio: String(item.teor_umidade_medio),
     lote_autoclave: item.lote_autoclave,
+    checklist: { ...item.checklist },
     status_liberacao: item.status_liberacao,
     observacoes: item.observacoes ?? "",
     ativo: item.ativo,
@@ -1075,8 +1081,215 @@ function FornecedorForm({ draft, saving, onChange, onSubmit, onClose }: { draft:
   return <ModalShell title={draft.id ? "Editar fornecedor" : "Novo fornecedor"} eyebrow="Cadastro de origem" saving={saving} onClose={onClose}><form className="cadeia-form-grid" onSubmit={onSubmit}><label className="cadeia-form-wide"><span className="rotulo">Razão Social *</span><input className="campo" value={draft.razao_social} onChange={(event) => onChange("razao_social", event.target.value)} maxLength={180} required /></label><label><span className="rotulo">CNPJ</span><input className="campo" value={draft.cnpj} onChange={(event) => onChange("cnpj", event.target.value)} maxLength={18} placeholder="00.000.000/0000-00" /></label><label className="cadeia-check-field"><input type="checkbox" checked={draft.homologacao_ativa} onChange={(event) => onChange("homologacao_ativa", event.target.checked)} /><span>Homologação ativa</span></label><label className="cadeia-form-wide"><span className="rotulo">Certificação / origem</span><input className="campo" value={draft.certificacao_origem} onChange={(event) => onChange("certificacao_origem", event.target.value)} maxLength={600} placeholder="Ex.: FSC, DOF, origem controlada" /></label><label><span className="rotulo">Contato técnico</span><input className="campo" value={draft.contato_tecnico_nome} onChange={(event) => onChange("contato_tecnico_nome", event.target.value)} maxLength={160} /></label><label><span className="rotulo">E-mail técnico</span><input className="campo" type="email" value={draft.contato_tecnico_email} onChange={(event) => onChange("contato_tecnico_email", event.target.value)} maxLength={180} /></label><label><span className="rotulo">Telefone técnico</span><input className="campo" value={draft.contato_tecnico_telefone} onChange={(event) => onChange("contato_tecnico_telefone", event.target.value)} maxLength={40} /></label><label className="cadeia-form-wide"><span className="rotulo">Histórico de avaliação dos lotes</span><textarea className="campo" rows={4} value={draft.historico_avaliacao} onChange={(event) => onChange("historico_avaliacao", event.target.value)} maxLength={5000} placeholder="Registre desempenho, não conformidades e ações tomadas." /></label><label className="cadeia-check-field"><input type="checkbox" checked={draft.ativo} onChange={(event) => onChange("ativo", event.target.checked)} /><span>Fornecedor ativo</span></label><FormActions saving={saving} onClose={onClose} submitLabel={draft.id ? "Salvar fornecedor" : "Cadastrar fornecedor"} /></form></ModalShell>;
 }
 
-function LoteForm({ draft, fornecedores, saving, onChange, onSubmit, onClose }: { draft: LoteDraft; fornecedores: CadeiaFornecedor[]; saving: boolean; onChange: <K extends keyof LoteDraft>(field: K, value: LoteDraft[K]) => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void; onClose: () => void }) {
-  return <ModalShell title={draft.id ? "Editar recebimento" : "Novo recebimento de madeira"} eyebrow="Auditoria de recebimento" saving={saving} onClose={onClose}><form className="cadeia-form-grid" onSubmit={onSubmit}><label><span className="rotulo">Fornecedor cadastrado *</span><select className="campo" value={draft.fornecedor_id} onChange={(event) => onChange("fornecedor_id", event.target.value)} required><option value="">Selecione</option>{fornecedores.filter((item) => item.ativo).map((item) => <option key={item.id} value={item.id}>{item.razao_social}</option>)}</select></label><label><span className="rotulo">Nota fiscal *</span><input className="campo" value={draft.numero_nota_fiscal} onChange={(event) => onChange("numero_nota_fiscal", event.target.value)} maxLength={80} required /></label><label><span className="rotulo">Volume (m³) *</span><input className="campo" type="number" min="0.001" step="0.001" value={draft.volume_m3} onChange={(event) => onChange("volume_m3", event.target.value)} required /></label><label><span className="rotulo">Data de recebimento *</span><input className="campo" type="date" value={draft.data_recebimento} onChange={(event) => onChange("data_recebimento", event.target.value)} required /></label><label><span className="rotulo">Placa do veículo</span><input className="campo" value={draft.placa_veiculo} onChange={(event) => onChange("placa_veiculo", event.target.value)} maxLength={20} /></label><label><span className="rotulo">Umidade média (%) *</span><input className={"campo " + (Number(draft.teor_umidade_medio) > LIMITE_UMIDADE_SEGURA ? "cadeia-campo-alerta" : "")} type="number" min="0" max="100" step="0.1" value={draft.teor_umidade_medio} onChange={(event) => onChange("teor_umidade_medio", event.target.value)} required /><small className="cadeia-field-help">Acima de {LIMITE_UMIDADE_SEGURA}% gera alerta de engenharia.</small></label><label><span className="rotulo">Lote de autoclave *</span><input className="campo" value={draft.lote_autoclave} onChange={(event) => onChange("lote_autoclave", event.target.value)} maxLength={120} required /></label><label><span className="rotulo">Status preliminar</span><select className="campo" value={draft.status_liberacao} onChange={(event) => onChange("status_liberacao", event.target.value as StatusLiberacaoMadeira)}>{STATUS_LIBERACAO_MADEIRA.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label><label className="cadeia-form-wide"><span className="rotulo">Observações da auditoria</span><textarea className="campo" rows={3} value={draft.observacoes} onChange={(event) => onChange("observacoes", event.target.value)} maxLength={5000} /></label><label className="cadeia-check-field"><input type="checkbox" checked={draft.ativo} onChange={(event) => onChange("ativo", event.target.checked)} /><span>Recebimento ativo no histórico</span></label><FormActions saving={saving} onClose={onClose} submitLabel={draft.id ? "Salvar recebimento" : "Salvar auditoria"} /></form></ModalShell>;
+function LoteForm({
+  draft,
+  fornecedores,
+  saving,
+  onChange,
+  onSubmit,
+  onClose,
+}: {
+  draft: LoteDraft;
+  fornecedores: CadeiaFornecedor[];
+  saving: boolean;
+  onChange: <K extends keyof LoteDraft>(field: K, value: LoteDraft[K]) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onClose: () => void;
+}) {
+  const marcados = CHECKLIST_RECEBIMENTO_MADEIRA.filter(
+    (item) => draft.checklist[item.id],
+  ).length;
+
+  return (
+    <ModalShell
+      title={draft.id ? "Editar recebimento" : "Novo recebimento de madeira"}
+      eyebrow="Auditoria de recebimento"
+      saving={saving}
+      onClose={onClose}
+    >
+      <form className="cadeia-form-grid" onSubmit={onSubmit}>
+        <label>
+          <span className="rotulo">Fornecedor cadastrado *</span>
+          <select
+            className="campo"
+            value={draft.fornecedor_id}
+            onChange={(event) => onChange("fornecedor_id", event.target.value)}
+            required
+          >
+            <option value="">Selecione</option>
+            {fornecedores
+              .filter((item) => item.ativo)
+              .map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.razao_social}
+                </option>
+              ))}
+          </select>
+        </label>
+
+        <label>
+          <span className="rotulo">Nota fiscal *</span>
+          <input
+            className="campo"
+            value={draft.numero_nota_fiscal}
+            onChange={(event) => onChange("numero_nota_fiscal", event.target.value)}
+            maxLength={80}
+            required
+          />
+        </label>
+
+        <label>
+          <span className="rotulo">Volume (m³) *</span>
+          <input
+            className="campo"
+            type="number"
+            min="0.001"
+            step="0.001"
+            value={draft.volume_m3}
+            onChange={(event) => onChange("volume_m3", event.target.value)}
+            required
+          />
+        </label>
+
+        <label>
+          <span className="rotulo">Data de recebimento *</span>
+          <input
+            className="campo"
+            type="date"
+            value={draft.data_recebimento}
+            onChange={(event) => onChange("data_recebimento", event.target.value)}
+            required
+          />
+        </label>
+
+        <label>
+          <span className="rotulo">Placa do veículo</span>
+          <input
+            className="campo"
+            value={draft.placa_veiculo}
+            onChange={(event) => onChange("placa_veiculo", event.target.value)}
+            maxLength={20}
+          />
+        </label>
+
+        <label>
+          <span className="rotulo">Umidade média (%) *</span>
+          <input
+            className={
+              "campo " +
+              (Number(draft.teor_umidade_medio) > LIMITE_UMIDADE_SEGURA
+                ? "cadeia-campo-alerta"
+                : "")
+            }
+            type="number"
+            min="0"
+            max="100"
+            step="0.1"
+            value={draft.teor_umidade_medio}
+            onChange={(event) => onChange("teor_umidade_medio", event.target.value)}
+            required
+          />
+          <small className="cadeia-field-help">
+            Acima de {LIMITE_UMIDADE_SEGURA}% gera alerta de engenharia.
+          </small>
+        </label>
+
+        <label>
+          <span className="rotulo">Lote de autoclave *</span>
+          <input
+            className="campo"
+            value={draft.lote_autoclave}
+            onChange={(event) => onChange("lote_autoclave", event.target.value)}
+            maxLength={120}
+            required
+          />
+        </label>
+
+        <label>
+          <span className="rotulo">Status preliminar</span>
+          <select
+            className="campo"
+            value={draft.status_liberacao}
+            onChange={(event) =>
+              onChange(
+                "status_liberacao",
+                event.target.value as StatusLiberacaoMadeira,
+              )
+            }
+          >
+            {STATUS_LIBERACAO_MADEIRA.map((item) => (
+              <option key={item.value} value={item.value}>
+                {item.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <fieldset className="cadeia-recebimento-checklist">
+          <legend>Checklist da inspeção</legend>
+          <div className="cadeia-checklist-head">
+            <p className="sub">
+              Confira as condições do material antes da liberação.
+            </p>
+            <span>
+              {marcados}/{CHECKLIST_RECEBIMENTO_MADEIRA.length} verificados
+            </span>
+          </div>
+          <div className="cadeia-recebimento-checks">
+            {CHECKLIST_RECEBIMENTO_MADEIRA.map((item) => {
+              const checked = draft.checklist[item.id];
+              return (
+                <label
+                  key={item.id}
+                  className={
+                    "cadeia-recebimento-check " + (checked ? "on" : "")
+                  }
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={(event) =>
+                      onChange("checklist", {
+                        ...draft.checklist,
+                        [item.id]: event.target.checked,
+                      })
+                    }
+                  />
+                  <span>{item.label}</span>
+                </label>
+              );
+            })}
+          </div>
+        </fieldset>
+
+        <label className="cadeia-form-wide">
+          <span className="rotulo">Observações da auditoria</span>
+          <textarea
+            className="campo"
+            rows={3}
+            value={draft.observacoes}
+            onChange={(event) => onChange("observacoes", event.target.value)}
+            maxLength={5000}
+          />
+        </label>
+
+        <label className="cadeia-check-field">
+          <input
+            type="checkbox"
+            checked={draft.ativo}
+            onChange={(event) => onChange("ativo", event.target.checked)}
+          />
+          <span>Recebimento ativo no histórico</span>
+        </label>
+
+        <FormActions
+          saving={saving}
+          onClose={onClose}
+          submitLabel={draft.id ? "Salvar recebimento" : "Salvar auditoria"}
+        />
+      </form>
+    </ModalShell>
+  );
 }
 
 function InspecaoForm({ draft, lote, saving, onChange, onSubmit, onClose }: { draft: InspecaoDraft; lote: CadeiaLote | null; saving: boolean; onChange: <K extends keyof InspecaoDraft>(field: K, value: InspecaoDraft[K]) => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void; onClose: () => void }) {
