@@ -5225,6 +5225,76 @@ tr.ind-clicavel[aria-selected="true"] > td {
 .cadeia-form-grid .campo { width: 100%; }
 .cadeia-check-field { display: flex; align-items: center; gap: 8px; min-height: 38px; color: var(--color-ink-2); font-size: 12px; }
 .cadeia-check-field input { accent-color: var(--color-brand); }
+
+.cadeia-recebimento-checklist {
+  grid-column: 1 / -1;
+  min-width: 0;
+  border: 1px solid var(--color-line);
+  border-radius: 10px;
+  padding: 12px;
+  background: var(--color-papel-2);
+}
+.cadeia-recebimento-checklist legend {
+  padding: 0 6px;
+  color: var(--color-ink-2);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+.cadeia-checklist-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 1px 0 10px;
+}
+.cadeia-checklist-head .sub {
+  margin: 0;
+  font-size: 11px;
+}
+.cadeia-checklist-head > span {
+  flex: 0 0 auto;
+  border: 1px solid var(--color-line);
+  border-radius: 999px;
+  padding: 4px 8px;
+  color: var(--color-ink-3);
+  font-size: 9.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.cadeia-recebimento-checks {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.cadeia-recebimento-check {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  min-height: 42px;
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  padding: 9px 10px;
+  background: var(--color-papel);
+  color: var(--color-ink-2);
+  font-size: 11px;
+  cursor: pointer;
+  transition: border-color 130ms, background 130ms, color 130ms;
+}
+.cadeia-recebimento-check:hover {
+  border-color: color-mix(in srgb, var(--color-brand) 48%, var(--color-line));
+}
+.cadeia-recebimento-check.on {
+  border-color: color-mix(in srgb, var(--color-brand) 64%, var(--color-line));
+  background: color-mix(in srgb, var(--color-brand) 10%, var(--color-papel));
+  color: var(--color-brand-forte);
+}
+.cadeia-recebimento-check input {
+  flex: 0 0 auto;
+  accent-color: var(--color-brand);
+}
 .cadeia-defeitos-fieldset { display: grid; grid-column: 1 / -1; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px 16px; border: 1px solid var(--color-line); border-radius: 8px; padding: 11px 12px; }
 .cadeia-defeitos-fieldset legend { padding: 0 5px; color: var(--color-ink-3); font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 .cadeia-field-help { display: block; margin-top: 5px; color: var(--color-ink-3); font-size: 10px; }
@@ -5313,8 +5383,10 @@ tr.ind-clicavel[aria-selected="true"] > td {
   .cadeia-ensaio-contexto,
   .cadeia-document-fields,
   .cadeia-form-grid,
-  .cadeia-defeitos-fieldset { grid-template-columns: 1fr; }
   .cadeia-defeitos-fieldset,
+  .cadeia-recebimento-checks { grid-template-columns: 1fr; }
+  .cadeia-defeitos-fieldset,
+  .cadeia-recebimento-checklist,
   .cadeia-form-wide,
   .cadeia-document-observacao,
   .cadeia-modal-actions { grid-column: auto; }
