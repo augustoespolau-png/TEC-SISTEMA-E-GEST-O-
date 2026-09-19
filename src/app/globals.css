@@ -3777,6 +3777,18 @@ tr.ind-clicavel[aria-selected="true"] > td {
   }
   .cadeia-lateral .aba-admin { margin-top: 0; }
 
+  /* MADEIRA usa a mesma distribuição horizontal do WEINMANN:
+     texto à esquerda e seta fixa no extremo direito do card. Esta regra
+     vem depois de .aba-admin para não ser sobrescrita por
+     justify-content:flex-start no desktop. */
+  .cadeia-lateral .cadeia-lateral-toggle {
+    justify-content: space-between;
+  }
+  .cadeia-lateral .cadeia-lateral-toggle > svg {
+    margin-left: auto;
+    flex: 0 0 auto;
+  }
+
   /* as acoes descem para o pe da coluna */
   .rodape-topo {
     margin-left: 0;
