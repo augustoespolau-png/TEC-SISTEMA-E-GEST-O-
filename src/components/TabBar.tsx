@@ -356,7 +356,15 @@ export default function TabBar({
                     key={item.id}
                     href={item.href}
                     className={`aba aba-filha ${cadeiaNaRota && cadeiaModuloAtual === item.id ? "on" : ""}`}
-                    onClick={() => selecionarModulo("cadeia")}
+                    onClick={(event) => {
+                      if (cadeiaNaRota) {
+                        event.preventDefault();
+                        window.history.pushState(null, "", item.href);
+                      }
+                      selecionarModulo("cadeia");
+                      setCadeiaMadeiraAberta(false);
+                      setWeinmannAberto(false);
+                    }}
                   >
                     {item.rotulo}
                   </Link>
