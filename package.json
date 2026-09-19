@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "eslint \"src/components/ai/AISuite.tsx\" && next build",
+    "build": "eslint \"src/app/(app)/ia/page.tsx\" && next build",
     "start": "next start",
     "lint": "eslint"
   },
