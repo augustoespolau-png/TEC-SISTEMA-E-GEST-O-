@@ -20,6 +20,8 @@ import {
   type CadeiaLote,
   type CadeiaMadeiraSnapshot,
   type ChecklistRecebimentoMadeira,
+  type ApresentacaoMaterialMadeira,
+  type DistribuicaoFardoMadeira,
   type ComponenteEnsaioMadeira,
   type StatusLiberacaoMadeira,
   type TipoAnexoCadeia,
@@ -50,7 +52,18 @@ export interface CadeiaLoteInput {
   numero_nota_fiscal: string;
   volume_m3: number | string;
   data_recebimento: string;
+  responsavel_recebimento: string | null;
+  transportadora: string | null;
   placa_veiculo: string | null;
+  tipo_madeira: string | null;
+  especie: string | null;
+  origem: string | null;
+  quantidade_pecas: number | string;
+  apresentacao_material: ApresentacaoMaterialMadeira;
+  distribuicao_fardos: Array<{
+    fardos: number | string;
+    pecas_por_fardo: number | string;
+  }>;
   teor_umidade_medio: number | string;
   lote_autoclave: string;
   checklist: ChecklistRecebimentoMadeira;
@@ -103,7 +116,7 @@ export interface CadeiaAnexoInput {
 const CAMPO_FORNECEDOR =
   "id, razao_social, cnpj, homologacao_ativa, certificacao_origem, contato_tecnico_nome, contato_tecnico_email, contato_tecnico_telefone, historico_avaliacao, ativo, created_at, updated_at";
 const CAMPO_LOTE =
-  "id, fornecedor_id, numero_nota_fiscal, volume_m3, data_recebimento, placa_veiculo, teor_umidade_medio, lote_autoclave, checklist, status_liberacao, observacoes, ativo, created_at, updated_at";
+  "id, fornecedor_id, numero_nota_fiscal, volume_m3, data_recebimento, responsavel_recebimento, transportadora, placa_veiculo, tipo_madeira, especie, origem, quantidade_pecas, apresentacao_material, total_fardos, distribuicao_fardos, teor_umidade_medio, lote_autoclave, checklist, status_liberacao, observacoes, ativo, created_at, updated_at";
 const CAMPO_INSPECAO =
   "id, lote_id, data_inspecao, inspetor_id, tipo_ensaio, componente_ensaiado, identificacao_prototipo, norma_procedimento, resultado_tecnico, bitola_nominal, dimensional_conforme, empenamento, fendas_profundas, nos_soltos, manchas_umidade_bolor, resultado, observacoes, created_at, updated_at";
 const CAMPO_LAUDO =
@@ -195,6 +208,65 @@ function numero(value: unknown, label: string, max: number) {
 function booleano(value: unknown, label: string) {
   if (typeof value !== "boolean") throw new Error(label + " inválido.");
   return value;
+}
+
+function inteiro(value: unknown, label: string, max: number) {
+  const result = numero(value, label, max);
+  if (!Number.isInteger(result)) throw new Error(label + " deve ser um número inteiro.");
+  return result;
+}
+
+function apresentacaoMaterial(value: unknown): ApresentacaoMaterialMadeira {
+  if (value !== "AVULSA" && value !== "FARDOS") {
+    throw new Error("Apresentação do recebimento inválida.");
+  }
+  return value;
+}
+
+function normalizarDistribuicaoFardos(
+  value: unknown,
+  quantidadePecas: number,
+  apresentacao: ApresentacaoMaterialMadeira,
+): { total_fardos: number; distribuicao_fardos: DistribuicaoFardoMadeira[] } {
+  if (apresentacao === "AVULSA") {
+    return { total_fardos: 0, distribuicao_fardos: [] };
+  }
+
+  if (!Array.isArray(value) || value.length === 0 || value.length > 100) {
+    throw new Error("Informe pelo menos um grupo de fardos.");
+  }
+
+  const distribuicao = value.map((raw, index) => {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+      throw new Error(`Grupo de fardos ${index + 1} inválido.`);
+    }
+    const row = raw as Record<string, unknown>;
+    const fardos = inteiro(row.fardos, `Fardos do grupo ${index + 1}`, 1000000);
+    const pecasPorFardo = inteiro(
+      row.pecas_por_fardo,
+      `Peças por fardo do grupo ${index + 1}`,
+      10000000,
+    );
+    if (fardos <= 0 || pecasPorFardo <= 0) {
+      throw new Error("Fardos e peças por fardo devem ser maiores que zero.");
+    }
+    return {
+      fardos,
+      pecas_por_fardo: pecasPorFardo,
+      total_pecas: fardos * pecasPorFardo,
+    };
+  });
+
+  const totalFardos = distribuicao.reduce((sum, row) => sum + row.fardos, 0);
+  const pecasDistribuidas = distribuicao.reduce((sum, row) => sum + row.total_pecas, 0);
+
+  if (pecasDistribuidas !== quantidadePecas) {
+    throw new Error(
+      `A distribuição dos fardos soma ${pecasDistribuidas} peças, mas a quantidade total informada é ${quantidadePecas}.`,
+    );
+  }
+
+  return { total_fardos: totalFardos, distribuicao_fardos: distribuicao };
 }
 
 function normalizarChecklistRecebimento(value: unknown): ChecklistRecebimentoMadeira {
@@ -319,14 +391,35 @@ function normalizarLote(input: CadeiaLoteInput, exigirId = false) {
   if (exigirId && !id) throw new Error("Lote não informado.");
   const umidade = numero(input.teor_umidade_medio, "Teor de umidade", 100);
   const volume = numero(input.volume_m3, "Volume em m³", 1000000);
+  const quantidadePecas = inteiro(input.quantidade_pecas, "Quantidade de peças", 100000000);
+  const apresentacao = apresentacaoMaterial(input.apresentacao_material);
+  const fardos = normalizarDistribuicaoFardos(
+    input.distribuicao_fardos,
+    quantidadePecas,
+    apresentacao,
+  );
   if (volume <= 0) throw new Error("Volume em m³ deve ser maior que zero.");
+  if (quantidadePecas <= 0) throw new Error("Quantidade de peças deve ser maior que zero.");
   return {
     id,
     fornecedor_id: uuid(input.fornecedor_id, "Fornecedor"),
     numero_nota_fiscal: texto(input.numero_nota_fiscal, "Nota fiscal", 80, true),
     volume_m3: volume,
     data_recebimento: data(input.data_recebimento, "Data de recebimento"),
+    responsavel_recebimento: texto(
+      input.responsavel_recebimento,
+      "Responsável pelo recebimento",
+      160,
+    ),
+    transportadora: texto(input.transportadora, "Transportadora", 180),
     placa_veiculo: texto(input.placa_veiculo, "Placa do veículo", 20),
+    tipo_madeira: texto(input.tipo_madeira, "Tipo de madeira", 100),
+    especie: texto(input.especie, "Espécie", 120),
+    origem: texto(input.origem, "Origem", 240),
+    quantidade_pecas: quantidadePecas,
+    apresentacao_material: apresentacao,
+    total_fardos: fardos.total_fardos,
+    distribuicao_fardos: fardos.distribuicao_fardos,
     teor_umidade_medio: umidade,
     lote_autoclave: texto(input.lote_autoclave, "Lote de autoclave", 120, true),
     checklist: normalizarChecklistRecebimento(input.checklist),
@@ -452,7 +545,18 @@ function converterLote(
     numero_nota_fiscal: String(row.numero_nota_fiscal ?? ""),
     volume_m3: Number(row.volume_m3 ?? 0),
     data_recebimento: String(row.data_recebimento ?? ""),
+    responsavel_recebimento: (row.responsavel_recebimento as string | null) ?? null,
+    transportadora: (row.transportadora as string | null) ?? null,
     placa_veiculo: (row.placa_veiculo as string | null) ?? null,
+    tipo_madeira: (row.tipo_madeira as string | null) ?? null,
+    especie: (row.especie as string | null) ?? null,
+    origem: (row.origem as string | null) ?? null,
+    quantidade_pecas: Number(row.quantidade_pecas ?? 0),
+    apresentacao_material: row.apresentacao_material === "FARDOS" ? "FARDOS" : "AVULSA",
+    total_fardos: Number(row.total_fardos ?? 0),
+    distribuicao_fardos: Array.isArray(row.distribuicao_fardos)
+      ? (row.distribuicao_fardos as DistribuicaoFardoMadeira[])
+      : [],
     teor_umidade_medio: Number(row.teor_umidade_medio ?? 0),
     lote_autoclave: String(row.lote_autoclave ?? ""),
     checklist: normalizarChecklistRecebimento(row.checklist),
@@ -833,7 +937,16 @@ export async function updateCadeiaLote(
         numero_nota_fiscal: lote.numero_nota_fiscal,
         volume_m3: lote.volume_m3,
         data_recebimento: lote.data_recebimento,
+        responsavel_recebimento: lote.responsavel_recebimento,
+        transportadora: lote.transportadora,
         placa_veiculo: lote.placa_veiculo,
+        tipo_madeira: lote.tipo_madeira,
+        especie: lote.especie,
+        origem: lote.origem,
+        quantidade_pecas: lote.quantidade_pecas,
+        apresentacao_material: lote.apresentacao_material,
+        total_fardos: lote.total_fardos,
+        distribuicao_fardos: lote.distribuicao_fardos,
         teor_umidade_medio: lote.teor_umidade_medio,
         lote_autoclave: lote.lote_autoclave,
         checklist: lote.checklist,
