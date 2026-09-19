@@ -107,7 +107,7 @@ const RESIDUOS_ITEM = {
 };
 
 const IA_TEC_ITEM = {
-  href: "/ia",
+  href: "/ia-tec",
   rotulo: "IA-TEC",
   papeis: ["gestao"] as Role[],
   modulo: "IA" as GovernanceModule,
