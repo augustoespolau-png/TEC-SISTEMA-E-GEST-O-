@@ -63,6 +63,7 @@ import {
   type CadeiaLote,
   type CadeiaMadeiraSnapshot,
   type ChecklistRecebimentoMadeira,
+  type ApresentacaoMaterialMadeira,
   type ComponenteEnsaioMadeira,
   type StatusLiberacaoMadeira,
   type TipoAnexoCadeia,
@@ -106,13 +107,26 @@ type FornecedorDraft = {
   ativo: boolean;
 };
 
+type FardoDraft = {
+  fardos: string;
+  pecas_por_fardo: string;
+};
+
 type LoteDraft = {
   id: string;
   fornecedor_id: string;
   numero_nota_fiscal: string;
   volume_m3: string;
   data_recebimento: string;
+  responsavel_recebimento: string;
+  transportadora: string;
   placa_veiculo: string;
+  tipo_madeira: string;
+  especie: string;
+  origem: string;
+  quantidade_pecas: string;
+  apresentacao_material: ApresentacaoMaterialMadeira;
+  distribuicao_fardos: FardoDraft[];
   teor_umidade_medio: string;
   lote_autoclave: string;
   checklist: ChecklistRecebimentoMadeira;
@@ -183,7 +197,15 @@ function loteVazio(fornecedorId = ""): LoteDraft {
     numero_nota_fiscal: "",
     volume_m3: "",
     data_recebimento: dataLocal(),
+    responsavel_recebimento: "",
+    transportadora: "",
     placa_veiculo: "",
+    tipo_madeira: "",
+    especie: "",
+    origem: "",
+    quantidade_pecas: "",
+    apresentacao_material: "AVULSA",
+    distribuicao_fardos: [],
     teor_umidade_medio: "",
     lote_autoclave: "",
     checklist: checklistRecebimentoVazio(),
@@ -200,7 +222,18 @@ function loteParaDraft(item: CadeiaLote): LoteDraft {
     numero_nota_fiscal: item.numero_nota_fiscal,
     volume_m3: String(item.volume_m3),
     data_recebimento: item.data_recebimento.slice(0, 10),
+    responsavel_recebimento: item.responsavel_recebimento ?? "",
+    transportadora: item.transportadora ?? "",
     placa_veiculo: item.placa_veiculo ?? "",
+    tipo_madeira: item.tipo_madeira ?? "",
+    especie: item.especie ?? "",
+    origem: item.origem ?? "",
+    quantidade_pecas: item.quantidade_pecas ? String(item.quantidade_pecas) : "",
+    apresentacao_material: item.apresentacao_material,
+    distribuicao_fardos: item.distribuicao_fardos.map((row) => ({
+      fardos: String(row.fardos),
+      pecas_por_fardo: String(row.pecas_por_fardo),
+    })),
     teor_umidade_medio: String(item.teor_umidade_medio),
     lote_autoclave: item.lote_autoclave,
     checklist: { ...item.checklist },
@@ -329,6 +362,8 @@ export default function CadeiaMadeira({
   const [saving, setSaving] = useState(false);
   const [fornecedorDraft, setFornecedorDraft] = useState<FornecedorDraft | null>(null);
   const [loteDraft, setLoteDraft] = useState<LoteDraft | null>(null);
+  const [recebimentoFotos, setRecebimentoFotos] = useState<File[]>([]);
+  const [recebimentoLaudo, setRecebimentoLaudo] = useState<File | null>(null);
   const [inspecaoDraft, setInspecaoDraft] = useState<InspecaoDraft | null>(null);
   const [selectedLoteId, setSelectedLoteId] = useState(initialSnapshot.lotes[0]?.id ?? "");
   const [fileBusy, setFileBusy] = useState(false);
@@ -428,26 +463,150 @@ export default function CadeiaMadeira({
     await load(snapshot.page);
   }
 
+  async function salvarEvidenciasRecebimento(loteId: string) {
+    if (!recebimentoFotos.length && !recebimentoLaudo) return 0;
+
+    const userResult = await createClient().auth.getUser();
+    const userId = userResult.data.user?.id;
+    if (!userId) throw new Error("Sua sessão expirou. Entre novamente.");
+
+    let falhas = 0;
+
+    for (const foto of recebimentoFotos) {
+      let path = "";
+      try {
+        const arquivo = await enviarArquivoCadeia(
+          foto,
+          "FOTO_INSPECAO",
+          loteId,
+          userId,
+        );
+        path = arquivo.path;
+        const linked = await registerCadeiaAnexo({
+          lote_id: loteId,
+          inspecao_id: null,
+          tipo: "FOTO_INSPECAO",
+          nome_arquivo: arquivo.ready.name,
+          mime_type: arquivo.readyMime,
+          tamanho_bytes: arquivo.ready.size,
+          storage_path: path,
+          observacoes: "Evidência da auditoria de recebimento.",
+        });
+        if (!linked.ok) throw new Error(linked.error);
+      } catch (caught) {
+        falhas += 1;
+        registrarErroSupabase("cadeia-madeira/evidencia-recebimento", caught);
+        if (path) {
+          const cleanup = await createClient()
+            .storage.from(BUCKET_CADEIA_MADEIRA)
+            .remove([path]);
+          if (cleanup.error) {
+            registrarErroSupabase(
+              "cadeia-madeira/limpar-evidencia-recebimento",
+              cleanup.error,
+            );
+          }
+        }
+      }
+    }
+
+    if (recebimentoLaudo) {
+      let path = "";
+      try {
+        const arquivo = await enviarArquivoCadeia(
+          recebimentoLaudo,
+          "LAUDO",
+          loteId,
+          userId,
+        );
+        path = arquivo.path;
+        const linked = await registerCadeiaLaudo({
+          lote_id: loteId,
+          tipo: "LAUDO_TECNICO",
+          nome_arquivo: arquivo.ready.name,
+          mime_type: arquivo.readyMime,
+          tamanho_bytes: arquivo.ready.size,
+          storage_path: path,
+          validade_ate: null,
+          observacoes: "Documento anexado na auditoria de recebimento.",
+        });
+        if (!linked.ok) throw new Error(linked.error);
+      } catch (caught) {
+        falhas += 1;
+        registrarErroSupabase("cadeia-madeira/laudo-recebimento", caught);
+        if (path) {
+          const cleanup = await createClient()
+            .storage.from(BUCKET_CADEIA_MADEIRA)
+            .remove([path]);
+          if (cleanup.error) {
+            registrarErroSupabase(
+              "cadeia-madeira/limpar-laudo-recebimento",
+              cleanup.error,
+            );
+          }
+        }
+      }
+    }
+
+    return falhas;
+  }
+
   async function salvarLote(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!loteDraft || !canEdit) return;
+
+    const eraEdicao = Boolean(loteDraft.id);
     setSaving(true);
+
     const payload: CadeiaLoteInput = {
       ...loteDraft,
       volume_m3: loteDraft.volume_m3,
+      quantidade_pecas: loteDraft.quantidade_pecas,
+      distribuicao_fardos: loteDraft.distribuicao_fardos,
       teor_umidade_medio: loteDraft.teor_umidade_medio,
+      responsavel_recebimento: loteDraft.responsavel_recebimento || null,
+      transportadora: loteDraft.transportadora || null,
       placa_veiculo: loteDraft.placa_veiculo || null,
+      tipo_madeira: loteDraft.tipo_madeira || null,
+      especie: loteDraft.especie || null,
+      origem: loteDraft.origem || null,
       observacoes: loteDraft.observacoes || null,
     };
-    const result = loteDraft.id ? await updateCadeiaLote(payload) : await createCadeiaLote(payload);
-    setSaving(false);
+
+    const result = eraEdicao
+      ? await updateCadeiaLote(payload)
+      : await createCadeiaLote(payload);
+
     if (!result.ok) {
+      setSaving(false);
       toast.error(result.error);
       return;
     }
+
+    let falhasAnexo = 0;
+    try {
+      falhasAnexo = await salvarEvidenciasRecebimento(result.data.id);
+    } catch (caught) {
+      falhasAnexo = recebimentoFotos.length + (recebimentoLaudo ? 1 : 0);
+      registrarErroSupabase("cadeia-madeira/evidencias-recebimento", caught);
+    }
+
+    setSaving(false);
     setLoteDraft(null);
+    setRecebimentoFotos([]);
+    setRecebimentoLaudo(null);
     setSelectedLoteId(result.data.id);
-    toast.success(loteDraft.id ? "Lote atualizado." : "Lote recebido e salvo.");
+
+    if (falhasAnexo > 0) {
+      toast.warning(
+        `Recebimento salvo. ${falhasAnexo} evidência(s) não puderam ser anexadas.`,
+      );
+    } else {
+      toast.success(
+        eraEdicao ? "Recebimento atualizado." : "Auditoria de recebimento salva.",
+      );
+    }
+
     await load(snapshot.page);
   }
 
@@ -630,8 +789,18 @@ export default function CadeiaMadeira({
           page={snapshot.page}
           total={snapshot.totalLotes}
           hasNextPage={snapshot.hasNextPage}
-          onNew={() => setLoteDraft(loteVazio(snapshot.fornecedores.find((item) => item.ativo)?.id ?? ""))}
-          onEdit={(item) => setLoteDraft(loteParaDraft(item))}
+          onNew={() => {
+            setRecebimentoFotos([]);
+            setRecebimentoLaudo(null);
+            setLoteDraft(
+              loteVazio(snapshot.fornecedores.find((item) => item.ativo)?.id ?? ""),
+            );
+          }}
+          onEdit={(item) => {
+            setRecebimentoFotos([]);
+            setRecebimentoLaudo(null);
+            setLoteDraft(loteParaDraft(item));
+          }}
           onOpenInspections={(id) => abrirLote(id, "inspecoes")}
           onOpenReports={(id) => abrirLote(id, "laudos")}
           onSelect={setSelectedLoteId}
@@ -696,9 +865,23 @@ export default function CadeiaMadeira({
           draft={loteDraft}
           fornecedores={snapshot.fornecedores}
           saving={saving}
-          onChange={(field, value) => setLoteDraft((current) => current ? { ...current, [field]: value } : current)}
+          fotos={recebimentoFotos}
+          laudo={recebimentoLaudo}
+          onFotos={setRecebimentoFotos}
+          onLaudo={setRecebimentoLaudo}
+          onChange={(field, value) =>
+            setLoteDraft((current) =>
+              current ? { ...current, [field]: value } : current,
+            )
+          }
           onSubmit={salvarLote}
-          onClose={() => { if (!saving) setLoteDraft(null); }}
+          onClose={() => {
+            if (!saving) {
+              setLoteDraft(null);
+              setRecebimentoFotos([]);
+              setRecebimentoLaudo(null);
+            }
+          }}
         />
       )}
 
@@ -830,7 +1013,13 @@ function LotesPanel({
                     <span className="cadeia-lote-umidade"><small>Umidade média</small><b>{item.teor_umidade_medio.toFixed(1)}%</b></span>
                     <span className={"cadeia-status cadeia-status-" + item.status_liberacao.toLowerCase()}>{rotuloStatusLiberacao(item.status_liberacao)}</span>
                   </button>
-                  <div className="cadeia-lote-facts"><span><small>Volume</small><b>{item.volume_m3.toFixed(3)} m³</b></span><span><small>Autoclave</small><b>{item.lote_autoclave}</b></span><span><small>Placa</small><b>{item.placa_veiculo || "—"}</b></span></div>
+                  <div className="cadeia-lote-facts">
+                    <span><small>Peças</small><b>{item.quantidade_pecas.toLocaleString("pt-BR")}</b></span>
+                    <span><small>Fardos</small><b>{item.apresentacao_material === "FARDOS" ? item.total_fardos.toLocaleString("pt-BR") : "Avulsa"}</b></span>
+                    <span><small>Volume</small><b>{item.volume_m3.toFixed(3)} m³</b></span>
+                    <span><small>Autoclave</small><b>{item.lote_autoclave}</b></span>
+                    <span><small>Placa</small><b>{item.placa_veiculo || "—"}</b></span>
+                  </div>
                   {umidadeAlta && <div className="cadeia-umidade-alerta"><strong>Atenção de engenharia</strong><span>O teor de umidade está acima do limite seguro de {LIMITE_UMIDADE_SEGURA}%.</span></div>}
                   <div className="cadeia-card-actions">
                     {canEdit && <button type="button" className="btn" onClick={() => onEdit(item)}>Editar lote</button>}
@@ -1044,6 +1233,10 @@ function LoteForm({
   draft,
   fornecedores,
   saving,
+  fotos,
+  laudo,
+  onFotos,
+  onLaudo,
   onChange,
   onSubmit,
   onClose,
@@ -1051,6 +1244,10 @@ function LoteForm({
   draft: LoteDraft;
   fornecedores: CadeiaFornecedor[];
   saving: boolean;
+  fotos: File[];
+  laudo: File | null;
+  onFotos: (files: File[]) => void;
+  onLaudo: (file: File | null) => void;
   onChange: <K extends keyof LoteDraft>(field: K, value: LoteDraft[K]) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   onClose: () => void;
@@ -1058,6 +1255,45 @@ function LoteForm({
   const marcados = CHECKLIST_RECEBIMENTO_MADEIRA.filter(
     (item) => draft.checklist[item.id],
   ).length;
+  const quantidade = Number(draft.quantidade_pecas || 0);
+  const totalFardos = draft.distribuicao_fardos.reduce(
+    (sum, row) => sum + Number(row.fardos || 0),
+    0,
+  );
+  const pecasDistribuidas = draft.distribuicao_fardos.reduce(
+    (sum, row) =>
+      sum +
+      Number(row.fardos || 0) * Number(row.pecas_por_fardo || 0),
+    0,
+  );
+  const fardosConferidos =
+    draft.apresentacao_material !== "FARDOS" ||
+    (quantidade > 0 &&
+      draft.distribuicao_fardos.length > 0 &&
+      pecasDistribuidas === quantidade);
+
+  function alterarFardo(index: number, field: keyof FardoDraft, value: string) {
+    onChange(
+      "distribuicao_fardos",
+      draft.distribuicao_fardos.map((row, rowIndex) =>
+        rowIndex === index ? { ...row, [field]: value } : row,
+      ),
+    );
+  }
+
+  function adicionarFardo() {
+    onChange("distribuicao_fardos", [
+      ...draft.distribuicao_fardos,
+      { fardos: "", pecas_por_fardo: "" },
+    ]);
+  }
+
+  function removerFardo(index: number) {
+    onChange(
+      "distribuicao_fardos",
+      draft.distribuicao_fardos.filter((_, rowIndex) => rowIndex !== index),
+    );
+  }
 
   return (
     <ModalShell
@@ -1067,131 +1303,321 @@ function LoteForm({
       onClose={onClose}
     >
       <form className="cadeia-form-grid" onSubmit={onSubmit}>
-        <label>
-          <span className="rotulo">Fornecedor cadastrado *</span>
-          <select
-            className="campo"
-            value={draft.fornecedor_id}
-            onChange={(event) => onChange("fornecedor_id", event.target.value)}
-            required
-          >
-            <option value="">Selecione</option>
-            {fornecedores
-              .filter((item) => item.ativo)
-              .map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.razao_social}
-                </option>
-              ))}
-          </select>
-        </label>
+        <fieldset className="cadeia-recebimento-secao">
+          <legend>01 · Identificação do recebimento</legend>
+          <div className="cadeia-recebimento-grid">
+            <label>
+              <span className="rotulo">Fornecedor cadastrado *</span>
+              <select
+                className="campo"
+                value={draft.fornecedor_id}
+                onChange={(event) => onChange("fornecedor_id", event.target.value)}
+                required
+              >
+                <option value="">Selecione</option>
+                {fornecedores
+                  .filter((item) => item.ativo)
+                  .map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.razao_social}
+                    </option>
+                  ))}
+              </select>
+            </label>
 
-        <label>
-          <span className="rotulo">Nota fiscal *</span>
-          <input
-            className="campo"
-            value={draft.numero_nota_fiscal}
-            onChange={(event) => onChange("numero_nota_fiscal", event.target.value)}
-            maxLength={80}
-            required
-          />
-        </label>
+            <label>
+              <span className="rotulo">Nota fiscal *</span>
+              <input
+                className="campo"
+                value={draft.numero_nota_fiscal}
+                onChange={(event) =>
+                  onChange("numero_nota_fiscal", event.target.value)
+                }
+                maxLength={80}
+                required
+              />
+            </label>
 
-        <label>
-          <span className="rotulo">Volume (m³) *</span>
-          <input
-            className="campo"
-            type="number"
-            min="0.001"
-            step="0.001"
-            value={draft.volume_m3}
-            onChange={(event) => onChange("volume_m3", event.target.value)}
-            required
-          />
-        </label>
+            <label>
+              <span className="rotulo">Data de recebimento *</span>
+              <input
+                className="campo"
+                type="date"
+                value={draft.data_recebimento}
+                onChange={(event) =>
+                  onChange("data_recebimento", event.target.value)
+                }
+                required
+              />
+            </label>
 
-        <label>
-          <span className="rotulo">Data de recebimento *</span>
-          <input
-            className="campo"
-            type="date"
-            value={draft.data_recebimento}
-            onChange={(event) => onChange("data_recebimento", event.target.value)}
-            required
-          />
-        </label>
+            <label>
+              <span className="rotulo">Responsável pela conferência</span>
+              <input
+                className="campo"
+                value={draft.responsavel_recebimento}
+                onChange={(event) =>
+                  onChange("responsavel_recebimento", event.target.value)
+                }
+                maxLength={160}
+              />
+            </label>
 
-        <label>
-          <span className="rotulo">Placa do veículo</span>
-          <input
-            className="campo"
-            value={draft.placa_veiculo}
-            onChange={(event) => onChange("placa_veiculo", event.target.value)}
-            maxLength={20}
-          />
-        </label>
+            <label>
+              <span className="rotulo">Transportadora</span>
+              <input
+                className="campo"
+                value={draft.transportadora}
+                onChange={(event) => onChange("transportadora", event.target.value)}
+                maxLength={180}
+              />
+            </label>
 
-        <label>
-          <span className="rotulo">Umidade média (%) *</span>
-          <input
-            className={
-              "campo " +
-              (Number(draft.teor_umidade_medio) > LIMITE_UMIDADE_SEGURA
-                ? "cadeia-campo-alerta"
-                : "")
-            }
-            type="number"
-            min="0"
-            max="100"
-            step="0.1"
-            value={draft.teor_umidade_medio}
-            onChange={(event) => onChange("teor_umidade_medio", event.target.value)}
-            required
-          />
-          <small className="cadeia-field-help">
-            Acima de {LIMITE_UMIDADE_SEGURA}% gera alerta de engenharia.
-          </small>
-        </label>
+            <label>
+              <span className="rotulo">Placa do veículo</span>
+              <input
+                className="campo"
+                value={draft.placa_veiculo}
+                onChange={(event) => onChange("placa_veiculo", event.target.value)}
+                maxLength={20}
+              />
+            </label>
+          </div>
+        </fieldset>
 
-        <label>
-          <span className="rotulo">Lote de autoclave *</span>
-          <input
-            className="campo"
-            value={draft.lote_autoclave}
-            onChange={(event) => onChange("lote_autoclave", event.target.value)}
-            maxLength={120}
-            required
-          />
-        </label>
+        <fieldset className="cadeia-recebimento-secao">
+          <legend>02 · Material recebido</legend>
+          <div className="cadeia-recebimento-grid">
+            <label>
+              <span className="rotulo">Tipo de madeira</span>
+              <select
+                className="campo"
+                value={draft.tipo_madeira}
+                onChange={(event) => onChange("tipo_madeira", event.target.value)}
+              >
+                <option value="">Selecione</option>
+                <option>Pinus</option>
+                <option>Eucalipto</option>
+                <option>OSB</option>
+                <option>Madeira serrada</option>
+                <option>Outro</option>
+              </select>
+            </label>
 
-        <label>
-          <span className="rotulo">Status preliminar</span>
-          <select
-            className="campo"
-            value={draft.status_liberacao}
-            onChange={(event) =>
-              onChange(
-                "status_liberacao",
-                event.target.value as StatusLiberacaoMadeira,
-              )
-            }
-          >
-            {STATUS_LIBERACAO_MADEIRA.map((item) => (
-              <option key={item.value} value={item.value}>
-                {item.label}
-              </option>
-            ))}
-          </select>
-        </label>
+            <label>
+              <span className="rotulo">Espécie</span>
+              <input
+                className="campo"
+                value={draft.especie}
+                onChange={(event) => onChange("especie", event.target.value)}
+                maxLength={120}
+                placeholder="Ex.: Pinus"
+              />
+            </label>
+
+            <label>
+              <span className="rotulo">Quantidade de peças recebidas *</span>
+              <input
+                className="campo"
+                type="number"
+                min="1"
+                step="1"
+                inputMode="numeric"
+                value={draft.quantidade_pecas}
+                onChange={(event) =>
+                  onChange("quantidade_pecas", event.target.value)
+                }
+                required
+              />
+            </label>
+
+            <label>
+              <span className="rotulo">Apresentação do recebimento *</span>
+              <select
+                className="campo"
+                value={draft.apresentacao_material}
+                onChange={(event) => {
+                  const next = event.target.value as ApresentacaoMaterialMadeira;
+                  onChange("apresentacao_material", next);
+                  if (next === "AVULSA") {
+                    onChange("distribuicao_fardos", []);
+                  } else if (!draft.distribuicao_fardos.length) {
+                    onChange("distribuicao_fardos", [
+                      { fardos: "", pecas_por_fardo: "" },
+                    ]);
+                  }
+                }}
+              >
+                <option value="AVULSA">Avulsa</option>
+                <option value="FARDOS">Fardos</option>
+              </select>
+            </label>
+
+            <label>
+              <span className="rotulo">Volume (m³) *</span>
+              <input
+                className="campo"
+                type="number"
+                min="0.001"
+                step="0.001"
+                value={draft.volume_m3}
+                onChange={(event) => onChange("volume_m3", event.target.value)}
+                required
+              />
+            </label>
+
+            <label>
+              <span className="rotulo">Umidade média (%) *</span>
+              <input
+                className={
+                  "campo " +
+                  (Number(draft.teor_umidade_medio) > LIMITE_UMIDADE_SEGURA
+                    ? "cadeia-campo-alerta"
+                    : "")
+                }
+                type="number"
+                min="0"
+                max="100"
+                step="0.01"
+                value={draft.teor_umidade_medio}
+                onChange={(event) =>
+                  onChange("teor_umidade_medio", event.target.value)
+                }
+                required
+              />
+              <small className="cadeia-field-help">
+                Acima de {LIMITE_UMIDADE_SEGURA}% gera alerta de engenharia.
+              </small>
+            </label>
+
+            <label>
+              <span className="rotulo">Origem</span>
+              <input
+                className="campo"
+                value={draft.origem}
+                onChange={(event) => onChange("origem", event.target.value)}
+                maxLength={240}
+                placeholder="Origem da madeira"
+              />
+            </label>
+
+            <label>
+              <span className="rotulo">Lote de autoclave *</span>
+              <input
+                className="campo"
+                value={draft.lote_autoclave}
+                onChange={(event) => onChange("lote_autoclave", event.target.value)}
+                maxLength={120}
+                required
+              />
+            </label>
+          </div>
+
+          {draft.apresentacao_material === "FARDOS" && (
+            <div className="cadeia-fardos-painel">
+              <div className="cadeia-fardos-head">
+                <div>
+                  <strong>Detalhamento dos fardos</strong>
+                  <small>
+                    Informe quantos fardos existem e quantas peças há em cada grupo.
+                  </small>
+                </div>
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={adicionarFardo}
+                  disabled={saving}
+                >
+                  + Grupo de fardos
+                </button>
+              </div>
+
+              <div className="cadeia-fardos-lista">
+                {draft.distribuicao_fardos.map((row, index) => (
+                  <div className="cadeia-fardo-linha" key={index}>
+                    <label>
+                      <span className="rotulo">Fardos</span>
+                      <input
+                        className="campo"
+                        type="number"
+                        min="1"
+                        step="1"
+                        value={row.fardos}
+                        onChange={(event) =>
+                          alterarFardo(index, "fardos", event.target.value)
+                        }
+                        required
+                      />
+                    </label>
+                    <label>
+                      <span className="rotulo">Peças por fardo</span>
+                      <input
+                        className="campo"
+                        type="number"
+                        min="1"
+                        step="1"
+                        value={row.pecas_por_fardo}
+                        onChange={(event) =>
+                          alterarFardo(index, "pecas_por_fardo", event.target.value)
+                        }
+                        required
+                      />
+                    </label>
+                    <div className="cadeia-fardo-total">
+                      <small>Total do grupo</small>
+                      <b>
+                        {(
+                          Number(row.fardos || 0) *
+                          Number(row.pecas_por_fardo || 0)
+                        ).toLocaleString("pt-BR")}{" "}
+                        peças
+                      </b>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn cadeia-danger"
+                      onClick={() => removerFardo(index)}
+                      disabled={saving}
+                    >
+                      Remover
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              <div
+                className={
+                  "cadeia-fardos-resumo " + (fardosConferidos ? "ok" : "erro")
+                }
+              >
+                <span>
+                  <small>Total de fardos</small>
+                  <b>{totalFardos.toLocaleString("pt-BR")}</b>
+                </span>
+                <span>
+                  <small>Peças distribuídas</small>
+                  <b>{pecasDistribuidas.toLocaleString("pt-BR")}</b>
+                </span>
+                <span>
+                  <small>Quantidade informada</small>
+                  <b>{quantidade.toLocaleString("pt-BR")}</b>
+                </span>
+                <p>
+                  {fardosConferidos
+                    ? "Distribuição conferida."
+                    : "A distribuição dos fardos precisa fechar exatamente com a quantidade de peças recebidas."}
+                </p>
+              </div>
+            </div>
+          )}
+        </fieldset>
 
         <fieldset className="cadeia-recebimento-checklist">
-          <legend>Checklist da inspeção</legend>
+          <legend>03 · Checklist da inspeção</legend>
           <div className="cadeia-checklist-head">
-            <p className="sub">
-              Confira as condições do material antes da liberação.
-            </p>
+            <p className="sub">Marque os itens verificados e conformes.</p>
             <span>
-              {marcados}/{CHECKLIST_RECEBIMENTO_MADEIRA.length} verificados
+              {marcados}/{CHECKLIST_RECEBIMENTO_MADEIRA.length} conformes
             </span>
           </div>
           <div className="cadeia-recebimento-checks">
@@ -1200,9 +1626,7 @@ function LoteForm({
               return (
                 <label
                   key={item.id}
-                  className={
-                    "cadeia-recebimento-check " + (checked ? "on" : "")
-                  }
+                  className={"cadeia-recebimento-check " + (checked ? "on" : "")}
                 >
                   <input
                     type="checkbox"
@@ -1214,32 +1638,101 @@ function LoteForm({
                       })
                     }
                   />
-                  <span>{item.label}</span>
+                  <span>
+                    <b>{item.label}</b>
+                    <small>{item.grupo}</small>
+                  </span>
                 </label>
               );
             })}
           </div>
         </fieldset>
 
-        <label className="cadeia-form-wide">
-          <span className="rotulo">Observações da auditoria</span>
-          <textarea
-            className="campo"
-            rows={3}
-            value={draft.observacoes}
-            onChange={(event) => onChange("observacoes", event.target.value)}
-            maxLength={5000}
-          />
-        </label>
+        <fieldset className="cadeia-recebimento-secao">
+          <legend>04 · Evidências</legend>
+          <div className="cadeia-evidencias-grid">
+            <label className="cadeia-evidencia-upload">
+              <strong>Fotos do recebimento</strong>
+              <span>Adicione uma ou mais imagens como evidência.</span>
+              <span className="btn">Selecionar fotos</span>
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                multiple
+                onChange={(event) => {
+                  const files = Array.from(event.target.files ?? []);
+                  onFotos(files);
+                  event.target.value = "";
+                }}
+              />
+              <small>
+                {fotos.length
+                  ? `${fotos.length} foto(s) selecionada(s)`
+                  : "Nenhuma foto selecionada."}
+              </small>
+            </label>
 
-        <label className="cadeia-check-field">
-          <input
-            type="checkbox"
-            checked={draft.ativo}
-            onChange={(event) => onChange("ativo", event.target.checked)}
-          />
-          <span>Recebimento ativo no histórico</span>
-        </label>
+            <label className="cadeia-evidencia-upload">
+              <strong>Laudo / documento</strong>
+              <span>Anexe PDF, JPG, PNG ou WebP ao recebimento.</span>
+              <span className="btn">Selecionar documento</span>
+              <input
+                type="file"
+                accept=".pdf,image/jpeg,image/png,image/webp"
+                onChange={(event) => {
+                  onLaudo(event.target.files?.[0] ?? null);
+                  event.target.value = "";
+                }}
+              />
+              <small>{laudo ? laudo.name : "Nenhum documento selecionado."}</small>
+            </label>
+          </div>
+        </fieldset>
+
+        <fieldset className="cadeia-recebimento-secao">
+          <legend>05 · Resultado</legend>
+          <div className="cadeia-recebimento-grid">
+            <label>
+              <span className="rotulo">Status preliminar</span>
+              <select
+                className="campo"
+                value={draft.status_liberacao}
+                onChange={(event) =>
+                  onChange(
+                    "status_liberacao",
+                    event.target.value as StatusLiberacaoMadeira,
+                  )
+                }
+              >
+                {STATUS_LIBERACAO_MADEIRA.map((item) => (
+                  <option key={item.value} value={item.value}>
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="cadeia-check-field">
+              <input
+                type="checkbox"
+                checked={draft.ativo}
+                onChange={(event) => onChange("ativo", event.target.checked)}
+              />
+              <span>Recebimento ativo no histórico</span>
+            </label>
+
+            <label className="cadeia-form-wide">
+              <span className="rotulo">Observações da auditoria</span>
+              <textarea
+                className="campo"
+                rows={3}
+                value={draft.observacoes}
+                onChange={(event) => onChange("observacoes", event.target.value)}
+                maxLength={5000}
+              />
+            </label>
+          </div>
+        </fieldset>
 
         <FormActions
           saving={saving}
