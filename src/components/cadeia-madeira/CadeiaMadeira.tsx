@@ -9,7 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import Image from "next/image";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import {
   approveCadeiaLaudo,
@@ -73,12 +73,6 @@ import { createClient } from "@/lib/supabase/client";
 
 export type AbaCadeia = "cadastro" | "lotes" | "laudos" | "inspecoes";
 
-const ABAS: Array<{ id: AbaCadeia; label: string; hint: string }> = [
-  { id: "lotes", label: "Auditoria de recebimento", hint: "NF, umidade e autoclave" },
-  { id: "cadastro", label: "Cadastro", hint: "Fornecedores homologados" },
-  { id: "inspecoes", label: "Ensaios", hint: "Protótipos e estrutura" },
-  { id: "laudos", label: "Laudos", hint: "Fornecedor e recebimento" },
-];
 
 const ABA_POR_MODULO: Record<string, AbaCadeia> = {
   recebimento: "lotes",
@@ -327,7 +321,6 @@ export default function CadeiaMadeira({
   canEdit: boolean;
   canManage: boolean;
 }) {
-  const router = useRouter();
   const busca = useSearchParams();
   const aba = abaPorModulo(busca.get("modulo"));
   const [snapshot, setSnapshot] = useState(initialSnapshot);
@@ -346,7 +339,11 @@ export default function CadeiaMadeira({
   function selecionarAba(next: AbaCadeia) {
     const params = new URLSearchParams(busca.toString());
     params.set("modulo", MODULO_POR_ABA[next]);
-    router.replace(`/cadeia-madeira?${params.toString()}`, { scroll: false });
+    const destino = `/cadeia-madeira?${params.toString()}`;
+
+    // Next 16 sincroniza pushState com useSearchParams sem refazer a Server
+    // Component. Assim a troca entre submódulos é imediata e preserva o snapshot.
+    window.history.pushState(null, "", destino);
   }
 
   const selectedLote = useMemo(
@@ -603,21 +600,6 @@ export default function CadeiaMadeira({
 
   return (
     <main className="tela cadeia-madeira-tela">
-      <section className="cartao cadeia-madeira-hero">
-        <div>
-          <p className="cadeia-madeira-eyebrow">Rastreabilidade estrutural</p>
-          <h1 className="cadeia-madeira-title">Cadeia da Madeira</h1>
-          <p className="sub cadeia-madeira-lead">
-            Controle técnico de fornecedores, recebimento, qualidade e documentação da madeira estrutural.
-          </p>
-        </div>
-        <div className="cadeia-madeira-hero-meta">
-          <span>Limite seguro de umidade</span>
-          <b>{LIMITE_UMIDADE_SEGURA}%</b>
-          <small>Acima disso exige avaliação de qualidade.</small>
-        </div>
-      </section>
-
       {error && (
         <section className="cartao cadeia-madeira-alert" role="alert">
           <strong>Não foi possível carregar a cadeia da madeira</strong>
@@ -627,29 +609,6 @@ export default function CadeiaMadeira({
           </button>
         </section>
       )}
-
-      <section className="cadeia-madeira-kpis" aria-label="Resumo da cadeia da madeira">
-        <div className="cartao"><span>Fornecedores ativos</span><b>{snapshot.resumo.fornecedores_ativos}</b><small>cadastro homologável</small></div>
-        <div className="cartao"><span>Lotes recebidos</span><b>{snapshot.resumo.lotes_total}</b><small>histórico ativo</small></div>
-        <div className="cartao"><span>Umidade acima de 20%</span><b className={snapshot.resumo.lotes_umidade_alta ? "cadeia-kpi-alerta" : ""}>{snapshot.resumo.lotes_umidade_alta}</b><small>requer avaliação</small></div>
-        <div className="cartao"><span>Laudos pendentes</span><b className={snapshot.resumo.laudos_pendentes ? "cadeia-kpi-alerta" : ""}>{snapshot.resumo.laudos_pendentes}</b><small>aguardando aprovação</small></div>
-      </section>
-
-      <section className="cartao cadeia-madeira-tabs" role="tablist" aria-label="Seções da Cadeia da Madeira">
-        {ABAS.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            role="tab"
-            aria-selected={aba === item.id}
-            className={aba === item.id ? "on" : ""}
-            onClick={() => selecionarAba(item.id)}
-          >
-            <b>{item.label}</b>
-            <small>{item.hint}</small>
-          </button>
-        ))}
-      </section>
 
       {aba === "cadastro" && (
         <FornecedoresPanel
