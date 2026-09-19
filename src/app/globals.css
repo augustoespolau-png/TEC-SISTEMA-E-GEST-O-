@@ -5156,7 +5156,7 @@ tr.ind-clicavel[aria-selected="true"] > td {
 .cadeia-lote-umidade { display: grid; gap: 3px; }
 .cadeia-lote-umidade b { color: var(--color-ink); font-size: 15px; }
 .umidade-alta .cadeia-lote-umidade b { color: var(--color-media); }
-.cadeia-lote-facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 1px solid var(--color-line); }
+.cadeia-lote-facts { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); border-top: 1px solid var(--color-line); }
 .cadeia-lote-facts span { display: grid; gap: 3px; min-width: 0; padding: 10px 16px; border-right: 1px solid var(--color-line); }
 .cadeia-lote-facts span:last-child { border-right: 0; }
 .cadeia-lote-facts b { overflow: hidden; color: var(--color-ink-2); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
@@ -5225,6 +5225,157 @@ tr.ind-clicavel[aria-selected="true"] > td {
 .cadeia-form-grid .campo { width: 100%; }
 .cadeia-check-field { display: flex; align-items: center; gap: 8px; min-height: 38px; color: var(--color-ink-2); font-size: 12px; }
 .cadeia-check-field input { accent-color: var(--color-brand); }
+
+.cadeia-recebimento-secao {
+  grid-column: 1 / -1;
+  min-width: 0;
+  border: 1px solid var(--color-line);
+  border-radius: 10px;
+  padding: 12px;
+  background: var(--color-papel-2);
+}
+.cadeia-recebimento-secao > legend {
+  padding: 0 6px;
+  color: var(--color-ink-2);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+.cadeia-recebimento-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 11px;
+}
+.cadeia-fardos-painel {
+  margin-top: 12px;
+  border: 1px solid color-mix(in srgb, var(--color-brand) 28%, var(--color-line));
+  border-radius: 9px;
+  padding: 11px;
+  background: var(--color-papel);
+}
+.cadeia-fardos-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.cadeia-fardos-head > div {
+  display: grid;
+  gap: 4px;
+}
+.cadeia-fardos-head strong {
+  color: var(--color-ink);
+  font-size: 12px;
+}
+.cadeia-fardos-head small {
+  color: var(--color-ink-3);
+  font-size: 10px;
+}
+.cadeia-fardos-lista {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+.cadeia-fardo-linha {
+  display: grid;
+  grid-template-columns: minmax(120px, .8fr) minmax(140px, 1fr) minmax(150px, 1fr) auto;
+  align-items: end;
+  gap: 8px;
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  padding: 9px;
+  background: var(--color-papel-2);
+}
+.cadeia-fardo-total {
+  display: grid;
+  gap: 4px;
+  min-height: 42px;
+  align-content: center;
+}
+.cadeia-fardo-total small {
+  color: var(--color-ink-3);
+  font-size: 9px;
+}
+.cadeia-fardo-total b {
+  color: var(--color-ink-2);
+  font-size: 11px;
+}
+.cadeia-fardos-resumo {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  padding: 9px;
+}
+.cadeia-fardos-resumo span {
+  display: grid;
+  gap: 3px;
+}
+.cadeia-fardos-resumo small {
+  color: var(--color-ink-3);
+  font-size: 9px;
+}
+.cadeia-fardos-resumo b {
+  color: var(--color-ink);
+  font-size: 13px;
+}
+.cadeia-fardos-resumo p {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 10px;
+  font-weight: 700;
+}
+.cadeia-fardos-resumo.ok {
+  border-color: color-mix(in srgb, var(--color-baixa) 42%, var(--color-line));
+}
+.cadeia-fardos-resumo.ok p {
+  color: var(--color-baixa);
+}
+.cadeia-fardos-resumo.erro {
+  border-color: color-mix(in srgb, var(--color-alta) 42%, var(--color-line));
+}
+.cadeia-fardos-resumo.erro p {
+  color: var(--color-alta);
+}
+.cadeia-evidencias-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.cadeia-evidencia-upload {
+  position: relative;
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  border: 1px dashed var(--color-line);
+  border-radius: 9px;
+  padding: 13px;
+  background: var(--color-papel);
+  cursor: pointer;
+}
+.cadeia-evidencia-upload strong {
+  color: var(--color-ink);
+  font-size: 12px;
+}
+.cadeia-evidencia-upload > span:not(.btn),
+.cadeia-evidencia-upload small {
+  color: var(--color-ink-3);
+  font-size: 10px;
+}
+.cadeia-evidencia-upload .btn {
+  width: fit-content;
+  pointer-events: none;
+}
+.cadeia-evidencia-upload input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
 
 .cadeia-recebimento-checklist {
   grid-column: 1 / -1;
@@ -5295,6 +5446,20 @@ tr.ind-clicavel[aria-selected="true"] > td {
   flex: 0 0 auto;
   accent-color: var(--color-brand);
 }
+.cadeia-recebimento-check > span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.cadeia-recebimento-check b {
+  color: inherit;
+  font-size: 11px;
+  font-weight: 700;
+}
+.cadeia-recebimento-check small {
+  color: var(--color-ink-3);
+  font-size: 9px;
+}
 .cadeia-defeitos-fieldset { display: grid; grid-column: 1 / -1; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px 16px; border: 1px solid var(--color-line); border-radius: 8px; padding: 11px 12px; }
 .cadeia-defeitos-fieldset legend { padding: 0 5px; color: var(--color-ink-3); font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 .cadeia-field-help { display: block; margin-top: 5px; color: var(--color-ink-3); font-size: 10px; }
@@ -5318,6 +5483,9 @@ tr.ind-clicavel[aria-selected="true"] > td {
   .cadeia-lote-umidade { grid-column: 1; grid-row: 3; }
   .cadeia-lote-summary .cadeia-status { grid-column: 2; grid-row: 1 / 4; align-self: center; }
   .cadeia-document-upload { grid-template-columns: 1fr; }
+  .cadeia-lote-facts { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .cadeia-fardo-linha { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cadeia-fardo-total { min-height: 0; }
 }
 @media (max-width: 620px) {
   .cadeia-madeira-tela { padding-inline: 10px; }
@@ -5377,14 +5545,21 @@ tr.ind-clicavel[aria-selected="true"] > td {
   .cadeia-fornecedor-card > .cadeia-card-actions { grid-column: auto; grid-row: auto; }
   .cadeia-card-actions { justify-content: flex-start; }
   .cadeia-lote-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .cadeia-lote-facts span:nth-child(2) { border-right: 0; }
-  .cadeia-lote-facts span:last-child { border-top: 1px solid var(--color-line); }
+  .cadeia-lote-facts span:nth-child(even) { border-right: 0; }
+  .cadeia-lote-facts span:nth-child(n+3) { border-top: 1px solid var(--color-line); }
   .cadeia-defeitos,
   .cadeia-ensaio-contexto,
   .cadeia-document-fields,
   .cadeia-form-grid,
   .cadeia-defeitos-fieldset,
-  .cadeia-recebimento-checks { grid-template-columns: 1fr; }
+  .cadeia-recebimento-grid,
+  .cadeia-recebimento-checks,
+  .cadeia-evidencias-grid,
+  .cadeia-fardos-resumo { grid-template-columns: 1fr; }
+  .cadeia-fardos-head { display: grid; }
+  .cadeia-fardos-head .btn { width: 100%; }
+  .cadeia-fardo-linha { grid-template-columns: 1fr; }
+  .cadeia-fardos-resumo p { grid-column: 1; }
   .cadeia-defeitos-fieldset,
   .cadeia-recebimento-checklist,
   .cadeia-form-wide,
